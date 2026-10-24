@@ -69,7 +69,7 @@ h1 {
   position: relative; border-radius: 14px; overflow: hidden; background: #000;
   box-shadow: 0 0 0 10px #111, 0 0 0 11px #2a2a2d, 0 40px 120px -20px rgba(41,151,255,.25), 0 30px 80px rgba(0,0,0,.8);
 }
-.tv .screen img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.tv .screen img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .compare { --x: 0%; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
 .compare img { -webkit-user-drag: none; pointer-events: none; }
 .compare .before { position: absolute; inset: 0; height: 100%; clip-path: inset(0 0 0 var(--x)); }
