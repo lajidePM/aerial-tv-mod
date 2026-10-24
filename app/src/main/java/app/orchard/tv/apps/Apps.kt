@@ -204,9 +204,23 @@ object AppCatalog {
             if (info.exported && info.isEnabled && info.applicationInfo.enabled) found.putIfAbsent(info.packageName, info to false)
         }
         val stockHomes = HashSet<String>()
-        for (info in stockLaunchers(pm)) {
+        // Skyworth skyT963 (1AA46_V58FP, Android 9) ships three home packages — the 芒果
+        // movieplatform, the officehomepage the Home key opens, and a blank
+        // com.example.android.home stub — and every one got a same-named 原桌面 tile. There, add
+        // only the home the Home key actually opens and drop the stub; other devices are
+        // unaffected.
+        val skyworthHomes = listOf("com.skyworth.officehomepage", "com.tianci.movieplatform")
+            .any { runCatching { pm.getPackageInfo(it, 0) }.isSuccess }
+        val stockInfos = stockLaunchers(pm)
+            .filter { !skyworthHomes || it.packageName != "com.example.android.home" }
+            .sortedBy {
+                SKYWORTH_PREFERRED_STOCK_HOMES.indexOf(it.packageName).let { i -> if (i == -1) Int.MAX_VALUE else i }
+            }
+        for (info in stockInfos) {
+            if (skyworthHomes && stockHomes.isNotEmpty()) continue
             if (found.putIfAbsent(info.packageName, info to false) == null) stockHomes += info.packageName
         }
+        if (skyworthHomes) found.remove("com.example.android.home")
         found.remove(context.packageName)
 
         val byCategory = HashMap<String, SystemTile>()
@@ -257,6 +271,9 @@ object AppCatalog {
     }
 
     private const val KIDS_KEY = "shortcut:kids"
+
+    /** Stock homes worth a 原桌面 tile on Skyworth skyT963, most-used first; see load(). */
+    private val SKYWORTH_PREFERRED_STOCK_HOMES = listOf("com.skyworth.officehomepage", "com.tianci.movieplatform")
 
     /**
      * The TV's own launcher, which some firmwares declare only as a Home: TCL's com.tcl.cyberui
