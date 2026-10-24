@@ -8,6 +8,8 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.getSystemService
 import app.orchard.tv.apps.AppCatalog
+import app.orchard.tv.apps.FOLDER_KEY_PREFIX
+import app.orchard.tv.apps.AppEntry
 import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.CustomIcons
 import app.orchard.tv.apps.SourceLooks
@@ -102,6 +104,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                     }
                     json(state().put("saved", saved))
                 }
+                session.method == Method.POST && path == "/api/layout" -> layout(form(session))
                 session.method == Method.POST && path == "/api/source/pin" -> {
                     val f = form(session)
                     val id = f["id"].orEmpty()
@@ -180,6 +183,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                         .put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key)))
                 }
             })
+            .put("layout", layoutState())
             .put("inputs", JSONArray().apply {
                 // Every input Home knows of, for pinning to Home from the phone.
                 AppCatalog.sources.forEach { src ->
@@ -200,6 +204,50 @@ class PhoneServer private constructor(private val context: Context, private val 
                 put("chosen", Weather.chosen)
                 Weather.now?.let { put("celsius", it.celsius); put("kind", it.kind.name.lowercase()); put("day", it.day) }
             })
+    }
+
+    /** Home in order, each folder's apps and the hidden apps, by the names Home shows. */
+    private fun layoutState(): JSONObject {
+        fun tile(e: AppEntry) = JSONObject().put("key", e.key).put("label", e.label)
+            .put("kind", when { e.folder != null -> "folder"; e.source != null -> "source"; else -> "app" })
+            .put("stamp", if (e.folder != null) e.art.hashCode().toLong() else CustomIcons.stamp(e.key))
+            .apply { e.folder?.let { put("id", it.id) }; e.source?.let { put("port", it.label) } }
+        val folders = JSONObject()
+        AppCatalog.folderApps.forEach { (id, apps) -> folders.put(id, JSONArray().apply { apps.forEach { put(tile(it)) } }) }
+        // With the parental PIN on, hidden apps stay hidden from here: on the TV, seeing them takes the PIN.
+        val locked = AerialSettings.locked
+        return JSONObject()
+            .put("home", JSONArray().apply { AppCatalog.home.forEach { put(tile(it)) } })
+            .put("folders", folders)
+            .put("hidden", JSONArray().apply { if (!locked) AppCatalog.hiddenApps.forEach { put(tile(it)) } })
+            .put("hiddenCount", AppCatalog.hiddenApps.size)
+            .put("locked", locked)
+            .put("ready", AppCatalog.layout != null)
+    }
+
+    /**
+     * One step of arranging Home from the phone: [op] is move, movein, hide, unhide, folder (into
+     * [folder], or a new one when it is empty), unfolder or ungroup. Done on the main thread before
+     * answering, so the state sent back shows it.
+     */
+    private fun layout(f: Map<String, String>): Response {
+        val ops = AppCatalog.layout ?: return json(state().put("saved", false))
+        val key = f["key"].orEmpty()
+        val target = f["target"].orEmpty()
+        val folder = f["folder"].orEmpty()
+        val known = (AppCatalog.home + AppCatalog.folderApps.values.flatten() + AppCatalog.hiddenApps).map { it.key }.toSet()
+        val step: (() -> Unit)? = when (f["op"]) {
+            "move" -> if (key in known && target in known) ({ ops.move(key, target) }) else null
+            "movein" -> if (key in known && target in known) ({ ops.moveInFolder(key, target) }) else null
+            "hide" -> if (key in known) ({ ops.hide(key) }) else null
+            "unhide" -> if (key in known && !AerialSettings.locked) ({ ops.unhide(key) }) else null
+            "folder" -> if (key in known && !key.startsWith(FOLDER_KEY_PREFIX)) ({ ops.toFolder(key, folder.ifEmpty { null }) }) else null
+            "unfolder" -> if (key in known) ({ ops.outOfFolder(key) }) else null
+            "ungroup" -> if (folder in AppCatalog.folderApps) ({ ops.ungroup(folder) }) else null
+            else -> null
+        }
+        if (step != null) runBlocking(Dispatchers.Main) { step() }
+        return json(state().put("saved", step != null))
     }
 
     /** An app on the TV or a pinned input: the only tiles a picture may be sent for. */

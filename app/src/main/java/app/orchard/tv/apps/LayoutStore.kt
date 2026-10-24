@@ -97,6 +97,19 @@ class LayoutStore(context: Context) {
         save()
     }
 
+    /** Moves [key] onto the slot of [target] inside the folder that holds them both. */
+    fun moveInFolder(key: String, target: String) {
+        if (key == target) return
+        val folder = folderHolding(key)?.takeIf { target in it.apps } ?: return
+        val list = folder.apps.toMutableList()
+        val from = list.indexOf(key)
+        val to = list.indexOf(target)
+        list.removeAt(from)
+        list.add(list.indexOf(target).let { if (from < to) it + 1 else it }, key)
+        folders = folders + (folder.id to folder.copy(apps = list))
+        save()
+    }
+
     fun renameFolder(id: String, name: String) {
         val folder = folders[id] ?: return
         folders = folders + (id to folder.copy(name = name))

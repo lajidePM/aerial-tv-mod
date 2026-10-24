@@ -16,6 +16,20 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
+/** What the phone page can do to Home's arrangement; the same steps as the tile menu on the TV. */
+interface LayoutOps {
+    /** Onto [target]'s slot among Home's tiles. */
+    fun move(key: String, target: String)
+    /** Onto [target]'s slot inside their folder. */
+    fun moveInFolder(key: String, target: String)
+    fun hide(key: String)
+    fun unhide(key: String)
+    /** Into folder [id], or a new one in the app's place when [id] is null. */
+    fun toFolder(key: String, id: String?)
+    fun outOfFolder(key: String)
+    fun ungroup(id: String)
+}
+
 data class AppEntry(
     val packageName: String,
     val label: String,
@@ -152,6 +166,14 @@ object AppCatalog {
 
     /** Renames a folder by id, on the main thread; set while Home is alive (the phone page names folders). */
     @Volatile var renameFolder: ((id: String, name: String) -> Unit)? = null
+
+    /** Home as it last arranged itself (tiles in order, each folder's apps, the hidden apps), for the phone page. */
+    @Volatile var home: List<AppEntry> = emptyList()
+    @Volatile var folderApps: Map<String, List<AppEntry>> = emptyMap()
+    @Volatile var hiddenApps: List<AppEntry> = emptyList()
+
+    /** Arranges Home from the phone page, on the main thread; set while Home is alive. */
+    @Volatile var layout: LayoutOps? = null
 
     /** Every TV input Home knows of, pinned or not, for the phone page to offer. */
     @Volatile var sources: List<TvSource> = emptyList()

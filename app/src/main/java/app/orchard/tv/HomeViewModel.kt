@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import app.orchard.tv.apps.AppCatalog
 import app.orchard.tv.apps.AppEntry
 import app.orchard.tv.apps.AppNames
+import app.orchard.tv.apps.LayoutOps
 import app.orchard.tv.apps.CustomIcons
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.FOLDER_KEY_PREFIX
@@ -98,11 +99,24 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     var screensaverVisible by mutableStateOf(false)
     val screensaverSkips = ScreensaverSkips()
 
+    /** The phone page's arranging: the tile menu's steps, without the focus moves that go with them on the TV. */
+    // Declared before init, which hands it to AppCatalog.
+    private val layoutOps: LayoutOps = object : LayoutOps {
+        override fun move(key: String, target: String) { store.move(key, target); arrange() }
+        override fun moveInFolder(key: String, target: String) { store.moveInFolder(key, target); arrange() }
+        override fun hide(key: String) = this@HomeViewModel.hide(key)
+        override fun unhide(key: String) = this@HomeViewModel.unhide(key)
+        override fun toFolder(key: String, id: String?) { putInFolder(key, id) }
+        override fun outOfFolder(key: String) = takeOutOfFolder(key)
+        override fun ungroup(id: String) = this@HomeViewModel.ungroup(id)
+    }
+
     private var loadJob: Job? = null
 
     init {
         AppCatalog.renameFolder = ::renameFolder
         AppCatalog.pinSource = ::pinSourceById
+        AppCatalog.layout = layoutOps
         reload()
         // A tile picture set or removed from the phone page.
         viewModelScope.launch { snapshotFlow { CustomIcons.version }.drop(1).collect { reload() } }
@@ -202,6 +216,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             folderEntry(folder, art)
         }
         apps = arrangement.home
+        AppCatalog.home = arrangement.home
+        AppCatalog.folderApps = arrangement.folders
+        AppCatalog.hiddenApps = arrangement.hidden
         AppCatalog.folders = arrangement.home.filter { it.folder != null }
         folderApps = arrangement.folders
         hiddenApps = arrangement.hidden
@@ -413,6 +430,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         if (AppCatalog.renameFolder == ::renameFolder) AppCatalog.renameFolder = null
         if (AppCatalog.pinSource == ::pinSourceById) AppCatalog.pinSource = null
+        if (AppCatalog.layout === layoutOps) AppCatalog.layout = null
     }
 }
 

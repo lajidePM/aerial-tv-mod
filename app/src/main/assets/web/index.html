@@ -156,6 +156,50 @@
   nav button[aria-selected="true"] { color: var(--tint); }
 
   /* Bottom sheet. Enters on the drawer curve; leaves faster than it came. */
+  /* Arrange Home: a full page that slides up over the tabs. */
+  .page {
+    position: fixed; inset: 0; z-index: 15; background: var(--bg); display: flex; flex-direction: column;
+    transform: translateY(100%); transition: transform .24s ease-in-out;
+  }
+  .page.open { transform: none; transition: transform .42s var(--ease-drawer); }
+  .pagebar {
+    flex-shrink: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+    padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; background: var(--bar); box-shadow: 0 .5px 0 var(--bar-line);
+    -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  }
+  .pagebar b { font-size: 17px; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pagebar .link { font-size: 17px; justify-self: start; display: inline-flex; align-items: center; gap: 2px; }
+  .pagebar .done { justify-self: end; font-weight: 600; }
+  .pagebody { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0 16px calc(32px + env(safe-area-inset-bottom)); }
+  .pagebody > .inner { max-width: 720px; margin: 0 auto; }
+  .pagebody .view { animation: none; }
+  .pagebody .view.push { animation: push .26s var(--ease-out); }
+  @keyframes push { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  .arow { min-height: 60px; background: var(--card); }
+  .arow .thumb { width: 64px; }
+  .arow .act { flex-shrink: 0; font-weight: 600; }
+  /* Home as on the TV: five tiles a row, the first on a shelf. */
+  .agrid {
+    position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px 7px;
+    padding: 12px 10px 14px; background: var(--card); border-radius: 14px;
+  }
+  .agrid .shelf { position: absolute; left: 4px; right: 4px; top: 4px; border-radius: 11px; background: var(--fill); pointer-events: none; }
+  .atile {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; cursor: grab;
+    touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  .atile .tpic {
+    width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--fill);
+    box-shadow: 0 1px 2px rgba(0,0,0,.14); transition: transform .16s var(--ease-out), box-shadow .2s ease;
+  }
+  .atile .tpic img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-drag: none; }
+  .atile .n { width: 100%; font-size: 10.5px; line-height: 1.25; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .atile:active .tpic { transform: scale(.95); }
+  .agrid.sorting .atile:not(.lift) { transition: transform .26s var(--ease-out); }
+  .atile.lift { z-index: 3; cursor: grabbing; }
+  .atile.lift .tpic { transform: scale(1.14); box-shadow: 0 14px 30px rgba(0,0,0,.32), 0 3px 8px rgba(0,0,0,.18); }
+  .atile.lift .n { opacity: 0; }
+  .icon-sq { width: 30px; height: 30px; border-radius: 7px; background: var(--tint); color: #fff; display: grid; place-items: center; flex-shrink: 0; }
   .sheet-wrap { position: fixed; inset: 0; z-index: 20; }
   .scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity .2s ease; }
   .sheet {
@@ -182,7 +226,9 @@
   }
   .toast.on { opacity: 1; transform: translate(-50%, 0); }
   @media (prefers-reduced-motion: reduce) {
-    .sheet, .sheet-wrap.open .sheet { transition: none; }
+    .sheet, .sheet-wrap.open .sheet, .page, .page.open { transition: none; }
+    .pagebody .view.push { animation: none; }
+    .agrid.sorting .atile:not(.lift) { transition: none; }
     .toast { transform: translate(-50%, 0); }
   }
 </style>
@@ -224,6 +270,10 @@
 
 <!-- Home screen -->
 <section data-tab="home" hidden>
+  <div class="list">
+    <button class="item" id="arrangeBtn"><span class="icon-sq"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="7" height="6" rx="1.6"/><rect x="13.5" y="4.5" width="7" height="6" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="6" rx="1.6"/><path d="M14 16.5h6M17 13.5v6"/></svg></span><span class="txt"><span data-i18n="arrange_title"></span><span class="sub" data-i18n="arrange_sub"></span></span><svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 6-6 6"/></svg></button>
+  </div>
+
   <h2 data-i18n="focus"></h2>
   <div class="list" id="focus" role="radiogroup" data-i18n-aria-label="focus">
     <button class="item" role="radio" data-style="high_contrast"><span class="txt"><span data-i18n="focus_high"></span><span class="sub" data-i18n="focus_hint_high"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
@@ -244,11 +294,6 @@
     <h2 data-i18n="inputs_h"></h2>
     <div class="list" id="inputs"></div>
     <p class="foot" data-i18n="inputs_hint"></p>
-  </div>
-
-  <div id="foldersBox" hidden>
-    <h2 data-i18n="folders_h"></h2>
-    <div class="list" id="folders"></div>
   </div>
 
   <h2 data-i18n="icons_h"></h2>
@@ -283,6 +328,15 @@
   <button role="tab" data-go="more"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="8" cy="12" r=".6" fill="currentColor"/><circle cx="12" cy="12" r=".6" fill="currentColor"/><circle cx="16" cy="12" r=".6" fill="currentColor"/></svg><span data-i18n="tab_more"></span></button>
 </nav>
 
+<div class="page" id="arrange" hidden role="dialog" aria-modal="true" aria-labelledby="arrTitle">
+  <div class="pagebar">
+    <button class="link" id="arrBack" style="visibility:hidden"><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2L2 10l8 8"/></svg><span data-i18n="back"></span></button>
+    <b id="arrTitle"></b>
+    <button class="link done" id="arrDone" data-i18n="done"></button>
+  </div>
+  <div class="pagebody" id="arrScroll"><div class="inner" id="arrBody"></div></div>
+</div>
+
 <div class="sheet-wrap" id="sheet" hidden>
   <div class="scrim" id="scrim"></div>
   <div class="sheet" role="dialog" aria-modal="true">
@@ -300,7 +354,7 @@ let state = null, stateJson = '';
 
 // The language: ?lang=ru in the address, else the one picked under More (kept on the phone), else the
 // first of the phone's preferred languages that has a table, else English. Keys are in KEYS, one array of texts per language.
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_photos", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "upload_label", "icons_h", "icons_hint", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_photos", "hint_clock", "g_live", "g_live_sub", "g_daily", "g_daily_sub", "g_photo", "g_builtin", "g_auto", "toast_wallpaper", "aria_delete", "confirm_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "tag_custom", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "daily_title", "daily_caption", "rotate_title", "rotate_caption", "empty_photos", "add_second", "toast_tv_updated", "sending_n", "toast_added", "toast_no_photos", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "hint_follows", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_wallpaper", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "this_tv", "folders_h", "folder_count", "folder_ph", "folder_rename_hint", "toast_folder_renamed", "inputs_h", "inputs_hint", "toast_pinned", "toast_unpinned", "rename_hint_app", "was_named", "tv_model"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_photos", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "upload_label", "icons_h", "icons_hint", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_photos", "hint_clock", "g_live", "g_live_sub", "g_daily", "g_daily_sub", "g_photo", "g_builtin", "g_auto", "toast_wallpaper", "aria_delete", "confirm_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "tag_custom", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "daily_title", "daily_caption", "rotate_title", "rotate_caption", "empty_photos", "add_second", "toast_tv_updated", "sending_n", "toast_added", "toast_no_photos", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "hint_follows", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_wallpaper", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "this_tv", "folder_count", "folder_ph", "toast_folder_renamed", "inputs_h", "inputs_hint", "toast_pinned", "toast_unpinned", "rename_hint_app", "was_named", "arrange_title", "arrange_sub", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "back", "done", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tv_model"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -401,10 +455,8 @@ const TEXTS = {
   "给信号源起个名字，留空恢复默认名字。",
   "从手机选一张图片",
   "这台电视",
-  "文件夹",
   "{n} 个 App",
   "文件夹名字",
-  "改好后电视上马上更新。",
   "文件夹已改名",
   "信号源",
   "打开后，这个信号源会放到主屏幕第一个位置；下面的 App 图标里可以给它换图标、改名字。",
@@ -412,6 +464,28 @@ const TEXTS = {
   "已从主屏幕移除",
   "改成你想在电视上看到的名字，留空恢复「{name}」。",
   "原名：{name}",
+  "整理主屏幕",
+  "排序、隐藏、文件夹",
+  "和电视上的排列一样，每排 5 个，第一排就是电视底板上的那一排。按住图标拖到想放的位置；点图标可以放进文件夹或隐藏，点文件夹可以打开。",
+  "电视上的主屏幕还没准备好，回到电视的主屏幕后再试。",
+  "隐藏的 App",
+  "没有隐藏的 App。",
+  "家长密码已开启：有 {n} 个隐藏的 App，要在电视上输入密码后恢复。",
+  "显示",
+  "从主屏幕隐藏",
+  "放进文件夹",
+  "新建文件夹",
+  "移出文件夹",
+  "解散文件夹",
+  "解散「{name}」？里面的 App 会回到主屏幕。",
+  "返回",
+  "完成",
+  "按住图标拖动来调整文件夹里的顺序；点图标可以移出文件夹。",
+  "已隐藏",
+  "已显示在主屏幕",
+  "已放进「{name}」",
+  "已移出文件夹",
+  "文件夹已解散",
   "型号"
  ],
  "en": [
@@ -513,10 +587,8 @@ const TEXTS = {
   "Name this input; leave it empty to restore the default name.",
   "Choose a Picture",
   "This TV",
-  "Folders",
   "{n} apps",
   "Folder name",
-  "The TV updates right away.",
   "Folder renamed",
   "Inputs",
   "Turned on, the input goes first on Home; you can then change its icon or name under App Icons.",
@@ -524,6 +596,28 @@ const TEXTS = {
   "Removed from Home",
   "The name the TV shows; leave it empty to go back to “{name}”.",
   "Originally “{name}”",
+  "Arrange Home",
+  "Order, hide, folders",
+  "Laid out as on the TV, five to a row; the first row is the one on the TV's shelf. Press and hold a tile, then drag it where you want it. Tap a tile to put it in a folder or hide it; tap a folder to open it.",
+  "Home on the TV is not ready; go back to Home on the TV and try again.",
+  "Hidden Apps",
+  "No hidden apps.",
+  "The parental PIN is on: {n} hidden apps can only be shown again on the TV, with the PIN.",
+  "Show",
+  "Hide from Home",
+  "Move to Folder",
+  "New Folder",
+  "Move Out of Folder",
+  "Ungroup Folder",
+  "Ungroup “{name}”? Its apps go back to Home.",
+  "Back",
+  "Done",
+  "Press and hold a tile and drag it to reorder the folder; tap a tile to move it out.",
+  "Hidden",
+  "Back on Home",
+  "Moved to “{name}”",
+  "Moved out of the folder",
+  "Folder ungrouped",
   "Model"
  ],
  "ru": [
@@ -625,10 +719,8 @@ const TEXTS = {
   "Назовите источник; оставьте пустым, чтобы вернуть название по умолчанию.",
   "Выбрать картинку",
   "Этот телевизор",
-  "Папки",
   "Приложений: {n}",
   "Название папки",
-  "На телевизоре изменится сразу.",
   "Папка переименована",
   "Источники",
   "Включённый источник встаёт первым на главном экране; затем в разделе значков приложений можно сменить его значок или название.",
@@ -636,6 +728,28 @@ const TEXTS = {
   "Убрано с главного экрана",
   "Название, которое показывает телевизор; оставьте пустым, чтобы вернуть «{name}».",
   "Исходное название: {name}",
+  "Упорядочить главный экран",
+  "Порядок, скрытие, папки",
+  "Как на телевизоре: по пять в ряд, первый ряд — тот, что на полке телевизора. Нажмите и удерживайте плитку, затем перетащите её. Нажмите на плитку, чтобы положить в папку или скрыть; нажмите на папку, чтобы открыть.",
+  "Главный экран телевизора ещё не готов; вернитесь на него и попробуйте снова.",
+  "Скрытые приложения",
+  "Скрытых приложений нет.",
+  "Включён родительский PIN: скрытых приложений {n}, вернуть их можно только на телевизоре с PIN-кодом.",
+  "Показать",
+  "Скрыть с главного экрана",
+  "Переместить в папку",
+  "Новая папка",
+  "Убрать из папки",
+  "Расформировать папку",
+  "Расформировать «{name}»? Приложения вернутся на главный экран.",
+  "Назад",
+  "Готово",
+  "Нажмите и удерживайте плитку и перетащите её, чтобы изменить порядок в папке; нажмите, чтобы убрать её из папки.",
+  "Скрыто",
+  "Снова на главном экране",
+  "Перемещено в «{name}»",
+  "Убрано из папки",
+  "Папка расформирована",
   "Модель"
  ],
  "uk": [
@@ -737,10 +851,8 @@ const TEXTS = {
   "Назвіть джерело; залиште порожнім, щоб повернути назву за замовчуванням.",
   "Вибрати зображення",
   "Цей телевізор",
-  "Папки",
   "Застосунків: {n}",
   "Назва папки",
-  "На телевізорі зміниться одразу.",
   "Папку перейменовано",
   "Джерела",
   "Увімкнене джерело стає першим на головному екрані; потім у розділі значків застосунків можна змінити його значок або назву.",
@@ -748,6 +860,28 @@ const TEXTS = {
   "Прибрано з головного екрана",
   "Назва, яку показує телевізор; залиште порожнім, щоб повернути «{name}».",
   "Початкова назва: {name}",
+  "Упорядкувати головний екран",
+  "Порядок, приховування, папки",
+  "Як на телевізорі: по п'ять у ряд, перший ряд — той, що на полиці телевізора. Натисніть і утримуйте плитку, потім перетягніть її. Натисніть на плитку, щоб покласти в папку або приховати; натисніть на папку, щоб відкрити.",
+  "Головний екран телевізора ще не готовий; поверніться на нього й спробуйте знову.",
+  "Приховані застосунки",
+  "Прихованих застосунків немає.",
+  "Увімкнено батьківський PIN: прихованих застосунків {n}, повернути їх можна лише на телевізорі з PIN-кодом.",
+  "Показати",
+  "Приховати з головного екрана",
+  "Перемістити в папку",
+  "Нова папка",
+  "Вийняти з папки",
+  "Розформувати папку",
+  "Розформувати «{name}»? Застосунки повернуться на головний екран.",
+  "Назад",
+  "Готово",
+  "Натисніть і утримуйте плитку та перетягніть, щоб змінити порядок у папці; натисніть, щоб вийняти її з папки.",
+  "Приховано",
+  "Знову на головному екрані",
+  "Переміщено в «{name}»",
+  "Вийнято з папки",
+  "Папку розформовано",
   "Модель"
  ],
  "kk": [
@@ -849,10 +983,8 @@ const TEXTS = {
   "Көзге атау беріңіз; әдепкі атауды қайтару үшін бос қалдырыңыз.",
   "Сурет таңдау",
   "Осы теледидар",
-  "Қалталар",
   "{n} қолданба",
   "Қалта атауы",
-  "Теледидарда бірден жаңарады.",
   "Қалтаның аты өзгертілді",
   "Көздер",
   "Қосылған көз басты экранда бірінші тұрады; содан кейін қолданба белгішелері бөлімінде оның белгішесін немесе атауын өзгертуге болады.",
@@ -860,6 +992,28 @@ const TEXTS = {
   "Басты экраннан алынды",
   "Теледидар көрсететін атау; «{name}» атауын қайтару үшін бос қалдырыңыз.",
   "Бастапқы атауы: {name}",
+  "Басты экранды реттеу",
+  "Реті, жасыру, қалталар",
+  "Теледидардағыдай: қатарда бесеуден, бірінші қатар — теледидар сөресіндегі қатар. Плитканы басып ұстап, қалаған жерге сүйреңіз. Қалтаға салу не жасыру үшін плитканы түртіңіз; қалтаны ашу үшін оны түртіңіз.",
+  "Теледидардағы басты экран әлі дайын емес; оған оралып, қайталап көріңіз.",
+  "Жасырылған қолданбалар",
+  "Жасырылған қолданбалар жоқ.",
+  "Ата-ана PIN коды қосулы: {n} жасырылған қолданбаны тек теледидарда PIN кодпен қайтаруға болады.",
+  "Көрсету",
+  "Басты экраннан жасыру",
+  "Қалтаға жылжыту",
+  "Жаңа қалта",
+  "Қалтадан шығару",
+  "Қалтаны тарату",
+  "«{name}» таратылсын ба? Қолданбалар басты экранға оралады.",
+  "Артқа",
+  "Дайын",
+  "Қалтадағы ретті өзгерту үшін плитканы басып ұстап сүйреңіз; қалтадан шығару үшін оны түртіңіз.",
+  "Жасырылды",
+  "Басты экранға қайтты",
+  "«{name}» қалтасына жылжытылды",
+  "Қалтадан шығарылды",
+  "Қалта таратылды",
   "Модель"
  ]
 };
@@ -1099,7 +1253,6 @@ function renderHome() {
     hint.append(b);
   } else hint.textContent = w.place ? t('wx_guessed', { place: w.place }) : t('wx_none');
   renderInputs();
-  renderFolders();
   renderApps();
 }
 function renderInputs() {
@@ -1122,42 +1275,6 @@ function renderInputs() {
     };
     row.append(txt, sw); list.appendChild(row);
   }
-}
-function renderFolders() {
-  const folders = state.folders || [];
-  $('#foldersBox').hidden = !folders.length;
-  const list = $('#folders'); list.replaceChildren();
-  for (const f of folders) {
-    const b = el('button', 'item');
-    const img = el('img', 'thumb'); img.alt = ''; img.src = `${base}tile/${encodeURIComponent(f.key)}?v=${f.stamp}`;
-    const txt = el('span', 'txt', f.name); txt.appendChild(el('span', 'sub', t('folder_count', { n: f.count })));
-    b.append(img, txt); b.insertAdjacentHTML('beforeend', ICON.chev);
-    b.onclick = () => folderSheet(f);
-    list.appendChild(b);
-  }
-}
-function folderSheet(f) {
-  openSheet(body => {
-    const pic = el('div', 'pic'); const img = el('img'); img.src = `${base}tile/${encodeURIComponent(f.key)}?v=${f.stamp}`; pic.appendChild(img); body.appendChild(pic);
-    body.appendChild(el('h3', '', f.name));
-    body.appendChild(el('p', 'meta', t('folder_count', { n: f.count })));
-    const l = el('div', 'list'); body.appendChild(l);
-    const form = el('form', 'item field');
-    const input = el('input'); input.type = 'text'; input.value = f.name; input.placeholder = t('folder_ph'); input.maxLength = 24;
-    input.setAttribute('enterkeyhint', 'done'); input.autocomplete = 'off'; input.setAttribute('aria-label', t('folder_ph'));
-    const save = el('button', 'link', t('save'));
-    const sync = () => save.disabled = !input.value.trim() || input.value.trim() === f.name;
-    input.oninput = sync; sync();
-    form.append(input, save); l.appendChild(form);
-    form.onsubmit = async e => {
-      e.preventDefault(); const name = input.value.trim(); if (!name) return; closeSheet();
-      try { const next = await api('api/folder/name', { id: f.id, name }); take(next); toast(t(next.saved ? 'toast_folder_renamed' : 'toast_rename_fail')); }
-      catch (err) { toast(t('toast_rename_fail')); }
-    };
-    body.appendChild(el('p', 'foot', t('folder_rename_hint'))).style.marginBottom = '16px';
-    const c = el('div', 'list'); body.appendChild(c);
-    action(c, t('cancel'), 'tint', closeSheet).style.fontWeight = '600';
-  });
 }
 document.querySelectorAll('#focus [data-style]').forEach(b => b.onclick = async () => {
   if (b.dataset.style === state.focusStyle) return;
@@ -1258,6 +1375,266 @@ $('#diagCopy').onclick = () => {
   toast(t(ok ? 'toast_copied' : 'toast_copy_manual'));
 };
 
+/* Arrange Home: Home's tiles in a grid as on the TV, dragged into place; a tile's tap offers its other steps. */
+const arrange = $('#arrange');
+let arrView = null;            // null = Home's list, else a folder id
+let arrDragging = false;       // while a row is held, nothing re-renders under it
+let arrPending = false;        // a state that arrived mid-drag, rendered on drop
+function tileImg(e) { const i = el('img', 'thumb'); i.alt = ''; i.loading = 'lazy'; i.src = `${base}tile/${encodeURIComponent(e.key)}?v=${e.stamp}`; return i; }
+function openArrange() {
+  arrView = null; renderArrange(false);
+  arrange.hidden = false; document.body.style.overflow = 'hidden';
+  placeShelves();   // measured once the page is shown
+  clearTimeout(openArrange.timer);
+  // A layout pass first, so the slide starts from below the screen.
+  void arrange.offsetHeight; arrange.classList.add('open');
+}
+function closeArrange() {
+  arrange.classList.remove('open'); document.body.style.overflow = '';
+  clearTimeout(openArrange.timer); openArrange.timer = setTimeout(() => { arrange.hidden = true; refresh(); }, 260);
+}
+$('#arrangeBtn').onclick = openArrange;
+$('#arrDone').onclick = closeArrange;
+$('#arrBack').onclick = () => { arrView = null; renderArrange(true); };
+
+async function lay(params, done) {
+  try {
+    const next = await api('api/layout', params);
+    if (!next.saved) throw new Error('not saved');
+    take(next); if (done) done(next);
+  } catch (e) { toast(t('toast_set_fail')); stateJson = ''; render(); }
+}
+function folderNameOf(next, key) {
+  const L = next.layout || {}; const f = Object.keys(L.folders || {}).find(id => (L.folders[id] || []).some(a => a.key === key));
+  const tile = f && (L.home || []).find(e => e.id === f); return tile ? tile.label : '';
+}
+
+function renderArrange(push) {
+  if (arrDragging) { arrPending = true; return; }
+  const L = state.layout || { home: [], folders: {}, hidden: [] };
+  if (arrView !== null && !(L.folders || {})[arrView]) arrView = null;   // ungrouped, or emptied
+  const folderTile = arrView !== null ? L.home.find(e => e.id === arrView) : null;
+  $('#arrTitle').textContent = folderTile ? folderTile.label : t('arrange_title');
+  // Hidden by visibility, so the title stays centred between the bar's two sides.
+  $('#arrBack').style.visibility = folderTile ? 'visible' : 'hidden';
+  const body = $('#arrBody'); const scroller = $('#arrScroll');
+  const keep = scroller.scrollTop;
+  const view = el('div', 'view' + (push ? ' push' : ''));
+  if (!L.ready) view.appendChild(el('p', 'foot', t('arrange_unready'))).style.marginTop = '20px';
+  if (folderTile) buildFolderView(view, folderTile, L.folders[arrView] || []);
+  else buildHomeView(view, L);
+  body.replaceChildren(view);
+  placeShelves();
+  scroller.scrollTop = push ? 0 : keep;
+}
+
+function buildHomeView(view, L) {
+  view.appendChild(el('h2', '', t('tab_home')));
+  const grid = tileGrid(L.home, true); view.appendChild(grid);
+  sortableGrid(grid, L.home.map(e => e.key),
+    (key, target) => lay({ op: 'move', key, target }),
+    i => { const e = L.home[i]; e.kind === 'folder' ? (arrView = e.id, renderArrange(true)) : tileActions(e, null); });
+  view.appendChild(el('p', 'foot', t('arrange_hint')));
+
+  view.appendChild(el('h2', '', t('hidden_h')));
+  if (L.locked && L.hiddenCount) { view.appendChild(el('p', 'foot', t('hidden_locked', { n: L.hiddenCount }))); return; }
+  if (!L.hidden.length) { view.appendChild(el('p', 'foot', t('hidden_none'))); return; }
+  const hl = el('div', 'list'); view.appendChild(hl);
+  for (const e of L.hidden) {
+    const row = el('div', 'item arow'); row.append(tileImg(e), el('span', 'txt', e.label));
+    const b = el('button', 'link act', t('show_app'));
+    b.onclick = () => { b.disabled = true; lay({ op: 'unhide', key: e.key }, () => toast(t('toast_shown'))); };
+    row.appendChild(b); hl.appendChild(row);
+  }
+}
+
+function buildFolderView(view, folder, apps) {
+  // The folder's name, edited in place.
+  view.appendChild(el('h2', '', t('folder_ph')));
+  const nl = el('div', 'list'); view.appendChild(nl);
+  const form = el('form', 'item field');
+  const input = el('input'); input.type = 'text'; input.value = folder.label; input.maxLength = 24; input.placeholder = t('folder_ph');
+  input.setAttribute('enterkeyhint', 'done'); input.autocomplete = 'off'; input.setAttribute('aria-label', t('folder_ph'));
+  const save = el('button', 'link', t('save'));
+  const sync = () => save.disabled = !input.value.trim() || input.value.trim() === folder.label;
+  input.oninput = sync; sync(); form.append(input, save); nl.appendChild(form);
+  form.onsubmit = async e => {
+    e.preventDefault(); const name = input.value.trim(); if (!name) return; input.blur();
+    try { const next = await api('api/folder/name', { id: folder.id, name }); take(next); toast(t(next.saved ? 'toast_folder_renamed' : 'toast_rename_fail')); }
+    catch (err) { toast(t('toast_rename_fail')); }
+  };
+
+  view.appendChild(el('h2', '', t('folder_count', { n: apps.length })));
+  const grid = tileGrid(apps, false); view.appendChild(grid);
+  sortableGrid(grid, apps.map(e => e.key), (key, target) => lay({ op: 'movein', key, target }), i => tileActions(apps[i], folder));
+  view.appendChild(el('p', 'foot', t('folder_hint')));
+
+  const al = el('div', 'list'); al.style.marginTop = '28px'; view.appendChild(al);
+  action(al, t('ungroup'), 'danger', () => openSheet(body => {
+    body.appendChild(el('h3', '', t('ungroup_confirm', { name: folder.label }))).style.marginBottom = '16px';
+    const l = el('div', 'list'); body.appendChild(l);
+    action(l, t('ungroup'), 'danger', () => { closeSheet(); lay({ op: 'ungroup', folder: folder.id }, () => toast(t('toast_ungrouped'))); });
+    const c = el('div', 'list'); body.appendChild(c);
+    action(c, t('cancel'), 'tint', closeSheet).style.fontWeight = '600';
+  }));
+}
+
+function tileGrid(entries, shelf) {
+  const grid = el('div', 'agrid');
+  if (shelf && entries.length) grid.appendChild(el('div', 'shelf'));
+  for (const e of entries) {
+    const tile = el('div', 'atile'); tile.dataset.key = e.key; tile.setAttribute('role', 'button'); tile.tabIndex = 0;
+    tile.setAttribute('aria-label', e.label);
+    const pic = el('div', 'tpic'); const img = el('img'); img.alt = ''; img.draggable = false; img.loading = 'lazy';
+    img.src = `${base}tile/${encodeURIComponent(e.key)}?v=${e.stamp}`; pic.appendChild(img);
+    tile.append(pic, el('span', 'n', e.label));
+    grid.appendChild(tile);
+  }
+  return grid;
+}
+/* The shelf sits behind Home's first row, as the glass plate does on the TV. */
+function placeShelves() {
+  document.querySelectorAll('#arrBody .agrid').forEach(g => {
+    const shelf = g.querySelector('.shelf'); if (!shelf) return;
+    const first = [...g.querySelectorAll('.atile')].slice(0, 5);
+    const bottom = Math.max(...first.map(t => t.offsetTop + t.offsetHeight));
+    shelf.style.height = (bottom + 6 - 4) + 'px';
+  });
+}
+addEventListener('resize', placeShelves);
+
+/* A tile's steps: into a folder (or a new one), out of its folder, hidden. */
+function tileActions(e, inFolder) {
+  const L = state.layout || {};
+  const folders = (L.home || []).filter(x => x.kind === 'folder' && (!inFolder || x.id !== inFolder.id));
+  openSheet(body => {
+    const pic = el('div', 'pic'); const img = el('img'); img.src = `${base}tile/${encodeURIComponent(e.key)}?v=${e.stamp}`; pic.appendChild(img); body.appendChild(pic);
+    body.appendChild(el('h3', '', e.label));
+    body.appendChild(el('p', 'meta', inFolder ? inFolder.label : ''));
+    const l = el('div', 'list'); body.appendChild(l);
+    action(l, t('to_folder'), 'tint', () => folderChooser(e, folders));
+    if (inFolder) action(l, t('out_of_folder'), 'tint', () => { closeSheet(); lay({ op: 'unfolder', key: e.key }, () => toast(t('toast_out_folder'))); });
+    action(l, t('hide_app'), 'danger', () => { closeSheet(); lay({ op: 'hide', key: e.key }, () => toast(t('toast_hidden'))); });
+    const c = el('div', 'list'); body.appendChild(c);
+    action(c, t('cancel'), 'tint', closeSheet).style.fontWeight = '600';
+  });
+}
+function folderChooser(e, folders) {
+  const body = $('#sheetBody'); body.replaceChildren();
+  body.appendChild(el('h3', '', t('to_folder'))); body.appendChild(el('p', 'meta', e.label));
+  const l = el('div', 'list'); body.appendChild(l);
+  const go = id => { closeSheet(); lay({ op: 'folder', key: e.key, folder: id || '' }, next => toast(t('toast_in_folder', { name: folderNameOf(next, e.key) }))); };
+  for (const f of folders) {
+    const b = el('button', 'item'); b.append(tileImg(f), el('span', 'txt', f.label)); b.onclick = () => go(f.id); l.appendChild(b);
+  }
+  const n = el('button', 'item tint'); n.innerHTML = ICON.plus; n.appendChild(el('span', 'txt', t('new_folder'))); n.onclick = () => go(''); l.appendChild(n);
+  const c = el('div', 'list'); body.appendChild(c);
+  action(c, t('cancel'), 'tint', closeSheet).style.fontWeight = '600';
+}
+
+/*
+ * Drag a tile to its place, as moving one on the TV. A touch picks the tile up after a short hold
+ * (a quick swipe still scrolls the page); a mouse picks it up as soon as it moves. The tile follows
+ * the finger with no easing (it is under the finger), the others slide to their new slots on an
+ * interruptible transition, and near the top or bottom the page scrolls. On release the tile settles
+ * into its slot and the grid takes the new order at once; the TV is told after. A tap is a tap.
+ * A second finger is ignored while one tile is held.
+ */
+function sortableGrid(grid, keys, onMove, onTap) {
+  grid.addEventListener('pointerdown', ev => {
+    const tile = ev.target.closest('.atile'); if (!tile || arrDragging || ev.button > 0) return;
+    const tiles = [...grid.querySelectorAll('.atile')]; const from = tiles.indexOf(tile);
+    const pid = ev.pointerId, touch = ev.pointerType !== 'mouse';
+    const scroller = $('#arrScroll');
+    const sx = ev.clientX, sy = ev.clientY;
+    let x = sx, y = sy, lifted = false, ended = false, timer = 0, raf = 0, to = from;
+    let cells = [], g0 = null;
+    const blockScroll = e => { if (lifted) e.preventDefault(); };
+
+    const lift = () => {
+      lifted = true; arrDragging = true;
+      try { tile.setPointerCapture(pid); } catch (e) {}
+      document.addEventListener('touchmove', blockScroll, { passive: false });
+      cells = tiles.map(t => ({ x: t.offsetLeft, y: t.offsetTop, w: t.offsetWidth, h: t.offsetHeight }));
+      const r = grid.getBoundingClientRect(); g0 = { x: sx - r.left, y: sy - r.top };
+      grid.classList.add('sorting'); tile.classList.add('lift');
+      try { navigator.vibrate && navigator.vibrate(10); } catch (e) {}
+      raf = requestAnimationFrame(edge);
+    };
+    const slotAt = (px, py) => {
+      let best = from, bd = Infinity;
+      cells.forEach((c, i) => { const d = (c.x + c.w / 2 - px) ** 2 + (c.y + c.h / 2 - py) ** 2; if (d < bd) { bd = d; best = i; } });
+      return best;
+    };
+    const place = () => {
+      const r = grid.getBoundingClientRect(); const gx = x - r.left, gy = y - r.top;
+      tile.style.transform = `translate(${gx - g0.x}px, ${gy - g0.y}px)`;
+      const next = slotAt(cells[from].x + cells[from].w / 2 + gx - g0.x, cells[from].y + cells[from].h / 2 + gy - g0.y);
+      if (next === to) return;
+      to = next;
+      tiles.forEach((t, j) => {
+        if (t === tile) return;
+        const k = from < to && j > from && j <= to ? j - 1 : from > to && j >= to && j < from ? j + 1 : j;
+        t.style.transform = k === j ? '' : `translate(${cells[k].x - cells[j].x}px, ${cells[k].y - cells[j].y}px)`;
+      });
+    };
+    const edge = () => {
+      const box = scroller.getBoundingClientRect(); const zone = 70;
+      const v = y < box.top + zone ? -(box.top + zone - y) / 4 : y > box.bottom - zone ? (y - (box.bottom - zone)) / 4 : 0;
+      if (v) { scroller.scrollTop += Math.max(-16, Math.min(16, v)); place(); }
+      raf = requestAnimationFrame(edge);
+    };
+    const finish = () => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel);
+      document.removeEventListener('touchmove', blockScroll);
+      clearTimeout(timer); cancelAnimationFrame(raf);
+    };
+    const drop = () => {
+      // Settle into the slot, then take the new order without motion.
+      tile.style.transition = 'transform .2s var(--ease-out)';
+      tile.style.transform = `translate(${cells[to].x - cells[from].x}px, ${cells[to].y - cells[from].y}px)`;
+      tile.classList.remove('lift');
+      setTimeout(() => {
+        grid.classList.remove('sorting');
+        tiles.forEach(t => { t.style.transition = 'none'; t.style.transform = ''; });
+        if (to !== from) grid.insertBefore(tile, to > from ? tiles[to].nextSibling : tiles[to]);
+        void grid.offsetHeight; tiles.forEach(t => t.style.transition = '');
+        arrDragging = false;
+        if (to !== from) onMove(keys[from], keys[to]);
+        else if (arrPending) { arrPending = false; renderArrange(false); }
+      }, 200);
+    };
+    const move = e => {
+      if (e.pointerId !== pid) return;
+      x = e.clientX; y = e.clientY;
+      const far = Math.hypot(x - sx, y - sy);
+      if (!lifted) {
+        if (touch && far > 8) { ended = true; finish(); }   // a swipe: the page scrolls
+        else if (!touch && far > 5) { lift(); place(); }
+        return;
+      }
+      place();
+    };
+    const up = e => {
+      if (e.pointerId !== pid || ended) return;
+      ended = true; finish();
+      if (lifted) drop(); else onTap(from);
+    };
+    const cancel = e => {
+      if (e.pointerId !== pid || ended) return;
+      ended = true; finish();
+      if (lifted) drop();
+    };
+    if (touch) timer = setTimeout(() => { if (!ended) { lift(); place(); } }, 260);
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel);
+  });
+  // Keyboard: Enter on a focused tile is a tap.
+  grid.addEventListener('keydown', e => {
+    const tile = e.target.closest('.atile'); if (!tile || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault(); onTap([...grid.querySelectorAll('.atile')].indexOf(tile));
+  });
+}
+
 function render() {
   if (!state) return;
   // The page polls; skip the rebuild when nothing changed, so pictures do not flicker and taps are not lost.
@@ -1267,6 +1644,7 @@ function render() {
   renderWallpapers();
   renderScreensaver();
   renderHome();
+  if (!arrange.hidden) renderArrange(false);
 }
 
 initLangSwitch();
@@ -1274,7 +1652,7 @@ applyI18n();
 show((location.hash || '').slice(1) || (() => { try { return localStorage.getItem('aerial-tab'); } catch (e) { return null; } })(), true);
 async function refresh() { try { state = await api('api/state'); render(); } catch (e) {} }
 refresh();
-setInterval(() => { if (!document.hidden && sheet.hidden) refresh(); }, 6000);
+setInterval(() => { if (!document.hidden && sheet.hidden && arrange.hidden) refresh(); }, 6000);
 </script>
 </body>
 </html>
