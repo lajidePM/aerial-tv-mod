@@ -74,7 +74,8 @@
   }
   .hero .cap small { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; opacity: .8; }
   .hero .cap b { font-size: 20px; font-weight: 600; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; }
+  /* Cells start at the top: a button centres its content, so a tile without a caption sat lower than its neighbour. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; align-items: start; }
   .wp { position: relative; display: block; border: 0; padding: 0; background: none; text-align: left; min-width: 0; }
   .wp .pic {
     position: relative; border-radius: 12px; overflow: hidden; background: var(--fill); aspect-ratio: 16 / 9;
