@@ -331,6 +331,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshNetwork() { network = SystemProbe.network(context) }
 
+    /**
+     * For the volume broadcast, one per step. It used to run refreshSystem, which read the level,
+     * then the inputs and brightness, and only then showed that level: holding a key on the slider,
+     * the steps outran those reads, and it jumped back to older levels (issue #445).
+     */
+    fun refreshVolume() { volume = SystemProbe.volume(context) }
+
     fun adjustVolume(direction: Int) {
         SystemProbe.adjustVolume(context, direction)
         volume = SystemProbe.volume(context)

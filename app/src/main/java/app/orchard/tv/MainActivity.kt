@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val volumeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = vm.refreshSystem()
+        override fun onReceive(context: Context, intent: Intent) = vm.refreshVolume()
     }
 
     /** Midnight, or the clock set at boot: a new daily photo, and the next of the rotating ones. */
@@ -612,6 +612,7 @@ class MainActivity : ComponentActivity() {
         vm.resumed = false
         DiagLog.i("onPause")
         GuardSetup.setHomeInFront(this, false)
+        HomeGuardService.onAerialPaused()
         idleHandler.removeCallbacks(showScreensaver)
         hideScreensaver()
     }
