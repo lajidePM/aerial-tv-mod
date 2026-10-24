@@ -299,6 +299,18 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * The brightness alone, off the main thread, for the level only the TV can change: XGIMI's DLP
+     * light engine can be moved from the TV's own overlay, which does not pause Aerial, so Control
+     * Center polls this while its brightness row is up.
+     */
+    fun refreshBrightness() {
+        viewModelScope.launch {
+            val level = withContext(Dispatchers.Default) { Brightness.level(context) }
+            brightness = level
+        }
+    }
+
     fun refreshNetwork() { network = SystemProbe.network(context) }
 
     fun adjustVolume(direction: Int) {

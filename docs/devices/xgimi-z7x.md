@@ -26,6 +26,13 @@ App 里的「开机自动恢复」默认关闭，**关着的话重启后 5555 �
 - 无障碍：原值 `com.xgimi.duertts/com.xgimi.duertts.MonitorService`，追加为 `...:app.orchard.tv/app.orchard.tv.guard.HomeGuardService`，可正常生效。
 - 屏保：`screensaver_enabled=1` 时接管为 `app.orchard.tv/app.orchard.tv.dream.AerialDream`。
 
+## 亮度
+
+- 真实亮度在私有 DLP 光机 HAL `com.xgimi.gmpf.api.DisplayManager.getDlpLumensLevel()`（byte，1–10，10 = 满亮）。普通 `Class.forName` 即可加载，实例用 `getInstance()` 拿。系统 `screen_brightness` 不跟随它：拖系统亮度时这个值不变，所以不能拿系统设置当真实亮度。
+- 1.42 及之前，控制中心那一行拖的是系统亮度：数字从 0 到 100 会动，画面一点不变。
+- `setDlpLumensLevel(byte)` 在这台 GMUI 9（`pig_chivalrous`）的普通 App 进程里写入有效：实测 10 → 2 后 `getDlpLumensLevel` 立刻返回 2，跨进程一致，画面同步变暗，不黑屏（最低 1）。issue #241 在 Z7X 上判定的「第三方只能读」在这台固件上不成立，所以 1.42 之后这一行直接步进光机自己的档位。
+- 极米亮度页是覆盖窗：打开时 Aerial 的 MainActivity 仍是 RESUMED，不触发 onPause/onResume，`SCREEN_BRIGHTNESS` 的 ContentObserver 也不触发。从极米页面改完亮度回到控制中心，只能靠控制中心自己轮询 HAL（每 700 ms）。
+
 ## 开机行为
 
 - **1.19 / 1.20**：重启后停在极米原桌面，需要手动按一次 Home 才进 Aerial，`keep_adb` 已经下发也无效。
