@@ -300,6 +300,19 @@ class HomeGuardService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             registerReceiver(userUnlocked, IntentFilter(Intent.ACTION_USER_UNLOCKED))
         }
+        // Start the boot take-over timer before the init below. With an unknown front the decision
+        // does not need stockHomes, and the init is not free: on Skyworth skyT963 (1AA46_V58FP,
+        // Android 9) refreshStockHomes and the rest took ~3 s, all of it added to what the stock
+        // launcher showed at boot. CEC is safe the same way it was: the take-over only acts when a
+        // stock home is still in front when it fires, so an input the firmware has already switched
+        // to is left alone; the input-switch pass-through below keeps its own longer settle.
+        val fastBootTakeOver = GuardSetup.isUserUnlocked(this) &&
+            SystemClock.elapsedRealtime() < BOOT_WINDOW_MS &&
+            getSystemService<PowerManager>()?.isInteractive == true
+        if (fastBootTakeOver) {
+            takeOverOnceSettled("bound shortly after boot", woke = true)
+            scheduleBootRechecks()
+        }
         refreshStockHomes()
         screenOff = getSystemService<PowerManager>()?.isInteractive == false
         updateKeyFilter()
@@ -337,7 +350,8 @@ class HomeGuardService : AccessibilityService() {
         // Not gated on being the default Home: Skyworth/Coolita (8R145, Android 11) starts its own
         // launcher at boot whatever Home resolves to (issue #43). The take-over looks first, and
         // bringing Aerial back over itself changes nothing.
-        if ((SystemClock.elapsedRealtime() < BOOT_WINDOW_MS || revived || diedInFront) &&
+        if (!fastBootTakeOver &&
+            (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS || revived || diedInFront) &&
             getSystemService<PowerManager>()?.isInteractive == true
         ) {
             takeOverOnceSettled(
