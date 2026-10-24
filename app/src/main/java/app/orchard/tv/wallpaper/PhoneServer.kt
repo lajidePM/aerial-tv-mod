@@ -12,6 +12,7 @@ import app.orchard.tv.apps.FOLDER_KEY_PREFIX
 import app.orchard.tv.apps.AppEntry
 import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.CustomIcons
+import app.orchard.tv.apps.SourceDevice
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.TileArtFactory
 import app.orchard.tv.settings.AerialSettings
@@ -105,6 +106,13 @@ class PhoneServer private constructor(private val context: Context, private val 
                     json(state().put("saved", saved))
                 }
                 session.method == Method.POST && path == "/api/layout" -> layout(form(session))
+                session.method == Method.POST && path == "/api/source/device" -> {
+                    val f = form(session)
+                    val source = AppCatalog.pinnedSources.firstOrNull { it.key == f["app"] }?.source
+                    // As from the tile's menu: a device names the tile after it, "" goes back to the plain input.
+                    if (source != null) runBlocking(Dispatchers.Main) { SourceLooks.chooseDevice(source.id, SourceDevice.of(f["device"])) }
+                    json(state().put("saved", source != null))
+                }
                 session.method == Method.POST && path == "/api/source/pin" -> {
                     val f = form(session)
                     val id = f["id"].orEmpty()
@@ -176,7 +184,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                     val label = look?.let { it.name ?: it.device?.let { d -> context.getString(d.label) } } ?: src.label
                     // The stamp makes the phone fetch the tile again once its picture changes.
                     put(JSONObject().put("key", a.key).put("label", label).put("default", src.label).put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key))
-                        .put("source", true).put("port", src.label).put("name", look?.name ?: "").put("look", look.hashCode()))
+                        .put("source", true).put("port", src.label).put("name", look?.name ?: "").put("device", look?.device?.key ?: "").put("look", look.hashCode()))
                 }
                 apps.forEach { (a, label) ->
                     put(JSONObject().put("key", a.key).put("label", label).put("default", a.label).put("name", AppNames.of(a.key) ?: "")
@@ -184,6 +192,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                 }
             })
             .put("layout", layoutState())
+            .put("devices", JSONArray().apply { SourceDevice.entries.forEach { put(JSONObject().put("key", it.key).put("label", context.getString(it.label))) } })
             .put("inputs", JSONArray().apply {
                 // Every input Home knows of, for pinning to Home from the phone.
                 AppCatalog.sources.forEach { src ->
@@ -210,7 +219,8 @@ class PhoneServer private constructor(private val context: Context, private val 
     private fun layoutState(): JSONObject {
         fun tile(e: AppEntry) = JSONObject().put("key", e.key).put("label", e.label)
             .put("kind", when { e.folder != null -> "folder"; e.source != null -> "source"; else -> "app" })
-            .put("stamp", if (e.folder != null) e.art.hashCode().toLong() else CustomIcons.stamp(e.key))
+            // Folder and input art changes without a picture from the phone (contents, chosen device).
+            .put("stamp", if (e.folder != null || e.source != null) e.art.hashCode().toLong() else CustomIcons.stamp(e.key))
             .apply { e.folder?.let { put("id", it.id) }; e.source?.let { put("port", it.label) } }
         val folders = JSONObject()
         AppCatalog.folderApps.forEach { (id, apps) -> folders.put(id, JSONArray().apply { apps.forEach { put(tile(it)) } }) }
