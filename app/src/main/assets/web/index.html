@@ -64,6 +64,17 @@
   [aria-checked="true"] .tick { opacity: 1; transform: none; }
   .item[disabled] { opacity: .5; }
   .item select { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; }
+  .switch {
+    appearance: none; -webkit-appearance: none; position: relative; flex-shrink: 0; width: 51px; height: 31px; margin: 0;
+    border-radius: 16px; background: var(--fill); cursor: pointer; transition: background-color .2s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
+    box-shadow: 0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.16); transition: transform .25s var(--ease-out);
+  }
+  .switch:checked { background: #34c759; }
+  .switch:checked::after { transform: translateX(20px); }
+  .switch:disabled { opacity: .5; }
 
   /* Wallpaper cards. */
   .hero { position: relative; margin-top: 14px; border-radius: 16px; overflow: hidden; background: var(--fill); aspect-ratio: 16 / 9; }
@@ -229,6 +240,12 @@
   </div>
   <p class="foot" id="wxHint"></p>
 
+  <div id="inputsBox" hidden>
+    <h2 data-i18n="inputs_h"></h2>
+    <div class="list" id="inputs"></div>
+    <p class="foot" data-i18n="inputs_hint"></p>
+  </div>
+
   <div id="foldersBox" hidden>
     <h2 data-i18n="folders_h"></h2>
     <div class="list" id="folders"></div>
@@ -283,7 +300,7 @@ let state = null, stateJson = '';
 
 // The language: ?lang=ru in the address, else the one picked under More (kept on the phone), else the
 // first of the phone's preferred languages that has a table, else English. Keys are in KEYS, one array of texts per language.
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_photos", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "upload_label", "icons_h", "icons_hint", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_photos", "hint_clock", "g_live", "g_live_sub", "g_daily", "g_daily_sub", "g_photo", "g_builtin", "g_auto", "toast_wallpaper", "aria_delete", "confirm_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "tag_custom", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "daily_title", "daily_caption", "rotate_title", "rotate_caption", "empty_photos", "add_second", "toast_tv_updated", "sending_n", "toast_added", "toast_no_photos", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "hint_follows", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_wallpaper", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "this_tv", "folders_h", "folder_count", "folder_ph", "folder_rename_hint", "toast_folder_renamed", "tv_model"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_photos", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "upload_label", "icons_h", "icons_hint", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_photos", "hint_clock", "g_live", "g_live_sub", "g_daily", "g_daily_sub", "g_photo", "g_builtin", "g_auto", "toast_wallpaper", "aria_delete", "confirm_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "tag_custom", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "daily_title", "daily_caption", "rotate_title", "rotate_caption", "empty_photos", "add_second", "toast_tv_updated", "sending_n", "toast_added", "toast_no_photos", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "hint_follows", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_wallpaper", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "this_tv", "folders_h", "folder_count", "folder_ph", "folder_rename_hint", "toast_folder_renamed", "inputs_h", "inputs_hint", "toast_pinned", "toast_unpinned", "rename_hint_app", "was_named", "tv_model"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -299,7 +316,7 @@ const TEXTS = {
   "设置",
   "添加照片",
   "App 图标",
-  "点一个 App，从手机选一张图片换掉它在电视上的图标。图片会裁成 16:9，横图效果最好。固定到主屏幕的信号源（HDMI 等）也在这里，还可以起名字。",
+  "点一个 App，可以从手机选一张图片换掉它在电视上的图标，也可以改名字。图片会裁成 16:9，横图效果最好。放到主屏幕的信号源（HDMI 等）也在这里。",
   "反馈问题",
   "这台电视上 Aerial 有问题，或者想让 Aerial 适配它：复制诊断信息，贴进 GitHub 的「机型适配」反馈里。里面是机型、系统版本、桌面接管状态、信号源和 Aerial 的日志，不含账号、Wi-Fi 名称、IP 地址和照片。",
   "显示诊断信息",
@@ -389,6 +406,12 @@ const TEXTS = {
   "文件夹名字",
   "改好后电视上马上更新。",
   "文件夹已改名",
+  "信号源",
+  "打开后，这个信号源会放到主屏幕第一个位置；下面的 App 图标里可以给它换图标、改名字。",
+  "已放到主屏幕",
+  "已从主屏幕移除",
+  "改成你想在电视上看到的名字，留空恢复「{name}」。",
+  "原名：{name}",
   "型号"
  ],
  "en": [
@@ -405,7 +428,7 @@ const TEXTS = {
   "Set",
   "Add Photos",
   "App Icons",
-  "Tap an app to replace its icon on the TV with a picture from your phone. Pictures are cropped to 16:9; wide ones work best. Inputs pinned to Home (HDMI and the like) are here too, and can be renamed.",
+  "Tap an app to replace its icon on the TV with a picture from your phone, or to rename it. Pictures are cropped to 16:9; wide ones work best. Inputs on Home (HDMI and the like) are here too.",
   "Report a Problem",
   "Something is wrong with Aerial on this TV, or you want Aerial to support it: copy the diagnostics and paste them into a GitHub “Device” issue. They hold the model, the system version, the Home takeover status, the inputs and Aerial’s log, and no accounts, Wi-Fi names, IP addresses or photos.",
   "Show Diagnostics",
@@ -495,6 +518,12 @@ const TEXTS = {
   "Folder name",
   "The TV updates right away.",
   "Folder renamed",
+  "Inputs",
+  "Turned on, the input goes first on Home; you can then change its icon or name under App Icons.",
+  "Added to Home",
+  "Removed from Home",
+  "The name the TV shows; leave it empty to go back to “{name}”.",
+  "Originally “{name}”",
   "Model"
  ],
  "ru": [
@@ -511,7 +540,7 @@ const TEXTS = {
   "Задать",
   "Добавить фото",
   "Значки приложений",
-  "Нажмите на приложение, чтобы заменить его значок на телевизоре картинкой с телефона. Картинка обрезается до 16:9; лучше всего подходят широкие. Здесь же источники, закреплённые на главном экране (HDMI и подобные), их можно переименовать.",
+  "Нажмите на приложение, чтобы заменить его значок на телевизоре картинкой с телефона или переименовать его. Картинка обрезается до 16:9; лучше всего подходят широкие. Здесь же источники на главном экране (HDMI и подобные).",
   "Сообщить о проблеме",
   "С Aerial на этом телевизоре что-то не так, или вы хотите, чтобы Aerial его поддерживал: скопируйте диагностику и вставьте её в обращение GitHub о моделях. В ней модель, версия системы, статус перехвата главного экрана, источники и журнал Aerial, без учётных записей, названий Wi-Fi, IP-адресов и фото.",
   "Показать диагностику",
@@ -601,6 +630,12 @@ const TEXTS = {
   "Название папки",
   "На телевизоре изменится сразу.",
   "Папка переименована",
+  "Источники",
+  "Включённый источник встаёт первым на главном экране; затем в разделе значков приложений можно сменить его значок или название.",
+  "Добавлено на главный экран",
+  "Убрано с главного экрана",
+  "Название, которое показывает телевизор; оставьте пустым, чтобы вернуть «{name}».",
+  "Исходное название: {name}",
   "Модель"
  ],
  "uk": [
@@ -617,7 +652,7 @@ const TEXTS = {
   "Задати",
   "Додати фото",
   "Значки застосунків",
-  "Натисніть на застосунок, щоб замінити його значок на телевізорі зображенням з телефона. Зображення обрізається до 16:9; найкраще підходять широкі. Тут же джерела, закріплені на головному екрані (HDMI тощо), їх можна перейменувати.",
+  "Натисніть на застосунок, щоб замінити його значок на телевізорі зображенням з телефона або перейменувати його. Зображення обрізається до 16:9; найкраще підходять широкі. Тут же джерела на головному екрані (HDMI тощо).",
   "Повідомити про проблему",
   "З Aerial на цьому телевізорі щось не так, або ви хочете, щоб Aerial його підтримував: скопіюйте діагностику й вставте її в звернення GitHub про моделі. У ній модель, версія системи, статус перехоплення головного екрана, джерела та журнал Aerial, без облікових записів, назв Wi-Fi, IP-адрес і фото.",
   "Показати діагностику",
@@ -707,6 +742,12 @@ const TEXTS = {
   "Назва папки",
   "На телевізорі зміниться одразу.",
   "Папку перейменовано",
+  "Джерела",
+  "Увімкнене джерело стає першим на головному екрані; потім у розділі значків застосунків можна змінити його значок або назву.",
+  "Додано на головний екран",
+  "Прибрано з головного екрана",
+  "Назва, яку показує телевізор; залиште порожнім, щоб повернути «{name}».",
+  "Початкова назва: {name}",
   "Модель"
  ],
  "kk": [
@@ -723,7 +764,7 @@ const TEXTS = {
   "Орнату",
   "Фото қосу",
   "Қолданба белгішелері",
-  "Теледидардағы белгішесін телефондағы суретпен ауыстыру үшін қолданбаны түртіңіз. Сурет 16:9 өлшеміне қиылады; ең жақсы нәтижені кең суреттер береді. Басты экранға бекітілген көздер (HDMI және т.б.) де осында, олардың атын өзгертуге болады.",
+  "Теледидардағы белгішесін телефондағы суретпен ауыстыру немесе атын өзгерту үшін қолданбаны түртіңіз. Сурет 16:9 өлшеміне қиылады; ең жақсы нәтижені кең суреттер береді. Басты экрандағы көздер (HDMI және т.б.) де осында.",
   "Мәселе туралы хабарлау",
   "Осы теледидардағы Aerial-де ақау бар немесе Aerial-дің оны қолдағанын қалайсыз: диагностиканы көшіріп, GitHub-тағы құрылғы туралы өтінішке қойыңыз. Онда модель, жүйе нұсқасы, басты экранды басып алу күйі, көздер және Aerial журналы бар, есептік жазбалар, Wi-Fi атаулары, IP мекенжайлар және фотолар жоқ.",
   "Диагностиканы көрсету",
@@ -813,6 +854,12 @@ const TEXTS = {
   "Қалта атауы",
   "Теледидарда бірден жаңарады.",
   "Қалтаның аты өзгертілді",
+  "Көздер",
+  "Қосылған көз басты экранда бірінші тұрады; содан кейін қолданба белгішелері бөлімінде оның белгішесін немесе атауын өзгертуге болады.",
+  "Басты экранға қосылды",
+  "Басты экраннан алынды",
+  "Теледидар көрсететін атау; «{name}» атауын қайтару үшін бос қалдырыңыз.",
+  "Бастапқы атауы: {name}",
   "Модель"
  ]
 };
@@ -1051,8 +1098,30 @@ function renderHome() {
     b.onclick = async () => { try { take(await api('api/weather/auto', {})); toast(t('toast_auto')); } catch (e) { toast(t('toast_set_fail')); } };
     hint.append(b);
   } else hint.textContent = w.place ? t('wx_guessed', { place: w.place }) : t('wx_none');
+  renderInputs();
   renderFolders();
   renderApps();
+}
+function renderInputs() {
+  const inputs = state.inputs || [];
+  $('#inputsBox').hidden = !inputs.length;
+  const list = $('#inputs'); list.replaceChildren();
+  for (const s of inputs) {
+    const row = el('label', 'item');
+    const txt = el('span', 'txt', s.name || s.port);
+    const sub = [s.name ? s.port : '', s.device].filter(Boolean).join(' · ');
+    if (sub) txt.appendChild(el('span', 'sub', sub));
+    const sw = el('input', 'switch'); sw.type = 'checkbox'; sw.checked = !!s.pinned; sw.setAttribute('aria-label', s.name || s.port);
+    sw.onchange = async () => {
+      const on = sw.checked; sw.disabled = true;
+      try {
+        const next = await api('api/source/pin', { id: s.id, pinned: on ? '1' : '0' });
+        if (!next.saved) throw new Error('not saved');
+        take(next); toast(t(on ? 'toast_pinned' : 'toast_unpinned'));
+      } catch (e) { sw.checked = !on; sw.disabled = false; toast(t('toast_set_fail')); }
+    };
+    row.append(txt, sw); list.appendChild(row);
+  }
 }
 function renderFolders() {
   const folders = state.folders || [];
@@ -1115,7 +1184,7 @@ function renderApps() {
     b.innerHTML = `<div class="pic"><img loading="lazy" alt=""></div><div class="t"></div><div class="c"></div>`;
     b.querySelector('img').src = tileSrc(a);
     b.querySelector('.t').textContent = a.label;
-    b.querySelector('.c').textContent = a.source ? (a.label === a.port ? t('tag_source') : a.port) : a.custom ? t('tag_custom') : '';
+    b.querySelector('.c').textContent = a.source ? (a.label === a.port ? t('tag_source') : a.port) : a.name ? t('was_named', { name: a.default }) : a.custom ? t('tag_custom') : '';
     b.onclick = () => appSheet(a);
     g.appendChild(b);
   }
@@ -1125,20 +1194,26 @@ function appSheet(a) {
   openSheet(body => {
     const pic = el('div', 'pic'); const img = el('img'); img.src = tileSrc(a); pic.appendChild(img); body.appendChild(pic);
     body.appendChild(el('h3', '', a.label));
-    body.appendChild(el('p', 'meta', a.source ? (a.label === a.port ? t('tag_source') : a.port) : a.custom ? t('tag_custom') : ''));
-    if (a.source) {
+    body.appendChild(el('p', 'meta', a.source ? (a.label === a.port ? t('tag_source') : a.port) : a.name ? t('was_named', { name: a.default }) : a.custom ? t('tag_custom') : ''));
+    {
       const l = el('div', 'list'); body.appendChild(l);
       const f = el('form', 'item field');
-      const input = el('input'); input.type = 'text'; input.value = a.name || ''; input.placeholder = t('name_ph');
+      const input = el('input'); input.type = 'text'; input.value = a.name || ''; input.maxLength = 24;
+      input.placeholder = a.source ? t('name_ph') : (a.default || a.label);
       input.setAttribute('enterkeyhint', 'done'); input.autocomplete = 'off'; input.setAttribute('aria-label', t('aria_rename'));
       const save = el('button', 'link', t('save'));
+      const sync = () => save.disabled = input.value.trim() === (a.name || '');
+      input.oninput = sync; sync();
       f.append(input, save); l.appendChild(f);
       f.onsubmit = async e => {
         e.preventDefault(); const name = input.value; closeSheet();
-        try { take(await api('api/source/name', { app: a.key, name })); toast(t(name.trim() ? 'toast_renamed' : 'toast_name_reset')); }
-        catch (err) { toast(t('toast_rename_fail')); }
+        try {
+          const next = await api('api/app/name', { app: a.key, name });
+          if (!next.saved) throw new Error('not saved');
+          take(next); toast(t(name.trim() ? 'toast_renamed' : 'toast_name_reset'));
+        } catch (err) { toast(t('toast_rename_fail')); }
       };
-      body.appendChild(el('p', 'foot', t('rename_hint'))).style.marginBottom = '16px';
+      body.appendChild(el('p', 'foot', a.source ? t('rename_hint') : t('rename_hint_app', { name: a.default || a.label }))).style.marginBottom = '16px';
     }
     const l = el('div', 'list'); body.appendChild(l);
     // The picker opens from this tap, so iOS treats it as the user's own gesture.

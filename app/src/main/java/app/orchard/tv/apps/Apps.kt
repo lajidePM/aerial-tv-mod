@@ -153,6 +153,12 @@ object AppCatalog {
     /** Renames a folder by id, on the main thread; set while Home is alive (the phone page names folders). */
     @Volatile var renameFolder: ((id: String, name: String) -> Unit)? = null
 
+    /** Every TV input Home knows of, pinned or not, for the phone page to offer. */
+    @Volatile var sources: List<TvSource> = emptyList()
+
+    /** Pins an input to Home or takes it off, on the main thread; set while Home is alive. */
+    @Volatile var pinSource: ((id: String, pinned: Boolean) -> Unit)? = null
+
     /**
      * Every app with a TV entry, plus apps that only have a phone-style entry. China-market firmwares
      * (Xiaomi's settings, gallery, weather...) expose many of their own apps with CATEGORY_LAUNCHER only,

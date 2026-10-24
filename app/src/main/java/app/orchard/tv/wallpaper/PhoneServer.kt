@@ -8,6 +8,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.getSystemService
 import app.orchard.tv.apps.AppCatalog
+import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.CustomIcons
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.TileArtFactory
@@ -89,6 +90,26 @@ class PhoneServer private constructor(private val context: Context, private val 
                     if (source != null) runBlocking(Dispatchers.Main) { SourceLooks.rename(source.id, f["name"]) }
                     json(state())
                 }
+                session.method == Method.POST && path == "/api/app/name" -> {
+                    val f = form(session)
+                    val key = f["app"].orEmpty()
+                    val source = AppCatalog.pinnedSources.firstOrNull { it.key == key }?.source
+                    // On the main thread before answering, so the state sent back has the new name.
+                    val saved = when {
+                        source != null -> { runBlocking(Dispatchers.Main) { SourceLooks.rename(source.id, f["name"]) }; true }
+                        AppCatalog.loaded.any { it.key == key } -> { runBlocking(Dispatchers.Main) { AppNames.rename(key, f["name"]) }; true }
+                        else -> false
+                    }
+                    json(state().put("saved", saved))
+                }
+                session.method == Method.POST && path == "/api/source/pin" -> {
+                    val f = form(session)
+                    val id = f["id"].orEmpty()
+                    val pin = AppCatalog.pinSource
+                    val known = AppCatalog.sources.any { it.id == id }
+                    if (known && pin != null) runBlocking(Dispatchers.Main) { pin(id, f["pinned"] == "1") }
+                    json(state().put("saved", known && pin != null))
+                }
                 session.method == Method.POST && path == "/api/folder/name" -> {
                     val f = form(session)
                     val id = f["id"].orEmpty()
@@ -142,15 +163,30 @@ class PhoneServer private constructor(private val context: Context, private val 
             .put("focusStyle", AerialSettings.focusStyle.key)
             .put("wallpapers", list)
             .put("apps", JSONArray().apply {
-                // Pinned inputs first: they can also be named here.
-                (AppCatalog.pinnedSources + AppCatalog.loaded.sortedBy { it.label }).forEach { a ->
-                    // The stamp makes the phone fetch the tile again once its picture changes.
+                // Pinned inputs first, then apps by the name Home shows. [default] is the name a
+                // blank one goes back to; [name] is the one typed on this page, if any.
+                val apps = AppCatalog.loaded.map { it to (AppNames.of(it.key) ?: it.label) }.sortedBy { it.second }
+                AppCatalog.pinnedSources.forEach { a ->
+                    val src = a.source ?: return@forEach
                     // An input's label as Home will show it once it has arranged the new look.
-                    val label = a.source?.let { src ->
-                        SourceLooks.of(src.id)?.let { it.name ?: it.device?.let { d -> context.getString(d.label) } } ?: src.label
-                    } ?: a.label
-                    put(JSONObject().put("key", a.key).put("label", label).put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key))
-                        .apply { a.source?.let { put("source", true).put("port", it.label).put("name", SourceLooks.of(it.id)?.name ?: "").put("look", SourceLooks.of(it.id).hashCode()) } })
+                    val look = SourceLooks.of(src.id)
+                    val label = look?.let { it.name ?: it.device?.let { d -> context.getString(d.label) } } ?: src.label
+                    // The stamp makes the phone fetch the tile again once its picture changes.
+                    put(JSONObject().put("key", a.key).put("label", label).put("default", src.label).put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key))
+                        .put("source", true).put("port", src.label).put("name", look?.name ?: "").put("look", look.hashCode()))
+                }
+                apps.forEach { (a, label) ->
+                    put(JSONObject().put("key", a.key).put("label", label).put("default", a.label).put("name", AppNames.of(a.key) ?: "")
+                        .put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key)))
+                }
+            })
+            .put("inputs", JSONArray().apply {
+                // Every input Home knows of, for pinning to Home from the phone.
+                AppCatalog.sources.forEach { src ->
+                    val look = SourceLooks.of(src.id)
+                    put(JSONObject().put("id", src.id).put("port", src.label).put("device", src.deviceName ?: "")
+                        .put("name", look?.let { it.name ?: it.device?.let { d -> context.getString(d.label) } } ?: "")
+                        .put("pinned", src.id in AerialSettings.pinnedSources))
                 }
             })
             .put("folders", JSONArray().apply {

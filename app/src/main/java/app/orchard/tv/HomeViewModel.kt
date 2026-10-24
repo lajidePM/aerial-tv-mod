@@ -13,6 +13,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.orchard.tv.apps.AppCatalog
 import app.orchard.tv.apps.AppEntry
+import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.CustomIcons
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.FOLDER_KEY_PREFIX
@@ -101,12 +102,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         AppCatalog.renameFolder = ::renameFolder
+        AppCatalog.pinSource = ::pinSourceById
         reload()
         // A tile picture set or removed from the phone page.
         viewModelScope.launch { snapshotFlow { CustomIcons.version }.drop(1).collect { reload() } }
         offerSetupOnce()
         // An input's device or name, chosen from its tile's menu or the phone page.
         viewModelScope.launch { snapshotFlow { SourceLooks.all }.drop(1).collect { if (loaded) arrange() } }
+        // An app renamed on the phone page.
+        viewModelScope.launch { snapshotFlow { AppNames.all }.drop(1).collect { if (loaded) arrange() } }
     }
 
     /**
@@ -188,7 +192,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         // Pinned TV inputs share the grid, order and hiding with the apps.
         val pinned = sources.filter { it.id in AerialSettings.pinnedSources }.map { sourceEntry(context, it) }
         AppCatalog.pinnedSources = pinned
-        val arrangement = store.arrange(all + pinned) { folder, inside ->
+        AppCatalog.sources = sources
+        // Names typed on the phone page stand in for the apps' own, everywhere Home shows one.
+        val named = all.map { e -> AppNames.of(e.key)?.let { e.copy(label = it) } ?: e }
+        val arrangement = store.arrange(named + pinned) { folder, inside ->
             val shown = inside.take(9).map { it.art }
             val art = folderArt[folder.id]?.takeIf { (made, _) -> made.size == shown.size && made.indices.all { made[it] === shown[it] } }?.second
                 ?: TileArtFactory.forFolder(shown).also { folderArt[folder.id] = shown to it }
@@ -279,6 +286,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             before != null && before != after -> notify(context.getString(R.string.notice_boot_switch, after, before))
             else -> notify(context.getString(R.string.notice_boot_on, after))
         }
+    }
+
+    /** The phone page pins by input id. */
+    private fun pinSourceById(id: String, pinned: Boolean) {
+        sources.firstOrNull { it.id == id }?.let { setSourcePinned(it, pinned) }
     }
 
     /** Pins a TV input to Home (as the first tile, where it is easiest to reach) or takes it off. */
@@ -400,6 +412,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         if (AppCatalog.renameFolder == ::renameFolder) AppCatalog.renameFolder = null
+        if (AppCatalog.pinSource == ::pinSourceById) AppCatalog.pinSource = null
     }
 }
 
