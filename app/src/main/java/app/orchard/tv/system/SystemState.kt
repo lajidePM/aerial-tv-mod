@@ -276,6 +276,9 @@ object SystemProbe {
     /** The DLP levels on this light engine, as the top step Control Center steps through. */
     val xgimiBrightnessMax: Int get() = XGIMI_DLP_LUMENS_MAX
 
+    /** Whether this TV's brightness is the light engine's (see [xgimiBrightnessLevel]). */
+    val hasXgimiBrightness: Boolean get() = xgimiBrightnessLevel() != null
+
     // XGIMI Z7X (GMUI 6.11) opens these pages through an exported service rather than an activity;
     // the reporter of issue #241 opened settings, network, inputs and picture through it on a Z7X.
     private fun xgimiSettingsIntent(context: Context, page: String): Intent? {

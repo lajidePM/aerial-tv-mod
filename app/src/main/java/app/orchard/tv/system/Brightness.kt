@@ -95,6 +95,20 @@ object Brightness {
     }
 
     /**
+     * XGIMI's light-engine level one notch from [current], or null on a TV without the engine.
+     * [current] comes from the caller rather than from the HAL: the engine applies a write a moment
+     * later, so a level read back between the repeats of a held key names the previous notch again
+     * and the row would stick while the picture moves on.
+     */
+    fun xgimiStep(current: Float, direction: Int): Float? {
+        if (!SystemProbe.hasXgimiBrightness) return null
+        val max = SystemProbe.xgimiBrightnessMax
+        val now = Math.round(current * max)
+        val next = (now + if (direction > 0) 1 else -1).coerceIn(1, max)
+        return next / max.toFloat()
+    }
+
+    /**
      * Steps brightness one notch up or down and returns the new level. Never to 0: Xiaomi turns the
      * backlight off at picture_backlight 0 and the screen goes black, with Control Center still open
      * on it (HyperOS, issue #174); its own slider stops at 1. So the lowest notch is 1, and the steps
@@ -105,12 +119,11 @@ object Brightness {
      */
     fun adjust(context: Context, direction: Int): Float? {
         SystemProbe.xgimiBrightnessLevel()?.let { current ->
-            val max = SystemProbe.xgimiBrightnessMax
-            val now = Math.round(current * max)
-            val next = (now + if (direction > 0) 1 else -1).coerceIn(1, max)
+            val next = xgimiStep(current, direction) ?: return current
+            val level = Math.round(next * SystemProbe.xgimiBrightnessMax)
             // The light engine applies it off this thread, so the new level is reported as asked and
             // Control Center's poll shows what it settled at — including where a TV drops the write.
-            return if (SystemProbe.setXgimiBrightnessLevel(next)) next / max.toFloat() else current
+            return if (SystemProbe.setXgimiBrightnessLevel(level)) next else current
         }
         val current = level(context) ?: return null
         val percent = Math.round(current * 100)
