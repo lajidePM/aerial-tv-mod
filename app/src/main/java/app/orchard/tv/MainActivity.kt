@@ -422,12 +422,13 @@ class MainActivity : ComponentActivity() {
         // the same format, so there is no black between them; the dream would be a new player in a
         // new window, and showed black even in 4K (TCL MT5879).
         val carry = Wallpapers.selectedId == Wallpapers.LIVE && Wallpapers.screensaver == ScreensaverMode.Aerial
-        if (!carry && SystemScreensaver.isAerials(this)) {
+        if (!carry && !dreamFails && SystemScreensaver.isAerials(this)) {
             // The dream's film needs the decoder the wallpaper's holds: TCL MT5879 failed Dolby
             // Vision beside it and the dream fell back to 4K HEVC.
             LiveFilm.onHome?.letDecoderGo()
             if (SystemScreensaver.startDream(this)) {
                 DiagLog.i("screensaver starts as the system's dream")
+                dreamAskedAt = SystemClock.uptimeMillis()
                 return
             }
             LiveFilm.onHome?.goOn()
@@ -440,6 +441,22 @@ class MainActivity : ComponentActivity() {
         idleHandler.postDelayed(releaseScreen, SCREENSAVER_HOLD_MS)
     }
     private val releaseScreen = Runnable { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+
+    /**
+     * When Aerial last asked the system for its dream. The dream's starter closes at once and Home
+     * resumes; a dream that shows pauses it again within a moment. Hisense VIDAA (MT9655, Android
+     * 14, issue #525; T963D4, Android 11, issue #533) never shows it, so Home stayed in front, its
+     * wallpaper's film let go for nothing.
+     */
+    private var dreamAskedAt = Long.MIN_VALUE / 2
+    private val dreamCheck = Runnable {
+        // Up to Android 10 the dream is a window over Home, which stays resumed: the focus says.
+        if (!vm.resumed || !hasWindowFocus()) return@Runnable
+        dreamFails = true
+        DiagLog.i("the system's dream did not show; Aerial's own screensaver instead")
+        LiveFilm.onHome?.goOn()
+        startScreensaver(asked = false)
+    }
     private var swallowKeyUp = -1
 
     /**
@@ -621,6 +638,7 @@ class MainActivity : ComponentActivity() {
     private fun resumeWork() {
         vm.resumed = true
         DiagLog.i("onResume; screensaver after ${idleBeforeScreensaver() / 1000} s")
+        if (SystemClock.uptimeMillis() - dreamAskedAt < 1_000) idleHandler.postDelayed(dreamCheck, 1_500)
         restartIdleTimer()
         GuardSetup.setHomeInFront(this, true)
         HomeGuardService.onAerialResumed()
@@ -643,6 +661,7 @@ class MainActivity : ComponentActivity() {
         GuardSetup.setHomeInFront(this, false)
         HomeGuardService.onAerialPaused()
         idleHandler.removeCallbacks(showScreensaver)
+        idleHandler.removeCallbacks(dreamCheck)
         hideScreensaver()
     }
 
@@ -691,6 +710,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** The system's dream did not show when asked (see dreamCheck); for this process. */
+        private var dreamFails = false
+
         /** How Home Guard and the boot receiver bring Aerial back: the same task the launcher entry uses. */
         fun bringBackIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java)
