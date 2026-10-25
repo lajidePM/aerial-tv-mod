@@ -435,12 +435,15 @@ fun HomeScreen(
         // With Control Center open, Home is still: once the panel is in, a picture of it stands in
         // for it, one full-screen image a frame instead of every tile again under the panel
         // (MiTV-MFTR0: GPU 18-21 ms a frame drawing Home under it, as against 9-15 ms frosted).
-        // Taken again now and then for the clock.
+        // Taken again now and then for the clock. Not before Android 7: on Android 6 the picture's
+        // ImageReader surface leaves a RenderNode that the finalizer thread later frees together
+        // with GPU layers, and hwui aborts with "Wrong thread!" (MiTV4-ANSM0, Android 6.0.1,
+        // issue #466: the reporter rebuilt the same steps in a small app and got the same 16 frames).
         val homeLayer = rememberGraphicsLayer()
         var homeShot by remember { mutableStateOf<ImageBitmap?>(null) }
         LaunchedEffect(ccOpen) {
             homeShot = null
-            if (!ccOpen) return@LaunchedEffect
+            if (!ccOpen || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return@LaunchedEffect
             delay(HOME_SHOT_AFTER_MS)
             while (true) {
                 homeShot = runCatching { homeLayer.toImageBitmap() }.getOrNull()
@@ -474,7 +477,7 @@ fun HomeScreen(
                 }
                 // Recorded while Control Center is open, for the picture that stands in for Home.
                 .drawWithContent {
-                    if (ccOpen) {
+                    if (ccOpen && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         homeLayer.record { this@drawWithContent.drawContent() }
                         drawLayer(homeLayer)
                     } else drawContent()
