@@ -765,7 +765,15 @@ class HomeGuardService : AccessibilityService() {
                 return
             }
             // One Home press shows two window changes 0.2 s apart (MiTV-MFTR0); one start will do.
-            if (SystemClock.uptimeMillis() - broughtBackAt < 1_000) return
+            // Yet a second press can come that soon, and then no window changes again: look once
+            // more after the second (Coocaa C10, Android 9: Home pressed 0.39 s after Aerial was
+            // back left the stock launcher in front for good, issue #487).
+            val since = SystemClock.uptimeMillis() - broughtBackAt
+            if (since < 1_000) {
+                handler.removeCallbacks(stockHomeRecheck)
+                handler.postDelayed(stockHomeRecheck, 1_000 - since + 300)
+                return
+            }
             Log.i(TAG, "stock home $pkg came to the front; bringing Aerial back")
             // Shortly after the screen lit, this is the wake itself (issue #111).
             goHome(woke = SystemClock.elapsedRealtime() - screenOnAt < WAKE_WINDOW_MS)
@@ -851,6 +859,26 @@ class HomeGuardService : AccessibilityService() {
     /** When goHome last started Aerial. */
     private var broughtBackAt = Long.MIN_VALUE / 2
 
+    /** The stock launcher's home screen came up just after Aerial was brought back; is it still there? */
+    private val stockHomeRecheck: Runnable = Runnable {
+        // Whether Aerial is in front, from Aerial itself: the window changes of the two starts can
+        // arrive in either order, and Aerial's came last with PatchWall on top (MiTV-MFTR0).
+        if (aerialResumed || SystemClock.uptimeMillis() < allowStockUntil) return@Runnable
+        val since = SystemClock.uptimeMillis() - broughtBackAt
+        if (since < 1_000) return@Runnable
+        // Unless the viewer has opened an app since.
+        val front = lastWindow?.first
+        if (front != null && front != packageName && front !in stockHomes) return@Runnable
+        // Up to Android 11, a Home the system handled itself holds app starts back for 5 s, and the
+        // start is still to come (TCL MT5879): look once more after that rather than start twice.
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R && aerialResumedAt < broughtBackAt && since < APP_SWITCH_HOLD_MS) {
+            handler.postDelayed(stockHomeRecheck, APP_SWITCH_HOLD_MS - since)
+            return@Runnable
+        }
+        Log.i(TAG, "the stock launcher came back just after Aerial did; bringing Aerial back again")
+        goHome()
+    }
+
     private fun goHome(woke: Boolean = false) {
         if (!GuardSetup.isUserUnlocked(this)) return
         // Starting an activity can light the screen: on OPPO K9 the TV came back on by itself a few
@@ -884,6 +912,8 @@ class HomeGuardService : AccessibilityService() {
         /** How far back to look for the front when no window has been seen; see frontByUsage. */
         private const val UNKNOWN_FRONT_LOOKBACK_MS = 6 * 60 * 60 * 1000L
         private const val DOUBLE_HOME_MS = 400L
+        /** Android's hold on app starts after Home (stopAppSwitches), with a margin. */
+        private const val APP_SWITCH_HOLD_MS = 5_500L
         /** Hisense VIDAA's launcher, invisible to window changes; see foregroundCheck. */
         private const val VIDAA_LAUNCHER = "com.jamdeo.tv.vod"
         /** Actions the firmware's own task centre answers, tried in order before SystemUI's recents. */
@@ -1008,9 +1038,14 @@ class HomeGuardService : AccessibilityService() {
         @Volatile
         private var aerialResumed = false
 
+        /** When Aerial last came to the front, in uptime. */
+        @Volatile
+        private var aerialResumedAt = Long.MIN_VALUE / 2
+
         /** Called when Aerial comes back to the front: the stock launcher is fair game again. */
         fun onAerialResumed() {
             aerialResumed = true
+            aerialResumedAt = SystemClock.uptimeMillis()
             val s = instance ?: return
             // Back in Aerial: an installer opened from Control Center was left without updating.
             GuardSetup.installerJustClosed(s)
