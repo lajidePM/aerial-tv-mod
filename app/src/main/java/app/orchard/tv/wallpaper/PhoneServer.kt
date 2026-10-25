@@ -261,8 +261,9 @@ class PhoneServer private constructor(private val context: Context, private val 
     }
 
     /** An app on the TV or a pinned input: the only tiles a picture may be sent for. */
+    /** An app, a firmware shortcut such as Xiaomi's children's mode (issue #530), or a pinned input. */
     private fun installed(pkg: String) =
-        (CustomIcons.isValidKey(pkg) && AppCatalog.loaded.any { it.key == pkg }) || AppCatalog.pinnedSources.any { it.key == pkg }
+        pkg.isNotEmpty() && (AppCatalog.loaded.any { it.key == pkg } || AppCatalog.pinnedSources.any { it.key == pkg })
 
     private fun tile(pkg: String): Response {
         val app = (AppCatalog.pinnedSources + AppCatalog.loaded + AppCatalog.folders).firstOrNull { it.key == pkg } ?: return text(Response.Status.NOT_FOUND, "")

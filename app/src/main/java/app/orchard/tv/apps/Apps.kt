@@ -264,7 +264,10 @@ object AppCatalog {
                 component = ComponentName(info.packageName, info.name),
                 leanback = false,
                 removable = false,
-                art = TileArtFactory.forSystem(SystemTile.Kids),
+                // A picture chosen on the phone page, as for apps (issue #530).
+                art = CustomIcons.load(KIDS_KEY)?.let {
+                    runCatching { TileArtFactory.fromBanner(android.graphics.drawable.BitmapDrawable(android.content.res.Resources.getSystem(), it)) }.getOrNull()
+                } ?: TileArtFactory.forSystem(SystemTile.Kids),
                 shortcut = kids,
             ),
         )

@@ -1506,6 +1506,21 @@ function folderChooser(e, folders) {
  * into its slot and the grid takes the new order at once; the TV is told after. A tap is a tap.
  * A second finger is ignored while one tile is held.
  */
+/*
+ * A tap opens its sheet on the lift, and the phone's browser sends the tap's click a moment later,
+ * hit-tested again: it landed on the scrim that had just appeared and closed the sheet at once, or
+ * on one of the sheet's buttons (issue #542, Chrome, WeChat and Samsung Internet on Android).
+ */
+function swallowNextClick() {
+  const until = performance.now() + 600;
+  const h = e => {
+    document.removeEventListener('click', h, true);
+    if (performance.now() < until) { e.preventDefault(); e.stopPropagation(); }
+  };
+  document.addEventListener('click', h, true);
+  setTimeout(() => document.removeEventListener('click', h, true), 700);
+}
+
 function sortableGrid(grid, keys, onMove, onTap) {
   grid.addEventListener('pointerdown', ev => {
     const tile = ev.target.closest('.atile'); if (!tile || arrDragging || ev.button > 0) return;
@@ -1584,7 +1599,7 @@ function sortableGrid(grid, keys, onMove, onTap) {
     const up = e => {
       if (e.pointerId !== pid || ended) return;
       ended = true; finish();
-      if (lifted) drop(); else onTap(from);
+      if (lifted) drop(); else { swallowNextClick(); onTap(from); }
     };
     const cancel = e => {
       if (e.pointerId !== pid || ended) return;
