@@ -98,9 +98,6 @@ import kotlin.math.roundToInt
 
 private const val COLUMNS = 5
 
-/** Room under the tiles for every app's name, when all are shown. */
-private val NameRoom = 22.dp
-
 /** The plate's distance from the bottom edge with no second row peeking: as from the sides. */
 private val PlateMarginBottom = 30.dp
 
@@ -108,7 +105,7 @@ private val PlateMarginBottom = 30.dp
 private val PlateNameRoom = 28.dp
 
 /** Grid geometry for the screen at hand. On a 1080p TV this is a 960×540 dp canvas. */
-private class GridMetrics(screenW: Dp, screenH: Dp, oneRow: Boolean, val nameRoom: Dp, plateNames: Boolean, peek: Boolean, plate: Boolean) {
+private class GridMetrics(screenW: Dp, screenH: Dp, oneRow: Boolean, plateNames: Boolean, peek: Boolean, plate: Boolean) {
     val margin = 56.dp
     val gap = 28.dp
     val tileW = (screenW - margin * 2 - gap * (COLUMNS - 1)) / COLUMNS
@@ -125,11 +122,13 @@ private class GridMetrics(screenW: Dp, screenH: Dp, oneRow: Boolean, val nameRoo
     /**
      * The top row sits a little past the middle, under the shelf, as on tvOS. In one-row mode, or
      * when every app fits in it, it sits low, with only the top of any second row showing under
-     * the focused app's name. [nameRoom] is kept under the tiles when every name is shown.
+     * the focused app's name. Every name shown changes nothing here: the names fit in the gap
+     * between the rows, or on the plate, which grows by [firstGap]. Lifting the row for them as
+     * well showed the second row nearly three times as far (issue #540).
      */
     val topRowY = when {
         !oneRow -> screenH * 0.555f
-        peek -> screenH - pitchY - 12.dp - nameRoom - firstGap
+        peek -> screenH - pitchY - 12.dp - firstGap
         // Nothing peeks under the row, so it goes as low as it fits: the plate as far from the
         // bottom edge as from the sides, or without a plate, room for the focused app's name.
         plate -> screenH - tileH - (PlateMarginBottom + PlatePadV) - firstGap
@@ -397,13 +396,12 @@ fun HomeScreen(
         val rows = (apps.size + COLUMNS - 1) / COLUMNS
         // With a single row of apps the two-row layout would leave the bottom of the screen empty.
         val oneRow = AerialSettings.oneRowHome || rows <= 1
-        val nameRoom = if (AerialSettings.showAllNames) NameRoom else 0.dp
         // With every name shown, the top row's go on its glass plate, which grows to hold them.
         val plateNames = AerialSettings.showAllNames && AerialSettings.homePlate
         val peek = AerialSettings.peekNextRow
         val hasPlate = AerialSettings.homePlate
-        val metrics = remember(maxWidth, maxHeight, oneRow, nameRoom, plateNames, peek, hasPlate) {
-            GridMetrics(maxWidth, maxHeight, oneRow, nameRoom, plateNames, peek, hasPlate)
+        val metrics = remember(maxWidth, maxHeight, oneRow, plateNames, peek, hasPlate) {
+            GridMetrics(maxWidth, maxHeight, oneRow, plateNames, peek, hasPlate)
         }
         val collapsePx = with(density) { (metrics.topRowY - metrics.restY).toPx() }
 
