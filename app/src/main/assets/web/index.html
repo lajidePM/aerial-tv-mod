@@ -136,9 +136,12 @@
   .field input::placeholder { color: var(--tertiary); }
   .field .link { font-weight: 600; }
   .field .link[disabled] { opacity: .4; }
+  /* A <pre>, not a textarea: focusing a field under 16px makes iOS zoom and scroll the page. */
   .diag {
-    display: block; width: 100%; height: 220px; margin-top: 10px; font: 12px/1.4 ui-monospace, Menlo, monospace;
-    color: var(--label); background: var(--card); border: 0; border-radius: 12px; padding: 10px;
+    display: block; height: 220px; margin: 10px 0 0; overflow: auto; -webkit-overflow-scrolling: touch;
+    font: 12px/1.4 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word;
+    -webkit-user-select: text; user-select: text;
+    color: var(--label); background: var(--card); border-radius: 12px; padding: 10px;
   }
 
   /* Tab bar. */
@@ -289,7 +292,7 @@
 
   <h2 data-i18n="feedback_h"></h2>
   <div class="list"><button class="item tint center" id="diagBtn" data-i18n="diag_show"></button></div>
-  <textarea class="diag" id="diag" readonly hidden></textarea>
+  <pre class="diag" id="diag" hidden></pre>
   <div class="row" id="diagActions" hidden>
     <button class="btn" id="diagCopy" data-i18n="diag_copy"></button>
     <a class="btn plain" href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml" target="_blank" rel="noopener" data-i18n="diag_github"></a>
@@ -1269,16 +1272,35 @@ $('#diagBtn').onclick = async () => {
   try {
     const r = await fetch(base + 'api/diagnostics');
     if (!r.ok) throw new Error(r.status);
-    $('#diag').value = await r.text();
+    $('#diag').textContent = await r.text();
     $('#diag').hidden = false; $('#diagActions').hidden = false; b.parentElement.hidden = true;
+    // Bring the Copy button out from under the tab bar.
+    // (Safari ignores scroll-margin in scrollIntoView, so measured by hand.)
+    const over = $('#diagActions').getBoundingClientRect().bottom - (innerHeight - $('nav').offsetHeight - 16);
+    if (over > 0) window.scrollBy({ top: over, behavior: 'smooth' });
   } catch (e) { toast(t('toast_diag_fail')); b.textContent = t('diag_show'); }
   b.disabled = false;
 };
-// The page is plain HTTP on the LAN, where browsers offer no navigator.clipboard.
+// The page is plain HTTP on the LAN, where browsers offer no navigator.clipboard. So the text is
+// copied from a field off screen: 16px so iOS does not zoom, and the scroll put back after, since
+// focusing it can still move the page.
 $('#diagCopy').onclick = () => {
-  const box = $('#diag'); box.focus(); box.select(); box.setSelectionRange(0, box.value.length);
+  const text = $('#diag').textContent, x = window.scrollX, y = window.scrollY;
+  const tmp = document.createElement('textarea');
+  tmp.value = text; tmp.setAttribute('aria-hidden', 'true');
+  tmp.style.cssText = 'position:fixed;top:0;left:-9999px;width:1px;height:1px;opacity:0;font-size:16px';
+  document.body.appendChild(tmp);
   let ok = false;
-  try { ok = document.execCommand('copy'); } catch (e) {}
+  try {
+    tmp.focus({ preventScroll: true }); tmp.select(); tmp.setSelectionRange(0, text.length);
+    ok = document.execCommand('copy');
+  } catch (e) {}
+  tmp.remove(); window.scrollTo(x, y);
+  if (!ok) {
+    // Select the text in the box so the system's Copy is one tap away.
+    const sel = window.getSelection(); sel.removeAllRanges();
+    const range = document.createRange(); range.selectNodeContents($('#diag')); sel.addRange(range);
+  }
   toast(t(ok ? 'toast_copied' : 'toast_copy_manual'));
 };
 
