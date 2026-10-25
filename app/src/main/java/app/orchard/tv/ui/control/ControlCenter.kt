@@ -195,7 +195,7 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
     Column {
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
-                BasicText(timeText(now), style = Type.LargeTitle.copy(fontSize = Type.LargeTitle.fontSize * 1.25f))
+                BasicText(timeText(now), style = Type.SmallClock.copy(fontSize = Type.LargeTitle.fontSize * 1.25f))
                 BasicText(dateText(now), style = Type.Callout)
             }
             val net = vm.network

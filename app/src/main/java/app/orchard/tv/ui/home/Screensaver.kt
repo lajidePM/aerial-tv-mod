@@ -259,7 +259,8 @@ private fun Labels(caption: String?, now: LocalDateTime, showTime: Boolean = tru
  * here when the screensaver carries on its film, and from the left it crossed the whole screen to
  * the right, a long slide for a moment that should be quiet (issue #357).
  */
-internal val SaverClockStyle = Type.LargeTitle.copy(fontSize = Type.LargeTitle.fontSize * 1.3f, color = Color.White.copy(alpha = 0.92f))
+// The same style as the small clock, which grows into it, so the hand-off does not jump.
+internal val SaverClockStyle = Type.SmallClock.copy(fontSize = Type.LargeTitle.fontSize * 1.3f, color = Color.White.copy(alpha = 0.92f))
 internal val SaverClockTop = 40.dp
 internal val SaverClockSide = 56.dp
 
