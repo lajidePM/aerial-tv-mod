@@ -349,6 +349,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * The volume and the network have broadcasts of their own (refreshSystem, refreshNetwork), and the
      * input list is not rebuilt here. Assigning equal values redraws nothing.
      */
+    /**
+     * Inputs again, for the inputs page while it lists none. Skyworth skyT963 (1AA46_V58FP,
+     * Android 9) fills its source list some 30 s after boot, after Aerial has loaded and while it
+     * stays in front, so nothing re-probed it (PR #507, by Sakurasan, checked on that TV).
+     */
+    fun refreshSources() {
+        viewModelScope.launch {
+            val ctx = context
+            val s = withContext(Dispatchers.Default) { SystemProbe.sources(ctx) }
+            if (s.isNotEmpty() && sources.isEmpty()) { sources = s; arrange() }
+        }
+    }
+
     fun refreshPanel() {
         viewModelScope.launch {
             val ctx = context

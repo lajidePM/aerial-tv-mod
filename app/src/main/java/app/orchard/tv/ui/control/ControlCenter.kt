@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -177,6 +178,14 @@ fun ControlCenter(
 private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, onOpen: (android.content.Intent) -> Unit) {
     val context = LocalContext.current
     val first = remember { FocusRequester() }
+    // Firmwares that list their inputs late (see HomeViewModel.refreshSources): look again while
+    // the page is open and still empty. One provider or TvInputManager query every 3 s.
+    LaunchedEffect(Unit) {
+        while (vm.sources.isEmpty()) {
+            vm.refreshSources()
+            delay(3000)
+        }
+    }
     LaunchedEffect(Unit) {
         if (!takeFocus) return@LaunchedEffect
         withFrameNanos { }
