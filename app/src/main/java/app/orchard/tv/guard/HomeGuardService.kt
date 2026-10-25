@@ -121,9 +121,9 @@ class HomeGuardService : AccessibilityService() {
     private var foregroundTakenAt = Long.MIN_VALUE / 2
 
     /** The newest activity moved to the front in the last few seconds, with its time; null if none. */
-    private fun foreground(): Pair<Pair<String, String>, Long>? = runCatching {
+    private fun foreground(lookbackMs: Long = FOREGROUND_LOOKBACK_MS): Pair<Pair<String, String>, Long>? = runCatching {
         val now = System.currentTimeMillis()
-        val events = getSystemService<UsageStatsManager>()?.queryEvents(now - FOREGROUND_LOOKBACK_MS, now) ?: return null
+        val events = getSystemService<UsageStatsManager>()?.queryEvents(now - lookbackMs, now) ?: return null
         var last: Pair<Pair<String, String>, Long>? = null
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
@@ -137,6 +137,12 @@ class HomeGuardService : AccessibilityService() {
     }.getOrNull()
 
 
+
+    /** The activity that last moved to the front, from usage stats, unless it is Aerial's; see takeOverIfStockHomeInFront. */
+    private fun frontByUsage(): Pair<String, String>? {
+        if (!usageStatsAllowed(this)) return null
+        return foreground(UNKNOWN_FRONT_LOOKBACK_MS)?.first?.takeIf { it.first != packageName }
+    }
 
     private fun scheduleBootRechecks() {
         handler.removeCallbacks(bootRecheck)
@@ -398,7 +404,14 @@ class HomeGuardService : AccessibilityService() {
      */
     private fun takeOverIfStockHomeInFront(reason: String, woke: Boolean) {
         if (!GuardSetup.isUserUnlocked(this)) return
-        val last = lastWindow
+        // No window seen since bound: ask usage stats what moved to the front last. Revived after
+        // the firmware killed Aerial in the background, an unknown front was taken for the stock
+        // launcher and Aerial was pulled over the video the viewer was watching (Toshiba
+        // tsbU6800C, Android 8, and XGIMI Z6X, Android 11, issue #497, with the logs). The same at
+        // the boot rechecks, on firmwares that raise no window change for the app the viewer
+        // opened (Skyworth 9S52_Q4A, Android 6, issue #489). Aerial itself says nothing about what
+        // it uncovered when it died, so it stays unknown.
+        val last = lastWindow ?: frontByUsage()?.also { Log.i(TAG, "$reason; usage stats say ${it.first} is in front") }
         // Unknown means we were only just bound, which happens after a standby kill. Any screen of
         // the stock launcher counts: when Aerial is killed, whatever was on top of the launcher's
         // task is uncovered, not always its home activity (PatchWall's StrategicLayerActivity).
@@ -793,9 +806,15 @@ class HomeGuardService : AccessibilityService() {
         // (LeTV Zero65 Pro, eUI 8.2, Android 6; reported with a local build in issue #121).
         stockHomes = homes.mapValues { (pkg, classes) ->
             classes + HOME_SCREENS_BEHIND_TRAMPOLINES[pkg].orEmpty().filter { isActivity(pkg, it) }
-        } + FIRMWARE_HOMES_WITHOUT_FILTER.mapValues { (pkg, classes) ->
+        }
+        // Added to what the package's filters gave, never in place of it: Tianci's movieplatform
+        // declares HOME.CC on another activity than the one the firmware shows.
+        val unfiltered = FIRMWARE_HOMES_WITHOUT_FILTER.mapValues { (pkg, classes) ->
             classes.filter { isActivity(pkg, it) }.toSet()
         }.filterValues { it.isNotEmpty() }
+        stockHomes = (stockHomes.keys + unfiltered.keys).associateWith {
+            stockHomes[it].orEmpty() + unfiltered[it].orEmpty()
+        }
     }
 
     /** Android's own SECONDARY_HOME is for other displays, and comes with CATEGORY_HOME anyway. */
@@ -841,6 +860,8 @@ class HomeGuardService : AccessibilityService() {
         private const val DEAF_AFTER_MS = 20_000L
         private const val FOREGROUND_POLL_MS = 1_000L
         private const val FOREGROUND_LOOKBACK_MS = 10_000L
+        /** How far back to look for the front when no window has been seen; see frontByUsage. */
+        private const val UNKNOWN_FRONT_LOOKBACK_MS = 6 * 60 * 60 * 1000L
         private const val DOUBLE_HOME_MS = 400L
         private const val VOLUME_REPEAT_MAX_MS = 8_000L
         private val VOLUME_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
@@ -881,6 +902,13 @@ class HomeGuardService : AccessibilityService() {
          */
         private val FIRMWARE_HOMES_WITHOUT_FILTER = mapOf(
             "com.skyworth.panasonichome" to listOf("com.skyworth.panasonichome.MainActivity"),
+            // Coocaa's AI launcher, started by com.tianci.system's SLauncher on the Home key and at
+            // power-on (Coocaa C10 projector 3H352_C10, Android 9, issue #487, with the log; Coocaa
+            // P60, Android 11; Skyworth 7T863_N6E, Android 10, issue #106). It declares no Home.
+            "com.coocaa.aigc.home" to listOf("com.coocaa.aigc.home.home.rootpage.HomeActivity"),
+            // What Tianci shows as its home, named only in persist.service.homepage.cls; the
+            // package's HOME.CC is on MainActivity (Skyworth 7S70_A9, Android 8, issues #106 #461).
+            "com.tianci.movieplatform" to listOf("com.coocaa.homepage.vast.HomePageActivity"),
         )
 
         /**
