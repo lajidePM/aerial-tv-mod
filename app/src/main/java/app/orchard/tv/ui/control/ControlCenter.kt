@@ -142,10 +142,10 @@ fun ControlCenter(
         ) {
             Column(
                 Modifier
-                    .width(360.dp)
+                    .width(300.dp)
                     .consumeTaps()
-                    .liquidGlass(30.dp)
-                    .padding(22.dp),
+                    .liquidGlass(24.dp)
+                    .padding(16.dp),
             ) {
                 AnimatedContent(
                     targetState = page,
@@ -195,7 +195,7 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
     Column {
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
-                BasicText(timeText(now), style = Type.SmallClock.copy(fontSize = Type.LargeTitle.fontSize * 1.25f))
+                BasicText(timeText(now), style = Type.SmallClock.copy(fontSize = Type.LargeTitle.fontSize * 1.05f))
                 BasicText(dateText(now), style = Type.Callout)
             }
             val net = vm.network
@@ -211,12 +211,12 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
                         NetKind.Offline -> stringResource(R.string.net_offline)
                     },
                     style = Type.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 130.dp),
+                    modifier = Modifier.widthIn(max = 110.dp),
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             RoundButton(Glyph.Input, stringResource(R.string.cc_inputs), focusRequester = first) {
                 // TCL lists no inputs to Android; its own input panel is the next best thing.
@@ -236,12 +236,12 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
             RoundButton(Glyph.Gear, stringResource(R.string.cc_settings)) { vm.whenUnlocked { onOpen(SystemProbe.settingsIntent(context)) } }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         VolumeRow(vm)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         BrightnessRow(vm)
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         // How Home looks (wallpaper, screensaver, focus style, hidden apps, weather) lives in one place.
         MenuRow(
             Glyph.Photo,
@@ -270,7 +270,7 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
             MenuRow(Glyph.Shield, stringResource(R.string.cc_setup_title), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) }, trailing = "›")
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         val (dot, text) = when (vm.homeStatus) {
             HomeStatus.Default -> Palette.Green to stringResource(R.string.cc_home_default)
             HomeStatus.Guarded -> Palette.Green to stringResource(R.string.cc_home_guarded)
@@ -408,11 +408,11 @@ private fun SetupPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.co
 private fun RoundButton(glyph: Glyph, label: String, focusRequester: FocusRequester? = null, onClick: () -> Unit) {
     Pressable(onClick = onClick, focusRequester = focusRequester, focusedScale = 1.1f) { state ->
         val bg by animateColorAsState(if (state.focused) Palette.Focus else Palette.Fill, tween(140, easing = Motion.EaseOut), label = "round-bg")
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
-            Box(Modifier.size(58.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
-                GlyphIcon(glyph, if (state.focused) Palette.OnFocus else Palette.Label, 24.dp)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(64.dp)) {
+            Box(Modifier.size(48.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                GlyphIcon(glyph, if (state.focused) Palette.OnFocus else Palette.Label, 20.dp)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             BasicText(
                 label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = Type.Caption.copy(color = if (state.focused) Palette.Label else Palette.SecondaryLabel, textAlign = TextAlign.Center),
@@ -473,11 +473,11 @@ private fun SliderRow(
                         while (travelled <= -pitch) { step(-1); travelled += pitch }
                     }
                 }
-                .clip(RoundedCornerShape(16.dp)).background(bg).height(48.dp).padding(horizontal = 16.dp),
+                .clip(RoundedCornerShape(14.dp)).background(bg).height(40.dp).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GlyphIcon(glyph, fg, 20.dp, level = level)
+            GlyphIcon(glyph, fg, 18.dp, level = level)
             Canvas(Modifier.weight(1f).height(6.dp)) {
                 val r = CornerRadius(size.height / 2)
                 drawRoundRect(fg.copy(alpha = 0.2f), cornerRadius = r)
