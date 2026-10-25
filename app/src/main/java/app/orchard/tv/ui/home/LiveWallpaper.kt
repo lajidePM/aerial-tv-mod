@@ -28,6 +28,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.system.DiagLog
 import app.orchard.tv.ui.theme.Motion
 import app.orchard.tv.wallpaper.Aerial
@@ -47,10 +48,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /** How long Home sits still before the aerial wallpaper starts moving. */
-private const val START_AFTER_MS = 10_000L
+internal const val START_AFTER_MS = 10_000L
 
 /** A stopped film keeps its player this long, so it moves on again without loading. */
-private const val KEEP_STOPPED_MS = 2 * 60 * 1000L
+internal const val KEEP_STOPPED_MS = 2 * 60 * 1000L
 
 /**
  * The film behind Home, for the screensaver that carries it on instead of starting its own
@@ -133,7 +134,8 @@ fun LiveWallpaper(
         delay(START_AFTER_MS)
         idle = true
     }
-    val play = moving && idle || hold
+    // Set to keep moving, it plays as soon as Home shows it and keys do not stop it (issue #360).
+    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) || hold
     val keepNow by rememberUpdatedState(keep)
     val standInNow by rememberUpdatedState(standIn)
 
@@ -263,8 +265,13 @@ fun LiveWallpaper(
                     // moves on from there when Home is still again. The picture, decoded apart
                     // and drawn on another plane with other processing, showed a slight jolt
                     // when swapped in. It takes over under a panel, whose blur the film would
-                    // not get, or after KEEP_STOPPED_MS.
-                    withTimeoutOrNull(KEEP_STOPPED_MS) { snapshotFlow { standInNow && keepNow }.first { !it } }
+                    // not get, or after KEEP_STOPPED_MS. Not where the copy of the plane came back
+                    // green: the paused film shows green there too once Home redraws over it
+                    // (Hisense T963, Xiaomi MiTV-MTEQ0 and MFTP0: green until the film moved
+                    // again, issues #256, #412).
+                    if (!copyLostColour) {
+                        withTimeoutOrNull(KEEP_STOPPED_MS) { snapshotFlow { standInNow && keepNow }.first { !it } }
+                    }
                     if (!keepNow) {
                         cover.snapTo(0f)
                         live.stopped = false
@@ -309,6 +316,12 @@ private suspend fun capture(view: SurfaceView): Bitmap? {
     return captureOnce(view).also { pixelCopy = it != null }
 }
 
+/** A moving wallpaper's current frame where this TV lets PixelCopy read its video plane; else null. */
+internal suspend fun copyFrame(view: SurfaceView): Bitmap? = if (pixelCopy == false) null else capture(view)
+
+/** Whether PixelCopy read the film green here: the video plane loses its colour when composited. */
+private var copyLostColour = false
+
 /**
  * The plate may come up over the stopped film: two frames on, once Home's plate has taken the
  * new glass while still out of sight, rather than fading it in over the last film's.
@@ -337,6 +350,7 @@ private suspend fun captureOnce(view: SurfaceView): Bitmap? {
         }.onFailure { done.resume(-1) }
     }
     val unread = if (result == PixelCopy.SUCCESS) unreadable(bitmap) else null
+    if (unread == "green") copyLostColour = true
     if (result != PixelCopy.SUCCESS || unread != null) DiagLog.i("wallpaper frame copy: result $result, $unread")
     return bitmap.takeIf { result == PixelCopy.SUCCESS && unread == null }
 }
