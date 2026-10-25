@@ -13,16 +13,16 @@
   })();
 </script>
 <title>Aerial · 给国产电视的一块干净桌面</title>
-<meta name="description" content="参照 tvOS 设计的开源 Android TV 桌面。没有广告，没有推荐流，只有你的 App、你的壁纸和航拍屏保。支持小米、TCL 等国产电视，开机自动接管。">
+<meta name="description" content="参照 tvOS 设计的开源 Android TV 桌面。没有广告，没有推荐流，只有你的 App、你的壁纸和航拍屏保。支持小米、TCL、创维、索尼等国产电视和盒子，开机自动接管。">
 <meta property="og:title" content="Aerial · 给国产电视的一块干净桌面">
 <meta property="og:description" content="参照 tvOS 设计的开源电视桌面，没有广告，开机自动接管。">
-<meta property="og:image" content="img/home.jpg?v=146">
+<meta property="og:image" content="img/home.jpg?v=147">
 <meta name="theme-color" content="#000000">
 <link rel="alternate" hreflang="zh" href="https://aerial.qust.me/">
 <link rel="alternate" hreflang="en" href="https://aerial.qust.me/en/">
 <link rel="alternate" hreflang="x-default" href="https://aerial.qust.me/en/">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -53,8 +53,8 @@
     <div class="tv reveal">
       <div class="glow"></div>
       <div class="screen compare" id="compare" role="slider" tabindex="0" aria-label="电视自带的桌面和 Aerial 的对比，左右移动查看" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <img class="after" src="img/home.jpg?v=146" alt="Aerial 首页：风景壁纸和玻璃底板上的一排 App" width="1600" height="900">
         <img class="before" src="img/stock-xiaomi.jpg?v=3" alt="电视自带的桌面：满屏剧集推荐、会员和限免角标" width="1600" height="900">
+        <div class="after"><img src="img/home.jpg?v=147" alt="Aerial 首页：风景壁纸和玻璃底板上的一排 App" width="1600" height="900"></div>
         <div class="divider" aria-hidden="true"><span class="knob"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></div>
       </div>
       <div class="stand"></div>
@@ -121,11 +121,11 @@
     <div class="gallery reveal">
       <figure>
         <div class="shot"><img src="img/screensaver-aerial.jpg?v=146" alt="航拍屏保：俯瞰夏威夷岛 Pu‘u O ‘Umi 自然保护区" loading="lazy" width="1600" height="900"></div>
-        <figcaption>优胜美地国家公园</figcaption>
+        <figcaption>夏威夷岛 Pu‘u O ‘Umi 自然保护区</figcaption>
       </figure>
       <figure>
-        <div class="shot"><img src="img/screensaver-aerial-2.jpg?v=146" alt="航拍屏保：俯瞰冰岛高地的辫状河" loading="lazy" width="1600" height="900"></div>
-        <figcaption>洛杉矶好莱坞标志</figcaption>
+        <div class="shot"><img src="img/screensaver-aerial-2.jpg?v=146" alt="航拍屏保：俯瞰冰岛高地通纳河" loading="lazy" width="1600" height="900"></div>
+        <figcaption>冰岛高地通纳河</figcaption>
       </figure>
     </div>
   </div>
@@ -145,9 +145,9 @@
       <div>
         <p class="kicker">用手机设置</p>
         <h3 class="sub">扫一下，<br>不用遥控器打字。</h3>
-        <p class="muted">扫电视上的二维码，用手机传照片、选壁纸、换屏保。</p>
+        <p class="muted">扫电视上的二维码，在手机上整理主屏幕（拖动排序、改名、换图标、文件夹、隐藏、加 HDMI），还能传照片、选壁纸、换屏保。</p>
       </div>
-      <div class="phone"><img src="img/phone.jpg?v=146" alt="手机上的个性化设置页" loading="lazy" width="780" height="1520"></div>
+      <div class="phone"><img src="img/phone.jpg?v=147" alt="手机设置页的主屏幕标签：和电视一样的图标网格" loading="lazy" width="780" height="1384"></div>
     </div>
   </div>
 </section>
@@ -176,11 +176,15 @@
       </div>
     </div>
     <div class="devices reveal">
-      <span class="chip"><b>小米 / Redmi</b> · HyperOS TV</span>
-      <span class="chip"><b>TCL</b> · Android 11</span>
+      <span class="chip"><b>小米 / Redmi</b> · Android 6–14</span>
+      <span class="chip"><b>TCL</b> · Android 8–11</span>
+      <span class="chip"><b>创维 / 酷开</b> · Android 11</span>
       <span class="chip"><b>索尼 BRAVIA</b> · Android 10–12</span>
-      <a class="chip chip-link" href="https://github.com/pengchujin/aerial-tv/issues">其他品牌：欢迎<b>反馈</b> ›</a>
+      <span class="chip"><b>康佳</b> · Android 9</span>
+      <span class="chip"><b>盒子和投影仪</b> · 极米、大眼橙、极光盒子</span>
+      <a class="chip chip-link" href="https://github.com/pengchujin/aerial-tv#支持的机型">完整<b>机型列表</b> ›</a>
     </div>
+    <p class="note devices-note reveal">海信 / Vidda 和部分酷开开机会先进原桌面，雷鸟 MT9655 机型暂时接管不了。</p>
   </div>
 </section>
 
@@ -310,8 +314,8 @@
         <p>直接从 Apple 的服务器播放，1080p，码率约 15–20 Mbps。连不上时自动改用照片屏保。</p>
       </details>
       <details>
-        <summary>我的电视不在列表里，能用吗？</summary>
-        <p>大概率可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.4 及更老的电视也不行（Aerial 最低要 Android 5.0）。极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。遇到问题请用 <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a> 告诉我们，附上诊断信息：电脑上运行 <code>curl -fsSL https://aerial.qust.me/tools/report.sh | TV=&lt;电视IP&gt; bash</code>，或在手机配置页「更多 → 反馈问题」里复制。</p>
+        <summary>我的电视能用吗？</summary>
+        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.4 及更老的电视也不行（Aerial 最低要 Android 5.0）。极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题请用 <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a> 告诉我们，附上诊断信息：电脑上运行 <code>curl -fsSL https://aerial.qust.me/tools/report.sh | TV=&lt;电视IP&gt; bash</code>，或在手机配置页「更多 → 反馈问题」里复制。</p>
       </details>
     </div>
   </div>
@@ -356,6 +360,6 @@
 - 按主页键后的 adb shell "dumpsys window | grep mCurrentFocus"（应该回到电视原来的桌面）`,
   };
 </script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

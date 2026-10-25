@@ -15,11 +15,23 @@
 | VIDAA C1 投影 | Android 9，MT9669 | 没有 role 服务，也没有 `persist.vt.use_home_pkg`；聚好看 HOME priority=50，守护拉起 Aerial 后 2–5 秒系统（uid 1000）又切回聚好看；`SYSTEM_ALERT_WINDOW` 被改回 ignore；暂时接管不了 | #323 |
 | 海信会议室触屏电视、海信投影 | 未说 | 投影打不开 ADB；会议室机只问了能否保留触屏（能，1.20 起支持触屏） | 微博 |
 
+Vidda C1S 激光投影（VIDAA_TV，MT9669，Android 9，PR #545）：聚好看（`com.jamdeo.tv.vod`）不向第三方无障碍服务发窗口事件，别的 App 的事件照常；`set-home-activity` 写了 preferred 也不生效；用量统计里有聚好看的 `MOVE_TO_FOREGROUND`。1.49 起原桌面里有聚好看就每秒查一次用量统计（要 `GET_USAGE_STATS`，安装命令会给），报告人实测从 B 站按主页键 1–2 秒回到 Aerial。
+
 微博上海信 / Vidda 用户最多的反馈是**开机不进 Aerial**（2026-10-22 一天约 6 人），其次是信号源、音量（已修）。
 
 - Android 11（SDK 30），`RP1A.200720.011`，MediaTek MT9653，arm64-v8a，1920×1080。
 - 原桌面：`com.jamdeo.tv.vod/com.ju.main.launcher.LauncherActivity`（聚好看）。
 - 安装的 flavor：`standard`。`adb install` 直接成功；`pm grant`、`appops`、通知监听、屏保接管都正常，`APP_AUTO_START` / `APP_ASSOC_START` 报 `Unknown operation string`（TCL 才有，忽略）。
+
+## 开机反复选择桌面（H55E9A）
+
+2026-10-24，H55E9A（Android 8.0.0，固件 `03.02.60.02`），已安装 Aerial 1.43 / versionCode 46。实机日志显示：系统先按默认 HOME 启动 Aerial，随后桌面守护在用户解锁前读取凭据存储里的 SharedPreferences，抛出 `IllegalStateException: SharedPreferences in credential encrypted storage are not available until after user is unlocked`。紧接着系统记录 `Clearing package preferred activities from app.orchard.tv` 并打开 `ResolverActivity`。因此「始终」确实保存过，是开机崩溃后被系统清除了。
+
+- 本地代码中，`onServiceConnected` 在解锁检查前调用 `watchCecInput`，其中 `CecHome.inputSettingKey` 无条件读取偏好；即使 CEC Home 没开启也会触发。
+- 这条调用和设置读取由 `617e317a`（2026-10-23，Apple TV HDMI Home 按键控制）引入。
+- 修复：`CecHome.enabled` 和 `inputSettingKey` 在未解锁时分别返回 false / null；收到 `ACTION_USER_UNLOCKED` 后重新注册 CEC 输入监听并刷新按键过滤。偏好仍留在原存储，不迁移用户数据。
+- 自动化验证：8 项守护相关测试通过，覆盖未解锁时不读设置、解锁后读取保留的配置、服务绑定到解锁后的监听注册和销毁清理，以及 Android 6 的兼容性；standard / guard 的 release Kotlin 编译通过。测试不替代真机重启验证。
+- **修复尚未在真机重启验证**：本机缺少原安装的签名密钥，未覆盖安装、重启或更改电视设置。需要同签名修复版覆盖安装后验证开机不再崩溃、默认 HOME 保留以及解锁后的正常使用。
 
 ## HOME 锁定
 
@@ -54,3 +66,8 @@
 - `HomeChrome.rememberNow` 原来保留 Compose 状态，仅靠协程等到下一分钟刷新，没有响应界面恢复、亮屏或系统校时。`MainActivity.dayReceiver` 虽监听校时，却只更新壁纸。因此系统时间已经正确时，界面仍可能暂时保留待机前的值。
 - 源码补丁改为前台监听 `TIME_TICK`、`TIME_SET`、`TIMEZONE_CHANGED`、`SCREEN_ON`，并在 `ON_START` / `ON_RESUME` 立即读取时间；首页和 Dream 共用这条逻辑。
 - **验证边界**：以上为原版的真机日志与源码分析；`:app:compileStandardReleaseKotlin` 通过。修复版尚未安装，也未验证真实待机唤醒。当前机器缺少与已装 APK 匹配的签名密钥。未改电视设置、未卸载应用。
+
+## 系统屏保起不来（VIDAA X Pro MT9655 Android 14，85V1KD-S T963D4 Android 11）
+
+- 屏保设成 Aerial 的 Dream 后，Aerial 用 Somnambulator 请系统起屏保，系统没有起：Aerial 30 毫秒后又回到前台（#525 的日志）。用了航拍壁纸时，壁纸的播放器已经为屏保让出解码器，于是停住（#533）。
+- 1.48 起：请求后 1.5 秒内 Aerial 仍在前台且有焦点，就改放 Aerial 自己的屏保，这个进程里不再请系统起。没在海信真机上验证。

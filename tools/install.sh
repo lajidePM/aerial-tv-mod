@@ -45,12 +45,18 @@ fi
 case "$TV" in *:*) SERIAL="$TV" ;; *) SERIAL="$TV:5555" ;; esac
 export ANDROID_SERIAL="$SERIAL"
 adb connect "$SERIAL" >/dev/null
-if [ "$(adb get-state 2>/dev/null)" != device ]; then
+STATE=$(adb get-state 2>&1 || true)
+if [ "$STATE" != device ]; then
+  case "$STATE" in
+    *unauthorized*) echo "The TV is asking \"Allow USB debugging?\". Choose Allow (and Always allow) on the TV, then run again." ; exit 1 ;;
+  esac
   # Android 11+ "Wireless debugging" never answers on 5555: adbd speaks TLS on ports that change
   # every visit, and the first connection needs a 6-digit pairing code (TCL Q9M / Q10L and other
   # 2026 firmwares only expose this mode, issue #31). Pair once, then put adbd back on 5555 so
   # the runs after this one (and KEEP_ADB) work the usual way. Some TCL firmwares (Q10M, 鹤 7 Pro)
   # have no pairing-code entry at all; the only way in there is a USB cable, then adb tcpip 5555.
+  # Android 11+ TVs with only wireless debugging use a TLS port of their own and refuse an
+  # unpaired computer's certificate (TCL 85T7L Ultra, issue #480).
   PAIRED=0
   if [ -n "${ADB_PAIR:-}" ] && [ -n "${ADB_CODE:-}" ] && [ -n "${ADB_CONNECT:-}" ]; then
     adb pair "$ADB_PAIR" "$ADB_CODE" || echo "Pairing failed: check the code, it expires quickly." >&2
@@ -73,10 +79,8 @@ if [ "$(adb get-state 2>/dev/null)" != device ]; then
       fi
     fi
   else
-    echo "The TV did not accept $SERIAL. If it runs Android 11+ wireless debugging, pair before connecting:" >&2
-    echo "  adb pair <pair-screen-ip:port> <6-digit-code> && adb connect <main-screen-ip:port>" >&2
-    echo "(TV: Developer options → Wireless debugging → Pair device with pairing code), or rerun with" >&2
-    echo "ADB_PAIR=<ip:port> ADB_CODE=<code> ADB_CONNECT=<ip:port> set." >&2
+    echo "Could not connect to $SERIAL. Check that ADB debugging is on and the IP is right. A TV that offers only wireless debugging (Android 11+) needs pairing first: adb pair <IP>:<pairing port> with the code the TV shows, then run again with TV=<IP>:<port the TV shows>." >&2
+    echo "Or rerun with ADB_PAIR=<pair-screen ip:port> ADB_CODE=<6-digit code> ADB_CONNECT=<main-screen ip:port> set." >&2
   fi
   if [ "$PAIRED" = 1 ]; then
     # Plaintext 5555 keeps working without pairing again; the pairing only authorizes this key.
@@ -241,8 +245,6 @@ if ! adb shell dumpsys notification 2>/dev/null | grep -q "$PKG/$PKG.guard.Reviv
   echo "short standby the TV's launcher can show for up to a minute. Keep auto-sync on. If Home ever stays" >&2
   echo "on the TV's launcher: TV=$TV $0 repair" >&2
 fi
-# Compose runs much smoother ahead-of-time compiled on TV chips.
-adb shell cmd package compile -m speed -f "$PKG" >/dev/null 2>&1 || true
 # TVs on Android's standard screensaver (TCL's carries a membership upsell) get Aerial's instead,
 # so it also starts while another app sits idle. Xiaomi uses its own; Aerial covers it from Home.
 if [ "$(adb shell settings get secure screensaver_enabled | tr -d '\r')" = 1 ]; then
@@ -265,6 +267,13 @@ if ! adb shell am start -W -n "$PKG/.MainActivity" | grep -q "Status: ok"; then
   echo "Aerial did not start; Home was left untouched." >&2
   exit 1
 fi
+
+# Compose runs much smoother ahead-of-time compiled on TV chips: Home's tiles show in about half the
+# time. After Aerial's first start, not before: some firmwares compile "speed" as "speed-profile"
+# (Xiaomi MiTV-MFTR0, Android 14), which needs the profile Aerial writes as it starts; compiled
+# straight after the install it was left interpreted ("verify").
+sleep 5
+adb shell cmd package compile -m speed -f "$PKG" >/dev/null 2>&1 || true
 
 resolve_home() {
   adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME \
