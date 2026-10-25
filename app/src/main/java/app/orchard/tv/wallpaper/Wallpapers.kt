@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
+import app.orchard.tv.ui.components.UhdCanvas
 import app.orchard.tv.BuildConfig
 import app.orchard.tv.guard.GuardSetup
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.math.roundToInt
 
 enum class WallpaperKind { Daily, Builtin, Photo, Auto, Live, Video, Source }
 
@@ -146,9 +148,11 @@ object Wallpapers {
         if (started) return
         started = true
         app = context.applicationContext
+        // Home drawn at the panel's size (UhdCanvas) gets pictures of that size.
+        val scale = UhdCanvas.scale(context)
         context.resources.displayMetrics.let {
-            screenW = maxOf(it.widthPixels, it.heightPixels)
-            screenH = minOf(it.widthPixels, it.heightPixels)
+            screenW = (maxOf(it.widthPixels, it.heightPixels) * scale).roundToInt()
+            screenH = (minOf(it.widthPixels, it.heightPixels) * scale).roundToInt()
         }
         selectedId = (prefs.getString("selected", LATEST_DAILY) ?: LATEST_DAILY)
             // A built-in wallpaper from before the Mac-style set: its nearest one now.

@@ -24,6 +24,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import app.orchard.tv.ui.components.FilmSlot
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.system.DiagLog
 import app.orchard.tv.ui.theme.Motion
@@ -149,8 +150,8 @@ fun VideoWallpaper(
 
     AndroidView(
         modifier = Modifier.fillMaxSize(),
-        factory = { ctx -> SurfaceView(ctx).also { surface = it; player?.setVideoSurfaceView(it) } },
-        onRelease = { player?.clearVideoSurfaceView(it); surface = null },
+        factory = { ctx -> FilmSlot(ctx).also { surface = it.surface; player?.setVideoSurfaceView(it.surface) } },
+        onRelease = { player?.clearVideoSurfaceView(it.surface); surface = null },
     )
 }
 

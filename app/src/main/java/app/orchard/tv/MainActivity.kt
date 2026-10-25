@@ -31,10 +31,12 @@ import androidx.core.content.getSystemService
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.core.content.ContextCompat
@@ -58,6 +60,7 @@ import app.orchard.tv.ui.theme.LocalReducedMotion
 import app.orchard.tv.ui.home.TileFaces
 import app.orchard.tv.ui.theme.FontWarmup
 import app.orchard.tv.ui.theme.canvasDensity
+import app.orchard.tv.ui.components.UhdCanvas
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.system.DiagLog
@@ -173,7 +176,8 @@ class MainActivity : ComponentActivity() {
         // restore, and this is the boot's first real start.
         val fresh = savedInstanceState == null
         FontWarmup.start(this)
-        TileArtFactory.useCanvasDensity(canvasDensity(resources.displayMetrics))
+        val uhd = UhdCanvas.scale(this)
+        TileArtFactory.useCanvasDensity(canvasDensity(resources.displayMetrics) * uhd)
         Wallpapers.init(this)
         Weather.init(this)
         Updates.init(this)
@@ -202,11 +206,11 @@ class MainActivity : ComponentActivity() {
             }
         })
         if (DiagLog.modeSwitch(this)) preferSmoothestRefreshRate() else DiagLog.i("refresh rate left as it is (mode_switch off)")
-        if (DiagLog.softLayer(this)) window.decorView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        if (DiagLog.softLayer(this) && uhd == 1f) window.decorView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         FrameStats.attach(window)
         logWindow()
 
-        setContent {
+        val home: @Composable () -> Unit = {
             // TVs ship at different densities for the same 1080p panel (Xiaomi 320dpi, TCL 240dpi),
             // which would make the same layout bigger on one and smaller on the other. Aerial is
             // designed on a 960×540 canvas, so it scales that canvas to whatever the panel is.
@@ -225,6 +229,11 @@ class MainActivity : ComponentActivity() {
                     onStartScreensaver = { idleHandler.postDelayed({ startScreensaver(asked = true) }, 150) },
                 )
             }
+        }
+        if (Build.VERSION.SDK_INT >= 29 && uhd > 1f) {
+            setContentView(UhdCanvas.host(this, ComposeView(this).apply { setContent(home) }, uhd))
+        } else {
+            setContent(content = home)
         }
 
         ContextCompat.registerReceiver(this, screenOnReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -393,7 +402,7 @@ class MainActivity : ComponentActivity() {
                 d.supportedModes.joinToString { "${it.modeId}:${it.physicalWidth}x${it.physicalHeight}@${it.refreshRate}" }
         } else null
         DiagLog.i(
-            "display ${m.widthPixels}x${m.heightPixels} ${m.densityDpi}dpi, canvas density ${canvasDensity(m)}; $modes; " +
+            "display ${m.widthPixels}x${m.heightPixels} ${m.densityDpi}dpi, canvas density ${canvasDensity(m)}, uhd ${UhdCanvas.scale(this)} (${UhdCanvas.why}); $modes; " +
                 "hwui ${systemProperty("debug.hwui.renderer")}, soft_layer=${DiagLog.softLayer(this)}",
         )
         window.decorView.viewTreeObserver.addOnDrawListener {
