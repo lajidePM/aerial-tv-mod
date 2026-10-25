@@ -532,7 +532,7 @@ class HomeGuardService : AccessibilityService() {
                 homeHeld = true
                 lastHomeUpAt = Long.MIN_VALUE / 2
                 Log.i(TAG, "Home pressed twice; opening recent apps")
-                performGlobalAction(GLOBAL_ACTION_RECENTS)
+                openRecents()
                 return true
             }
             handler.postDelayed(homeHold, ViewConfiguration.getLongPressTimeout().toLong())
@@ -702,6 +702,21 @@ class HomeGuardService : AccessibilityService() {
     private val homeHold = Runnable {
         homeHeld = true
         Log.i(TAG, "Home held; opening recent apps")
+        openRecents()
+    }
+
+    /**
+     * The task centre Home opens. Dangbei OS (D5X Pro, Android 9) keeps its own recents app for the
+     * remote's D-pad and leaves SystemUI's in place behind it, so the global action still opens the one
+     * the remote cannot drive: start the vendor activity when the set has one, else the system's.
+     */
+    private fun openRecents() {
+        for (action in TASK_CENTRE_ACTIONS) {
+            val intent = Intent(action)
+                .addCategory(Intent.CATEGORY_DEFAULT)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (runCatching { startActivity(intent) }.isSuccess) return
+        }
         performGlobalAction(GLOBAL_ACTION_RECENTS)
     }
 
@@ -863,6 +878,8 @@ class HomeGuardService : AccessibilityService() {
         /** How far back to look for the front when no window has been seen; see frontByUsage. */
         private const val UNKNOWN_FRONT_LOOKBACK_MS = 6 * 60 * 60 * 1000L
         private const val DOUBLE_HOME_MS = 400L
+        /** Actions the firmware's own task centre answers, tried in order before SystemUI's recents. */
+        private val TASK_CENTRE_ACTIONS = listOf("com.dangbei.recentstask.action.SHOW_RECENTS_FOR_USER")
         private const val VOLUME_REPEAT_MAX_MS = 8_000L
         private val VOLUME_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
 
