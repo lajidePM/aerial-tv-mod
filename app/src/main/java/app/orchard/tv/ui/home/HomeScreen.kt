@@ -201,7 +201,9 @@ fun HomeScreen(
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
     val pillRequester = remember { FocusRequester() }
     val appContext = LocalContext.current
-    val firmwareInputPanel = remember { SystemProbe.tclInputPanel(appContext) != null }
+    val firmwareInputPanel = remember {
+        SystemProbe.tclInputPanel(appContext) != null || SystemProbe.coocaaInputPanel(appContext)
+    }
 
     var focusedKey by remember { mutableStateOf<String?>(null) }
     // Where focus goes when the overlay closes, when that is not the tile it was on. Kept apart
