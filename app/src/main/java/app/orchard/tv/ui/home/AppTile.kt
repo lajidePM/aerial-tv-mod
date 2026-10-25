@@ -80,6 +80,13 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import app.orchard.tv.apps.AppEntry
+import app.orchard.tv.apps.TileArt
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.mutableIntStateOf
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.settings.FocusStyle
 import app.orchard.tv.system.Sounds
@@ -152,8 +159,6 @@ fun AppTile(
     nameOnPlate: Boolean = false,
 ) {
     val reduced = LocalReducedMotion.current
-    // The tile's face at its drawn size, made on first draw and kept while the artwork lasts.
-    val faceFor = remember(app.art) { arrayOfNulls<Pair<IntSize, ImageBitmap>>(2) }
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
@@ -246,7 +251,7 @@ fun AppTile(
                 translationY = (1f - appear.value) * 18.dp.toPx()
             },
     ) {
-        if (lift > 0.01f) {
+        if (lift > 0.01f && !AerialSettings.lite) {
             // A lifted tile casts a soft shadow below it, as cards do on tvOS. The system's
             // elevation shadow is too faint to read on a TV; this one is baked, so it costs one
             // image draw while a tile is lifted.
@@ -406,8 +411,12 @@ fun AppTile(
                 // tiles at rest were shrunk and lost a little.
                 val fw = focusedPx(size.width)
                 val fh = focusedPx(size.height)
-                fun face(i: Int, fw: Int, fh: Int): ImageBitmap = faceFor[i]?.takeIf { it.first == full }?.second
-                    ?: tileFace(art.back, fw, fh, Corner.toPx() * fw / w, 0.5.dp.toPx() * fw / w).also { faceFor[i] = full to it }
+                // Made in the background (TileFaces.prepare). Until it is there the artwork is drawn
+                // as it is, inside the layer's rounded clip: nearly the same picture, and the tiles
+                // show at once instead of waiting for the faces.
+                fun face(fw: Int, fh: Int): ImageBitmap? = TileFaces.ready(art.back, fw, fh)
+                    ?: if (TileFaces.background) null
+                    else TileFaces.face(art.back, fw, fh, Corner.toPx() * fw / w, 0.5.dp.toPx() * fw / w)
                 val shape = BitmapShader(smoothMask(w, h, Corner.toPx()), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
                     .apply { setLocalMatrix(Matrix().apply { setScale(size.width / w, size.height / h) }) }
                 val rim = tileRim(w, h, Corner.toPx(), 0.5.dp.toPx())
@@ -416,13 +425,19 @@ fun AppTile(
                     val lifted = scale > (1f + FOCUSED_SCALE) / 2f
                     val pw = if (lifted) fw else w
                     val ph = if (lifted) fh else h
+                    // Read here so the tile draws again when the faces it waits for are made.
+                    TileFaces.version
+                    // Lite: no sheen (a shader per frame) and no parallax on the focused tile.
+                    val lite = AerialSettings.lite
                     scale(size.width / pw, size.height / ph, pivot = Offset.Zero) {
-                        drawImage(face(if (lifted) 1 else 0, pw, ph))
+                        val made = face(pw, ph)
+                        if (made != null) drawImage(made)
+                        else drawImage(art.back, dstSize = IntSize(pw, ph), filterQuality = FilterQuality.Medium)
                         art.fore?.let { fore ->
                             val at = art.foreAt
                             // Parallax: the logo travels further than the plate when the tile leans.
-                            val px = leanY.value / 7f * pw * 0.035f
-                            val py = -leanX.value / 7f * ph * 0.035f
+                            val px = if (lite) 0f else leanY.value / 7f * pw * 0.035f
+                            val py = if (lite) 0f else -leanX.value / 7f * ph * 0.035f
                             drawImage(
                                 fore,
                                 dstOffset = IntOffset((at.left * pw + px).roundToInt(), (at.top * ph + py).roundToInt()),
@@ -431,7 +446,7 @@ fun AppTile(
                             )
                         }
                     }
-                    if (lift > 0.01f) {
+                    if (lift > 0.01f && !lite) {
                         // Light from above: a soft sheen across the top, brighter where the tile leans toward it.
                         val glintX = size.width * (0.3f + leanY.value / 7f * 0.25f)
                         val glint = RadialGradient(
@@ -524,6 +539,79 @@ private fun GraphicsLayerScope.zoom(scale: Float) {
     val t = (scale - 1f) / (FOCUSED_SCALE - 1f)
     scaleX = 1f + t * (focusedPx(size.width) / size.width - 1f)
     scaleY = 1f + t * (focusedPx(size.height) / size.height - 1f)
+}
+
+/**
+ * Tile faces by artwork and pixel size. A face is a path drawn with anti-aliasing on the CPU: made
+ * on a tile's first draw, the whole grid's took the main thread about 120 ms in the frame the tiles
+ * first appear on a cold start (Xiaomi MiTV-MFTR0, release build; more on slower TVs). Home makes
+ * them on background threads before it shows the tiles ([prepare]); a tile only draws them.
+ * Kept while the artwork is: AppCatalog keeps that as long as the app is installed and unchanged.
+ */
+object TileFaces {
+    private val made = java.util.WeakHashMap<ImageBitmap, HashMap<Long, ImageBitmap>>()
+
+    /** Bumped when [prepare] has made a batch; tiles read it while drawing. */
+    var version by mutableIntStateOf(0); private set
+
+    /** Set while [prepare] is making faces: a tile then draws its artwork until its face is made. */
+    @Volatile var background = false; private set
+
+    /** The size [prepare] last made the faces at rest, packed as in [made]'s keys. */
+    @Volatile private var restKey = 0L
+
+    /**
+     * Drops the faces at any other size than at rest (the focused ones, about 250 KB each): a tile
+     * makes its own again when it is next focused. For the system's low-memory signals.
+     */
+    fun trimMemory() = synchronized(made) {
+        val keep = restKey
+        for (sizes in made.values) sizes.keys.retainAll { it == keep }
+    }
+
+    fun ready(back: ImageBitmap, w: Int, h: Int): ImageBitmap? =
+        synchronized(made) { made[back]?.get((w.toLong() shl 32) or h.toLong()) }
+
+    fun face(back: ImageBitmap, w: Int, h: Int, radius: Float, rimWidth: Float): ImageBitmap {
+        val key = (w.toLong() shl 32) or h.toLong()
+        synchronized(made) { made[back]?.get(key) }?.let { return it }
+        val face = tileFace(back, w, h, radius, rimWidth)
+        synchronized(made) { made.getOrPut(back) { HashMap(2) }[key] = face }
+        return face
+    }
+
+    /**
+     * Makes the faces of [arts] at rest on a screen [screenW] px wide at [density], as AppTile will
+     * draw them, several at a time; with [focused], the focused faces instead. Off the main thread.
+     * Sizes worked out exactly as AppTile's: a face of another size is simply made there.
+     */
+    suspend fun prepare(arts: List<TileArt>, screenW: Int, density: Float, focused: Boolean = false) = coroutineScope {
+        val tileW = restTileWidth((screenW / density).dp).value * density
+        val tileH = tileW * 9f / 16f
+        val w = tileW.roundToInt()
+        val h = tileH.roundToInt()
+        val fw = if (focused) focusedPx(tileW) else w
+        val fh = if (focused) focusedPx(tileH) else h
+        val radius = Corner.value * density * fw / w
+        val rim = 0.5f * density * fw / w
+        if (!focused) restKey = (w.toLong() shl 32) or h.toLong()
+        val todo = arts.distinctBy { System.identityHashCode(it.back) }.filter { ready(it.back, fw, fh) == null }
+        if (todo.isEmpty()) return@coroutineScope
+        // Only for the faces at rest: the focused ones are made ahead of need, and a tile focused
+        // before its turn still makes its own.
+        if (!focused) background = true
+        try {
+            // A few at a time, so the tiles appear in order (and Home's first frames keep a core).
+            for (batch in todo.chunked(BATCH)) {
+                batch.map { art -> async { runCatching { face(art.back, fw, fh, radius, rim) } } }.awaitAll()
+                withContext(Dispatchers.Main) { version++ }
+            }
+        } finally {
+            if (!focused) background = false
+        }
+    }
+
+    private const val BATCH = 5
 }
 
 private fun tileFace(back: ImageBitmap, w: Int, h: Int, radius: Float, rimWidth: Float): ImageBitmap {

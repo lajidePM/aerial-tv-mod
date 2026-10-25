@@ -97,6 +97,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
     implementation("androidx.core:core-ktx:1.16.0")
+    // Baseline Profile install (src/main/baseline-prof.txt) and its compile state in the diagnostics.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.0")
     // Aerial films. 1.8 is the last Media3 that runs on Android 5.0 (1.9 raised minSdk to 23).
     implementation("androidx.media3:media3-exoplayer:1.8.1")
     implementation("androidx.media3:media3-datasource:1.8.1")

@@ -34,7 +34,10 @@ import app.orchard.tv.system.TvSource
 import app.orchard.tv.system.VolumeStatus
 import app.orchard.tv.ui.home.PinMode
 import app.orchard.tv.ui.home.ScreensaverSkips
+import app.orchard.tv.ui.home.TileFaces
+import app.orchard.tv.ui.theme.canvasDensity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
@@ -53,6 +56,12 @@ sealed interface Overlay {
 }
 
 enum class CcPage { Main, Inputs, InputSettings, Update, Setup }
+
+/**
+ * Tiles a cold start reads whole before showing Home (two rows and a half, as many as can show);
+ * see AppCatalog.load.
+ */
+private const val LEADING_TILES = 13
 
 /** Time since boot at which the app list is looked at again; see HomeViewModel.catchUpAfterBoot. */
 private val BOOT_CATCH_UP_MS = listOf(60_000L, 180_000L)
@@ -168,15 +177,66 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch {
             val ctx = context
             val started = SystemClock.uptimeMillis()
-            all = AppCatalog.load(ctx)
-            DiagLog.i("${all.size} apps in ${SystemClock.uptimeMillis() - started} ms")
-            sources = withContext(Dispatchers.Default) { SystemProbe.sources(ctx) }
+            // The inputs are probed while the apps load: one after the other, a cold start waited
+            // for both in turn (0.1-0.8 s more on the TVs in issues #452, #454, #537).
+            val probing = async(Dispatchers.Default) { SystemProbe.sources(ctx) }
+            // A cold start reads only the first rows' tiles whole; the rest follow just after.
+            val first: ((Set<String>) -> Set<String>)? = if (loaded) null else { installed -> store.leading(LEADING_TILES, installed) }
+            all = AppCatalog.load(ctx, first)
+            // Where it went: waiting for a thread, the package queries, the tiles, then waiting for
+            // the main thread (busy with Home's first frames on a cold start).
+            val (from, queried, done) = AppCatalog.lastTiming
+            val now = SystemClock.uptimeMillis()
+            DiagLog.i("${all.size} apps in ${now - started} ms (wait ${from - started}, queries ${queried - from}, " +
+                "tiles ${done - queried}, main ${now - done})")
+            sources = probing.await()
             arrange()
-            if (!loaded) {
+            prepareFaces()
+            val wasLoaded = loaded
+            if (!wasLoaded) {
                 DiagLog.i("Home loaded: ${apps.size} tiles, ${sources.size} inputs, ${SystemClock.uptimeMillis() - started} ms")
                 catchUpAfterBoot()
             }
             loaded = true
+            // Counted from this load's own list: a second Home (the guard starting MainActivity
+            // again just after a cold start, Xiaomi MiTV-MFTR0) loads at the same time, and a count
+            // kept in AppCatalog was cleared by the other one's second pass, leaving this Home's
+            // placeholders on screen for good.
+            val waiting = all.count { it.art.placeholder }
+            if (waiting > 0) {
+                val rest = SystemClock.uptimeMillis()
+                all = AppCatalog.load(ctx)
+                arrange()
+                prepareFaces()
+                DiagLog.i("$waiting more tiles in ${SystemClock.uptimeMillis() - rest} ms")
+            }
+        }
+    }
+
+    private suspend fun prepareFaces(entries: List<AppEntry>, focused: Boolean = false) {
+        val dm = context.resources.displayMetrics
+        withContext(Dispatchers.Default) {
+            TileFaces.prepare(entries.map { it.art }.filterNot { it.placeholder }, dm.widthPixels, canvasDensity(dm), focused)
+        }
+    }
+
+    private var facesJob: Job? = null
+
+    /**
+     * The tiles' faces, in the background: made on each tile's first draw, the whole grid's held up
+     * the main thread at once (see TileFaces). Then the top row's faces at the focused size, which a
+     * tile otherwise makes the first time it is focused, on the main thread.
+     */
+    private fun prepareFaces() {
+        val shown = apps + folderApps.values.flatten()
+        val row = apps.take(5)
+        facesJob?.cancel()
+        facesJob = viewModelScope.launch {
+            val started = SystemClock.uptimeMillis()
+            prepareFaces(shown)
+            DiagLog.i("tile faces in ${SystemClock.uptimeMillis() - started} ms")
+            delay(1_000)
+            prepareFaces(row, focused = true)
         }
     }
 

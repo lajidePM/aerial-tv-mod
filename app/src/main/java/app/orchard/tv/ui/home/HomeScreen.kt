@@ -3,6 +3,7 @@ package app.orchard.tv.ui.home
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
+import android.os.SystemClock
 import android.view.KeyEvent as NativeKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -104,11 +105,22 @@ private val PlateMarginBottom = 30.dp
 /** How much taller the glass plate grows to hold the top row's names, with the second row kept clear of it. */
 private val PlateNameRoom = 28.dp
 
+/** Control Center has been drawn once in this process (HomeScreen's warm-up). */
+private object ControlCenterWarmed { var done = false }
+
+private const val CC_WARM_AFTER_MS = 3_000L
+
+private val GridMargin = 56.dp
+private val GridGap = 28.dp
+
+/** A tile's width at rest on a screen [screenW] wide; TileFaces works out the same size. */
+internal fun restTileWidth(screenW: Dp): Dp = (screenW - GridMargin * 2 - GridGap * (COLUMNS - 1)) / COLUMNS
+
 /** Grid geometry for the screen at hand. On a 1080p TV this is a 960×540 dp canvas. */
 private class GridMetrics(screenW: Dp, screenH: Dp, oneRow: Boolean, plateNames: Boolean, peek: Boolean, plate: Boolean) {
-    val margin = 56.dp
-    val gap = 28.dp
-    val tileW = (screenW - margin * 2 - gap * (COLUMNS - 1)) / COLUMNS
+    val margin = GridMargin
+    val gap = GridGap
+    val tileW = restTileWidth(screenW)
     val tileH = tileW * 9f / 16f
     val pitchX = tileW + gap
     val pitchY = tileH + 50.dp
@@ -520,7 +532,21 @@ fun HomeScreen(
                 saverPush = { saverPush.value },
             )
 
-            Box(Modifier.fillMaxSize().offset { IntOffset(0, -scroll.value.roundToInt()) }) {
+            // Before Android 7 there is no picture of Home under Control Center (issue #466), so the
+            // GPU draws every tile again under the panel each frame. Lite there lets the clock and
+            // the tiles fade out under the panel's veil; the wallpaper and plate stay.
+            val shedUnderPanel = Build.VERSION.SDK_INT < Build.VERSION_CODES.N && AerialSettings.lite
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .offset { IntOffset(0, -scroll.value.roundToInt()) }
+                    .then(
+                        if (shedUnderPanel) Modifier.graphicsLayer {
+                            alpha = 1f - backdropVeil
+                            compositingStrategy = CompositingStrategy.ModulateAlpha
+                        } else Modifier,
+                    ),
+            ) {
                 val clockRight = AerialSettings.clockRight
                 // The large clock stands over the top row; the small one is the time and weather in
                 // one line, top left or beside the pill, so the wallpaper keeps the screen.
@@ -705,6 +731,21 @@ fun HomeScreen(
             )
         }
 
+        // Once per process, while Home is idle: Control Center drawn for a few frames, nearly
+        // transparent, so that its first opening is not its first draw (see ControlCenter).
+        var ccWarm by remember { mutableStateOf(false) }
+        LaunchedEffect(vm.loaded) {
+            if (!vm.loaded || ControlCenterWarmed.done) return@LaunchedEffect
+            while (true) {
+                delay(CC_WARM_AFTER_MS)
+                val idle = SystemClock.uptimeMillis() - vm.lastInputAt > CC_WARM_AFTER_MS
+                if (idle && vm.overlay == Overlay.None && !vm.screensaverVisible && vm.resumed) break
+            }
+            ControlCenterWarmed.done = true
+            ccWarm = true
+            repeat(3) { withFrameNanos { } }
+            ccWarm = false
+        }
         ControlCenter(
             visible = overlay is Overlay.ControlCenter,
             page = (overlay as? Overlay.ControlCenter)?.page ?: CcPage.Main,
@@ -712,6 +753,7 @@ fun HomeScreen(
             now = now,
             onOpen = { vm.overlay = Overlay.None; onOpen(it) },
             onClose = { vm.overlay = Overlay.None },
+            warm = ccWarm,
         )
 
         FolderView(

@@ -62,6 +62,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -111,6 +112,8 @@ fun ControlCenter(
     now: LocalDateTime,
     onOpen: (android.content.Intent) -> Unit,
     onClose: () -> Unit,
+    /** Draw the closed panel once, nearly transparent, so that its first opening is not its first draw (HomeScreen). */
+    warm: Boolean = false,
 ) {
     BackHandler(enabled = visible) {
         when (page) {
@@ -134,6 +137,15 @@ fun ControlCenter(
     }
 
     Box(Modifier.fillMaxSize().padding(top = 24.dp, end = 32.dp), contentAlignment = Alignment.TopEnd) {
+        // The first opening composed the panel and then, frame after frame, gave the GPU its
+        // pictures, glyphs and shaders for the first time: 55-95 ms a frame for the whole drop-in,
+        // against about 26 ms on the second opening (Xiaomi MiTV-MFTR0, release build). Drawn once
+        // at 1% while Home is idle, without focus, the first opening is like the second.
+        if (warm && !visible) {
+            Column(Modifier.graphicsLayer { alpha = 0.01f }.width(300.dp).liquidGlass(24.dp).padding(16.dp)) {
+                MainPage(vm, now, false, onOpen)
+            }
+        }
         AnimatedVisibility(
             visible = visible,
             // Grows out of the corner where the status pill lives; leaves faster than it came.

@@ -205,8 +205,6 @@ if ! adb shell dumpsys notification 2>/dev/null | grep -q "$PKG/$PKG.guard.Reviv
   echo "short standby the TV's launcher can show for up to a minute. Keep auto-sync on. If Home ever stays" >&2
   echo "on the TV's launcher: TV=$TV $0 repair" >&2
 fi
-# Compose runs much smoother ahead-of-time compiled on TV chips.
-adb shell cmd package compile -m speed -f "$PKG" >/dev/null 2>&1 || true
 # TVs on Android's standard screensaver (TCL's carries a membership upsell) get Aerial's instead,
 # so it also starts while another app sits idle. Xiaomi uses its own; Aerial covers it from Home.
 if [ "$(adb shell settings get secure screensaver_enabled | tr -d '\r')" = 1 ]; then
@@ -229,6 +227,13 @@ if ! adb shell am start -W -n "$PKG/.MainActivity" | grep -q "Status: ok"; then
   echo "Aerial did not start; Home was left untouched." >&2
   exit 1
 fi
+
+# Compose runs much smoother ahead-of-time compiled on TV chips: Home's tiles show in about half the
+# time. After Aerial's first start, not before: some firmwares compile "speed" as "speed-profile"
+# (Xiaomi MiTV-MFTR0, Android 14), which needs the profile Aerial writes as it starts; compiled
+# straight after the install it was left interpreted ("verify").
+sleep 5
+adb shell cmd package compile -m speed -f "$PKG" >/dev/null 2>&1 || true
 
 resolve_home() {
   adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME \
