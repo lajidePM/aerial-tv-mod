@@ -399,9 +399,9 @@ private fun darkened(src: ImageBitmap, alpha: Float): ImageBitmap {
 }
 
 /**
- * The large clock, as on the lock screen: the date over the time, and under it the weather, the
- * city it is for (issue #59) and today's high and low. Left or right, the three lines share one
- * edge, the tiles' edge. The digits stay proportional: tabular ones leave a narrow "1" short of
+ * The large clock, as on the lock screen: the date (in Chinese, with the lunar one) over the time,
+ * and under it the weather, the city it is for (issue #59) and today's high and low. Left or right,
+ * the three lines share one edge, the tiles' edge. The digits stay proportional: tabular ones leave a narrow "1" short of
  * that edge. A soft shadow keeps them readable on bright photos. The clock screensaver shows the same.
  */
 @Composable
@@ -416,7 +416,10 @@ fun ShelfClock(
     val secondary = Color.White.copy(alpha = 0.78f)
     val aside = Modifier.graphicsLayer { alpha = 1f - (toSaver() * 2.5f).coerceIn(0f, 1f) }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
-        BasicText(dateText(now), style = Type.Title.copy(color = Color.White.copy(alpha = 0.9f), shadow = shadow), modifier = aside)
+        // On a TV set to Chinese, the Chinese calendar's date follows, as on the iPhone's lock screen.
+        val lunar = if (Locale.getDefault().language == "zh") Lunar.text(now.toLocalDate()) else null
+        val date = dateText(now).let { if (lunar != null) "$it  $lunar" else it }
+        BasicText(date, style = Type.Title.copy(color = Color.White.copy(alpha = 0.9f), shadow = shadow), modifier = aside)
         BasicText(
             timeText(now),
             style = Type.Clock.copy(shadow = shadow),
