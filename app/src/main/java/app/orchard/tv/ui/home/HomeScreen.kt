@@ -413,8 +413,9 @@ fun HomeScreen(
         LaunchedEffect(target, dragged) {
             if (dragged) return@LaunchedEffect
             if (reduced) scroll.snapTo(target)
-            // A spring keeps its velocity when a quick second press retargets it mid-flight.
-            else scroll.animateTo(target, spring(dampingRatio = 1f, stiffness = 170f))
+            // A spring keeps its velocity when a quick second press retargets it mid-flight. At 170
+            // a row took about 300 ms to get 90% of the way and half a second to settle.
+            else scroll.animateTo(target, spring(dampingRatio = 1f, stiffness = 280f))
         }
 
         // The folder open, or under its app's menu.
@@ -688,8 +689,8 @@ fun HomeScreen(
 
         AnimatedVisibility(
             visible = moving != null,
-            enter = fadeIn(tween(200)) + slideInVertically(tween(260, easing = Motion.EaseOut)) { it / 2 },
-            exit = fadeOut(tween(150)) + slideOutVertically(tween(150, easing = Motion.EaseOut)) { it / 2 },
+            enter = fadeIn(tween(200, easing = Motion.EaseOut)) + slideInVertically(tween(260, easing = Motion.EaseOut)) { it / 2 },
+            exit = fadeOut(tween(150, easing = Motion.EaseOut)) + slideOutVertically(tween(150, easing = Motion.EaseOut)) { it / 2 },
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
         ) {
             // Screens that can be touched also say how to move with a finger.

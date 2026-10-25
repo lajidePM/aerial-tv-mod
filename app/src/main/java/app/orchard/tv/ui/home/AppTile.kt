@@ -12,7 +12,7 @@ import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.view.KeyEvent as NativeKeyEvent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloat
@@ -94,12 +94,27 @@ import app.orchard.tv.ui.theme.Type
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.roundToInt
 
 // D-pad remotes give no tilt to follow, so the lift itself has to read from across the room.
 private const val FOCUSED_SCALE = 1.15f
 private const val PRESSED_SCALE = 1.05f
+
+/**
+ * A tile's rest bounds grown about their middle to its size when focused: where the launch
+ * animation starts, since the focused tile is what the viewer sees.
+ */
+fun Rect.asFocusedTile(): Rect {
+    val dx = width * (FOCUSED_SCALE - 1f) / 2f
+    val dy = height * (FOCUSED_SCALE - 1f) / 2f
+    return Rect(left - dx, top - dy, right + dx, bottom + dy)
+}
+
+/** Half a sine wave, so a back-and-forth eases through each turn. */
+private val SineEasing = Easing { t -> (1f - cos(PI * t).toFloat()) / 2f }
 private val Corner = 12.dp
 private const val RIM_AT_REST = 0.07f
 
@@ -123,7 +138,8 @@ fun AppTile(
     focusRequester: FocusRequester,
     enabled: Boolean,
     moving: Boolean,
-    appearDelayMs: Int,
+    /** Delay of the first-appearance stagger; null for no entrance (tiles in a folder that just opened). */
+    appearDelayMs: Int?,
     onFocused: () -> Unit,
     onClick: (Rect?) -> Unit,
     onLongPress: (Rect?) -> Unit,
@@ -190,33 +206,35 @@ fun AppTile(
     val wobble = if (moving && !reduced) {
         rememberInfiniteTransition(label = "jiggle").animateFloat(
             initialValue = -1.3f, targetValue = 1.3f,
-            animationSpec = infiniteRepeatable(tween(130, easing = LinearEasing), RepeatMode.Reverse),
+            // A sine, not a triangle: linear turned back hard at each end and read as a buzz.
+            animationSpec = infiniteRepeatable(tween(130, easing = SineEasing), RepeatMode.Reverse),
             label = "jiggle-angle",
         )
     } else null
 
     // First appearance: a short stagger, so the grid settles in rather than popping on.
-    val appear = remember { Animatable(if (reduced) 1f else 0f) }
+    val appear = remember { Animatable(if (reduced || appearDelayMs == null) 1f else 0f) }
     LaunchedEffect(Unit) {
-        if (appear.value < 1f) {
+        if (appear.value < 1f && appearDelayMs != null) {
             delay(appearDelayMs.toLong())
             appear.animateTo(1f, tween(420, easing = Motion.EaseOut))
         }
     }
 
+    // One small bump back, as tvOS does: at 0.45 damping it swung past rest and rocked once more.
     fun nudge(dx: Float, dy: Float) {
         if (reduced) return
         scope.launch {
             push.animateTo(Offset(dx * 14f, dy * 14f), tween(90, easing = Motion.EaseOut))
-            push.animateTo(Offset.Zero, spring(dampingRatio = 0.45f, stiffness = 520f))
+            push.animateTo(Offset.Zero, spring(dampingRatio = 0.65f, stiffness = 520f))
         }
         scope.launch {
-            leanY.animateTo(dx * 7f, tween(90, easing = Motion.EaseOut))
-            leanY.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 420f))
+            leanY.animateTo(dx * 5f, tween(90, easing = Motion.EaseOut))
+            leanY.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f))
         }
         scope.launch {
-            leanX.animateTo(-dy * 7f, tween(90, easing = Motion.EaseOut))
-            leanX.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 420f))
+            leanX.animateTo(-dy * 5f, tween(90, easing = Motion.EaseOut))
+            leanX.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f))
         }
     }
 
@@ -288,7 +306,9 @@ fun AppTile(
                         else -> null
                     }
                     if (dir != null) {
-                        if (down && !focusManager.moveFocus(dir)) {
+                        // A held key repeats: the wall is told once, on the first press, or the tile
+                        // stayed pushed and leaning and the limit sound ran on while the key was held.
+                        if (down && !focusManager.moveFocus(dir) && e.nativeKeyEvent.repeatCount == 0) {
                             Sounds.limit()
                             when (dir) {
                                 FocusDirection.Left -> nudge(-1f, 0f)

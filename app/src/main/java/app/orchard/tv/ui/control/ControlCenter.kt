@@ -125,8 +125,8 @@ fun ControlCenter(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(220)),
-        exit = fadeOut(tween(180)),
+        enter = fadeIn(tween(220, easing = Motion.EaseOut)),
+        exit = fadeOut(tween(180, easing = Motion.EaseOut)),
         modifier = Modifier.fillMaxSize(),
     ) {
         // A tap outside the panel closes Control Center.
@@ -137,8 +137,8 @@ fun ControlCenter(
         AnimatedVisibility(
             visible = visible,
             // Grows out of the corner where the status pill lives; leaves faster than it came.
-            enter = fadeIn(tween(200)) + scaleIn(tween(340, easing = Motion.Drawer), initialScale = 0.9f, transformOrigin = TransformOrigin(1f, 0f)),
-            exit = fadeOut(tween(160)) + scaleOut(tween(160, easing = Motion.EaseOut), targetScale = 0.95f, transformOrigin = TransformOrigin(1f, 0f)),
+            enter = fadeIn(tween(200, easing = Motion.EaseOut)) + scaleIn(tween(280, easing = Motion.Drawer), initialScale = 0.9f, transformOrigin = TransformOrigin(1f, 0f)),
+            exit = fadeOut(tween(160, easing = Motion.EaseOut)) + scaleOut(tween(160, easing = Motion.EaseOut), targetScale = 0.95f, transformOrigin = TransformOrigin(1f, 0f)),
         ) {
             Column(
                 Modifier
@@ -154,7 +154,7 @@ fun ControlCenter(
                         // both pages (and their scrollables) every frame, and sliding the new page on
                         // top of the cross-fade makes its first frame land late; on low-end TV SoCs
                         // that is felt as a stutter when opening and leaving pages.
-                        (fadeIn(tween(130)) togetherWith fadeOut(tween(110)))
+                        (fadeIn(tween(130, easing = Motion.EaseOut)) togetherWith fadeOut(tween(110, easing = Motion.EaseOut)))
                             .using(SizeTransform { _, _ -> tween(0) })
                     },
                     label = "cc-page",
