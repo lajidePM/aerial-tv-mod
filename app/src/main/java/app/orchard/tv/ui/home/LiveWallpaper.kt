@@ -135,9 +135,7 @@ fun LiveWallpaper(
         idle = true
     }
     // Set to keep moving, it plays as soon as Home shows it and keys do not stop it (issue #360).
-    // Where even 1080p dropped frames, the film stays still on Home (AerialFormats.wallpaperStep).
-    val still = AerialFormats.wallpaperStill(context)
-    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) && !still || hold
+    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) || hold
     val keepNow by rememberUpdatedState(keep)
     val standInNow by rememberUpdatedState(standIn)
 
@@ -207,39 +205,6 @@ fun LiveWallpaper(
             val frame = surface?.let { copyGlass(it) }
                 ?: if (pixelCopy == true) null else reader.frame(id, at, 320, 180, exact = false, quiet = true)
             frame?.also { glassSample = GlassSample(id, at, it) }
-        }
-    }
-
-    // The film's own dropped frames, over WATCH_MS at a time while it moves: two stretches running
-    // that drop more than DROP_SHARE step the wallpaper down, from 4K to 1080p at once, from the
-    // same moment; from 1080p to still. The first stretch after it starts moving is not counted:
-    // it starts, and frames for the glass are tried then (sampleGlass).
-    LaunchedEffect(showing) {
-        if (!showing || !AerialFormats.wallpaperSteps) return@LaunchedEffect
-        delay(WATCH_MS)
-        var bad = 0
-        while (true) {
-            val p = player ?: return@LaunchedEffect
-            val a = p.videoDecoderCounters?.apply { ensureUpdated() } ?: return@LaunchedEffect
-            val dropped = a.droppedBufferCount
-            val rendered = a.renderedOutputBufferCount
-            delay(WATCH_MS)
-            val b = p.videoDecoderCounters?.apply { ensureUpdated() } ?: return@LaunchedEffect
-            if (b !== a) continue
-            val d = b.droppedBufferCount - dropped
-            val all = d + b.renderedOutputBufferCount - rendered
-            bad = if (all > 0 && d > all * DROP_SHARE) bad + 1 else 0
-            if (bad < 2) continue
-            val why = "$d of $all frames dropped in ${WATCH_MS / 1000} s, twice running, at ${p.videoFormat?.let { "${it.width}x${it.height} ${it.sampleMimeType}" }}"
-            if (AerialFormats.stepWallpaperDown(context, why) == 1) {
-                // The same films and moment, in 1080p; the paused frame stays up meanwhile.
-                val quality = AerialFormats.forWallpaper(context)
-                val all2 = Aerials.all(context)
-                val films = (0 until p.mediaItemCount).mapNotNull { i -> all2.firstOrNull { it.id == p.getMediaItemAt(i).mediaId } }
-                p.setMediaItems(films.map { AerialStream.mediaItem(it, quality, Build.VERSION.SDK_INT < Build.VERSION_CODES.N) }, p.currentMediaItemIndex, p.currentPosition)
-                p.prepare()
-            }
-            return@LaunchedEffect
         }
     }
 
@@ -396,16 +361,6 @@ private const val COPY_SLOW_MS = 150L
 
 /** Whether PixelCopy read the film in this process; null until it has been tried. */
 private var pixelCopy: Boolean? = null
-
-/** How long a stretch of the moving film is watched for dropped frames. */
-private const val WATCH_MS = 10_000L
-
-/**
- * The share of a stretch's frames dropped that steps the wallpaper down. With nothing else going
- * on, 0 on Xiaomi MiTV-MFTR0 and TCL MT5879 (4K); TCL dropped 16% while frames were copied for the
- * glass, and lower-end TVs are what this is for.
- */
-private const val DROP_SHARE = 0.05f
 
 /** How often a small frame is taken for the glass while the film moves. */
 internal const val GLASS_EVERY_MS = 2_500L

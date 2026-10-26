@@ -1,11 +1,6 @@
 package app.orchard.tv.wallpaper
 
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
-import app.orchard.tv.BuildConfig
-import app.orchard.tv.system.DiagLog
 import app.orchard.tv.settings.AerialSettings
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
@@ -80,56 +75,8 @@ object AerialFormats {
      * shows the tiles over the film with Dolby's picture settings. A screensaver that carries the
      * wallpaper's film on plays this too (Screensaver), so the two are one, with no switch.
      */
-    fun forWallpaper(context: Context): AerialQuality {
-        val q = resolve(context, AerialSettings.aerialQuality).let { if (it == AerialQuality.DolbyVision) AerialQuality.Uhd else it }
-        return if (q == AerialQuality.Uhd && wallpaperStep(context) >= 1) AerialQuality.Hd else q
-    }
-
-    /**
-     * How far the aerial wallpaper has stepped down on this TV, from the frames it dropped while
-     * moving (LiveWallpaper): 0 not at all, 1 from 4K to 1080p H.264 (the lightest of Apple's
-     * files), 2 not moving on Home at all. With quality on Auto, or on Dolby Vision, which the
-     * wallpaper never plays anyway (the owner of TCL MT5879 chose it for the screensaver); 4K or
-     * 1080p chosen is played as chosen. Kept until the app is updated or a quality is chosen,
-     * then tried again from the top.
-     */
-    fun wallpaperStep(context: Context): Int {
-        if (!wallpaperSteps) return 0
-        if (!stepRead) {
-            stepRead = true
-            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            step = if (prefs.getInt("wallpaper_step_version", 0) == STEP_VERSION) prefs.getInt("wallpaper_step", 0) else 0
-        }
-        return step
-    }
-
-    /** Whether the wallpaper may step down here: not where a quality other than Dolby Vision is chosen. */
-    val wallpaperSteps: Boolean
-        get() = AerialSettings.aerialQuality == AerialQuality.Auto || AerialSettings.aerialQuality == AerialQuality.DolbyVision
-
-    /** Whether the aerial wallpaper stays still on Home here (step 2). */
-    fun wallpaperStill(context: Context): Boolean = wallpaperStep(context) >= 2
-
-    /** One step down from what the wallpaper plays now: to 1080p from 4K, else to still. The new step. */
-    fun stepWallpaperDown(context: Context, why: String): Int {
-        val next = if (forWallpaper(context) == AerialQuality.Uhd) 1 else 2
-        DiagLog.i("wallpaper steps down to ${if (next == 1) "1080p" else "still"}: $why")
-        step = next
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt("wallpaper_step", next).putInt("wallpaper_step_version", STEP_VERSION).apply()
-        return next
-    }
-
-    /** A quality chosen again: the wallpaper starts from the top. */
-    fun resetWallpaperSteps(context: Context) {
-        step = 0
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("wallpaper_step").remove("wallpaper_step_version").apply()
-    }
-
-    private var step by mutableIntStateOf(0)
-    private var stepRead = false
-    private const val PREFS = "aerial_formats"
-    private const val STEP_VERSION = BuildConfig.VERSION_CODE
+    fun forWallpaper(context: Context): AerialQuality =
+        resolve(context, AerialSettings.aerialQuality).let { if (it == AerialQuality.DolbyVision) AerialQuality.Uhd else it }
 
     /** One step down, after a decoder failed on [quality]. */
     fun lower(quality: AerialQuality): AerialQuality = when (quality) {
