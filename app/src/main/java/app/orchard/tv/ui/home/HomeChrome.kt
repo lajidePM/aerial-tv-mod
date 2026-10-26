@@ -85,6 +85,7 @@ import app.orchard.tv.ui.components.Dissolve
 import app.orchard.tv.ui.components.Pressable
 import app.orchard.tv.ui.components.frozen
 import app.orchard.tv.ui.components.glassEdge
+import app.orchard.tv.ui.components.rememberFrostSwap
 import app.orchard.tv.ui.components.smoothMask
 import app.orchard.tv.ui.theme.Glyph
 import app.orchard.tv.ui.theme.GlyphIcon
@@ -481,12 +482,19 @@ private fun bakePlate(glass: ImageBitmap, screen: Size, plate: Rect, radius: Flo
  */
 @Composable
 fun PanelBackdrop(frosted: ImageBitmap?, frost: () -> Float, veil: () -> Float) {
-    val dark = remember(frosted) { frosted?.let { darkened(it, GRID_SHADE) } }
+    val (shown, under, swap) = rememberFrostSwap(frosted)
+    val dark = remember(shown) { shown?.let { darkened(it, GRID_SHADE) } }
+    val darkUnder = remember(under) { under?.let { darkened(it, GRID_SHADE) } }
     Canvas(Modifier.fillMaxSize()) {
         val f = frost()
         if (f >= 0.01f) {
+            val full = IntSize(size.width.roundToInt(), size.height.roundToInt())
+            val t = swap()
             if (dark == null) drawRect(Color.Black, alpha = 0.55f * f)
-            else drawImage(dark, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()), filterQuality = FilterQuality.Low, alpha = f)
+            else if (darkUnder != null && t < 1f) {
+                drawImage(darkUnder, dstSize = full, filterQuality = FilterQuality.Low, alpha = f)
+                drawImage(dark, dstSize = full, filterQuality = FilterQuality.Low, alpha = f * t)
+            } else drawImage(dark, dstSize = full, filterQuality = FilterQuality.Low, alpha = f)
         }
         val v = veil()
         if (v >= 0.01f) drawRect(Color.Black, alpha = 0.45f * v)

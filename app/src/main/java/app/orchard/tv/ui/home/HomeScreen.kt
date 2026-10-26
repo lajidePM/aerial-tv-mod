@@ -533,7 +533,11 @@ fun HomeScreen(
                     lastInputAt = vm.lastInputAt,
                     cover = filmCover,
                     hold = filmSaver && vm.resumed,
-                    standIn = overlay == Overlay.None,
+                    // Control Center and Personalize leave Home sharp (dimmed, or above the sheet):
+                    // the paused film stays. Swapped for its picture there, the background jumped
+                    // (another plane and processing; a key frame a second off where the exact
+                    // frame did not decode, Xiaomi MiTV-MFTR0 and TCL MT5879).
+                    standIn = overlay == Overlay.None || overlay is Overlay.ControlCenter || overlay is Overlay.Wallpaper,
                     live = liveFilm,
                 )
                 Wallpapers.selectedId == Wallpapers.VIDEOS -> VideoWallpaper(
