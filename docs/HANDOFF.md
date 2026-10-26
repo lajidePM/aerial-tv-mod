@@ -189,8 +189,8 @@ adb -s $XIAOMI_TV:5555 shell cmd package compile -m speed -f app.orchard.tv
 6. **不要把 `local/` 提交到版本库**（里面有 IP 和签名密钥）。
 7. 改动系统设置前，先记下原值（写进 `local/TVS.md`），并确保 `restore.sh` 能还原。
 8. 每次改完都在真机上验证，不要只看编译通过。电视上的行为和模拟器差别很大。
-10. **Lite（`lite/`）不要引入 AndroidX、Compose 或协程**，任何新接口都要能在 Android 4.0 上跑（`./gradlew :lite:lintRelease` 的 NewApi）。Kotlin 的 `use` 不要用在 `Socket`/`ServerSocket` 上（4.4 以前它们不是 Closeable），`HashMap.putIfAbsent`、`Map.forEach { k, v -> }` 这类 Java 8 默认方法在 4.x 上不存在。
 9. **不要升级 Compose BOM 到 2025.12 及以后**（Compose 1.10 要求 Android 6.0），也不要升级到要求 minSdk 23 的 AndroidX 版本（比如 `lifecycle` 2.10 起）。升级前看 AAR 里 `AndroidManifest.xml` 的 `minSdkVersion`。
+10. **Lite（`lite/`）不要引入 AndroidX、Compose 或协程**，任何新接口都要能在 Android 4.0 上跑（`./gradlew :lite:lintRelease` 的 NewApi）。Kotlin 的 `use` 不要用在 `Socket`/`ServerSocket` 上（4.4 以前它们不是 Closeable），`HashMap.putIfAbsent`、`Map.forEach { k, v -> }` 这类 Java 8 默认方法在 4.x 上不存在。
 
 ## 重新生成航拍目录
 
