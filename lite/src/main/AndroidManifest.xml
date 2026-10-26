@@ -21,7 +21,8 @@
         android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
-        tools:targetApi="21">
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="24">
 
         <activity
             android:name=".HomeActivity"
