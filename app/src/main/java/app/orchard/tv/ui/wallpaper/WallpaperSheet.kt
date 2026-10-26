@@ -184,11 +184,6 @@ fun WallpaperSheet(
                             listOf(false to R.string.st_names_focused, true to R.string.st_names_all),
                             AerialSettings.showAllNames, AerialSettings::chooseShowAllNames,
                         )
-                        Choices(
-                            R.string.st_icon_library, stringResource(R.string.st_icon_library_hint), note,
-                            listOf(true to R.string.st_icon_library_on, false to R.string.st_icon_library_off),
-                            AerialSettings.iconLibrary, AerialSettings::chooseIconLibrary,
-                        )
                         // Apps taken off Home are kept with the rest of how Home looks.
                         SettingRow(R.string.st_hidden_apps, stringResource(R.string.st_hidden_apps_hint), note) {
                             ActionChip(

@@ -4,6 +4,9 @@
 
 ## 现状（2026-10-26）
 
+- **1.56（versionCode 68），2026-10-26 发布**：
+  - 个性化去掉「App 图标：精选图 / App 自带」（户主决定）：有精选图的 App 一律用精选图，单个 App 在手机页点图标单独选（`IconLibrary.uses` 不选就是精选图）。原因是这个总开关在小米 MFTR0 上看着「没反应」：这台只有 3 个 App 有精选图，其中云视听极光、银河奇异果以前在手机页单独选过「App 自带」（单独选择优先），第一排看不出变化。户主那两个单独选择没动。以前关掉总开关的用户（比如 #654 的报告人）升级后会改用精选图。
+  - #654 新线索（报告人 1.54 诊断）：按返回那一刻没有 `drawn before its face`，1.54 的猜测不成立；只在航拍 / 视频壁纸播放时出现，静态壁纸正常。MFTR0、TCL MT5879、deepfry666 的模拟器都复现不了。现在怀疑 Novatek（NSOP0）的 GPU 在窗口下面是透明（影片在下层）时处理 `ModulateAlpha` 淡出有问题。加了实验开关 `ConfigReceiver --ez saver_fade_offscreen true`（下次启动 Home 生效，诊断 display 一行会显示），让进屏保时的磁贴各自在离屏缓冲里淡出；MFTR0 上打开试过外观正常，已关回 false。等报告人试。
 - **1.55（versionCode 67），2026-10-26 发布**：手机 / 电脑设置页改为 Aerial 运行期间一直监听（户主要求，方便电脑随时打开）：`MainActivity.startWork` 里 `PhoneServer.listen`，不再在个性化关闭 5 分钟后停掉；地址里的令牌固定，仍是唯一的访问凭据。小米 MFTR0 和 TCL MT5879 上验证：没打开过个性化、另一个 App 在前台、关掉个性化后、force-stop 后守护拉起，带令牌访问都是 200，错令牌 404，二维码地址不变。
 - **1.54（versionCode 66），2026-10-26 发布**（[v1.54](https://github.com/pengchujin/aerial-tv/releases/tag/v1.54)）：
   - #609 TCL MT5879 上「视频」屏保（系统 dream）黑屏：视频列表在 IO 线程读完才加 AndroidView，dream 窗口第一帧之后才加进去的 SurfaceView 一直拿不到 surface，ExoPlayer 往占位 surface 解码。现在影片的 view 在第一帧就在（`VideoSaver`）。TCL 上传测试视频、切视频屏保、Somnambulator 验证：surface created、first frame、画面正常；测完删掉测试视频（按 id）、屏保改回航拍。中间推过 versionCode 62–65 的测试包，所以正式版是 66。

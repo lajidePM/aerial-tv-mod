@@ -60,7 +60,8 @@ class ConfigReceiver : BroadcastReceiver() {
         // ... --ez diag true / --ez mode_switch false / --ez soft_layer true   (see DiagLog;
         //                                 the last two apply the next time Home starts)
         if (intent.hasExtra("diag")) DiagLog.setEnabled(context, intent.getBooleanExtra("diag", false))
-        for (key in listOf("mode_switch", "soft_layer")) {
+        // ... --ez saver_fade_offscreen true   (issue #654, see DiagLog.saverFadeOffscreen)
+        for (key in listOf("mode_switch", "soft_layer", "saver_fade_offscreen")) {
             if (intent.hasExtra(key)) DiagLog.setOption(context, key, intent.getBooleanExtra(key, false))
         }
         // ... --ez uhd_canvas true|false / --es uhd_canvas auto   (Home at the panel's resolution,

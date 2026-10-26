@@ -160,9 +160,8 @@ class PhoneServer private constructor(private val context: Context, private val 
                     val ok = installed(pkg) && pick != null && (pick != IconLibrary.Pick.Library || IconLibrary.has(pkg))
                     if (ok) {
                         CustomIcons.clear(pkg)
-                        // What Personalize picks for every app anyway is kept as no pick, so the app
-                        // follows Personalize again.
-                        IconLibrary.choose(pkg, pick.takeIf { (it == IconLibrary.Pick.Library) != AerialSettings.iconLibrary })
+                        // The library is what every app uses anyway: kept as no pick.
+                        IconLibrary.choose(pkg, pick.takeIf { it != IconLibrary.Pick.Library })
                         runBlocking(Dispatchers.Main) { CustomIcons.changed(); IconLibrary.changed() }
                     }
                     json(state().put("saved", ok))
