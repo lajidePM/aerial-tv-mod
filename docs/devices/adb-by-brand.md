@@ -43,7 +43,8 @@ ColorOS TV 的更多限制（比如只认三个固定包名当桌面）见 [oppo
 
 设置里通常没有开发者选项，连点版本号无效。
 
-- **Z7X、H3**：用 U 盘安装 [code-ant/z7x-adb](https://github.com/code-ant/z7x-adb) 并打开一次，即可连上网络 ADB。Z7X 见 [xgimi-z7x.md](xgimi-z7x.md)，H3 见 [xgimi-h3.md](xgimi-h3.md)。
+- **H3**：手机下载 [code-ant/z7x-adb](https://github.com/code-ant/z7x-adb) 的 APK，用极米手机 App 上传到投影仪并安装，打开一次即可。见 [xgimi-h3.md](xgimi-h3.md)。
+- **Z7X**：用 U 盘安装同一个工具并打开一次。见 [xgimi-z7x.md](xgimi-z7x.md)。
 - 目前只有这两台有本仓库的用户实测，不代表所有极米型号。
 
 ## 打不开 ADB 的机型
