@@ -122,6 +122,10 @@
     <string name="st_names_focused">Таңдалған қолданба</string>
     <string name="st_names_all">Барлық қолданбалар</string>
     <string name="st_names_hint">Атаулар әр қолданбаның астында немесе тек таңдалғанның астында, Apple TV сияқты.</string>
+    <string name="st_icon_library">Қолданба суреттері</string>
+    <string name="st_icon_library_on">Дайын</string>
+    <string name="st_icon_library_off">Қолданбадан</string>
+    <string name="st_icon_library_hint">Танымал қолданбаларға Aerial сайтынан дайын суреттер жүктеледі, тек осы теледидардағы қолданбаларға. Өшірсеңіз, тақтайшалар қолданбаның баннері не белгішесінен салынады. Телефоннан таңдаған сурет әрқашан бірінші.</string>
     <string name="ss_kind">Түрі</string>
     <string name="wp_weather_city">Орналасқан жер</string>
     <string name="st_home_standard">Екі қатар</string>

@@ -122,6 +122,10 @@
     <string name="st_names_focused">Выбранное приложение</string>
     <string name="st_names_all">Все приложения</string>
     <string name="st_names_hint">Названия под каждым приложением или только под выбранным, как на Apple TV.</string>
+    <string name="st_icon_library">Картинки приложений</string>
+    <string name="st_icon_library_on">Готовые</string>
+    <string name="st_icon_library_off">Из приложения</string>
+    <string name="st_icon_library_hint">Для популярных приложений — готовые картинки с сайта Aerial, только для приложений на этом телевизоре. Если выключить, плитки рисуются из баннера или значка приложения. Картинка, выбранная с телефона, всегда важнее.</string>
     <string name="ss_kind">Вид</string>
     <string name="wp_weather_city">Местоположение</string>
     <string name="st_home_standard">Два ряда</string>

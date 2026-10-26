@@ -48,6 +48,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import app.orchard.tv.apps.AppEntry
 import app.orchard.tv.apps.CustomIcons
+import app.orchard.tv.apps.IconLibrary
 import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.TileArtFactory
@@ -182,6 +183,7 @@ class MainActivity : ComponentActivity() {
         Weather.init(this)
         Updates.init(this)
         CustomIcons.init(this)
+        IconLibrary.init(this)
         SourceLooks.init(this)
         AppNames.init(this)
         AerialSettings.init(this)

@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import android.os.SystemClock
 import android.provider.Settings
+import app.orchard.tv.apps.IconLibrary
 import app.orchard.tv.guard.GuardSetup
 import app.orchard.tv.system.DeviceClass
 import app.orchard.tv.wallpaper.AerialQuality
@@ -109,6 +110,9 @@ object AerialSettings {
     /** The weather beside the clock; off for those who want the time alone (issue #472). */
     var showWeather by mutableStateOf(true); private set
 
+    /** Ready-made tile pictures for popular apps from the website ([IconLibrary]). */
+    var iconLibrary by mutableStateOf(true); private set
+
     /**
      * The time over Aerial's aerial and photo screensavers (issue #240: TCL's firmware puts its own
      * clock over the system screensaver). The clock screensaver is the clock and keeps it.
@@ -179,6 +183,7 @@ object AerialSettings {
         showAllNames = prefs.getBoolean("show_all_names", false)
         wallpaperAlwaysMoves = prefs.getBoolean("wallpaper_always_moves", false)
         showWeather = prefs.getBoolean("show_weather", true)
+        iconLibrary = prefs.getBoolean("icon_library", true)
         screensaverClock = prefs.getBoolean("screensaver_clock", true)
         // Before 1.28 this was on or off; on meant whichever sounds Aerial played.
         uiSounds = UiSounds.of(prefs.getString("ui_sounds_kind", null)) ?: when {
@@ -273,6 +278,12 @@ object AerialSettings {
     fun chooseShowWeather(on: Boolean) {
         showWeather = on
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("show_weather", on) }
+    }
+
+    fun chooseIconLibrary(on: Boolean) {
+        iconLibrary = on
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("icon_library", on) }
+        IconLibrary.changed()
     }
 
     fun chooseScreensaverClock(on: Boolean) {

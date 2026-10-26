@@ -130,6 +130,10 @@
     <string name="st_names_focused">Selected App</string>
     <string name="st_names_all">All Apps</string>
     <string name="st_names_hint">Names under every app, or only under the selected one, as on Apple TV. With every name shown, the top row\'s names sit on its glass plate too.</string>
+    <string name="st_icon_library">App Pictures</string>
+    <string name="st_icon_library_on">Ready-made</string>
+    <string name="st_icon_library_off">From the App</string>
+    <string name="st_icon_library_hint">Popular apps get a ready-made picture from Aerial\'s website, downloaded only for the apps on this TV. Off, every tile is drawn from the app\'s own banner or icon. A picture you chose on your phone always comes first.</string>
     <string name="ss_kind">Style</string>
     <string name="wp_weather_city">Location</string>
     <string name="st_home_standard">Two Rows</string>

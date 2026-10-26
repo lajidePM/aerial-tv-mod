@@ -122,6 +122,10 @@
     <string name="st_names_focused">Вибраний застосунок</string>
     <string name="st_names_all">Усі застосунки</string>
     <string name="st_names_hint">Назви під кожним застосунком або лише під вибраним, як на Apple TV.</string>
+    <string name="st_icon_library">Зображення застосунків</string>
+    <string name="st_icon_library_on">Готові</string>
+    <string name="st_icon_library_off">Із застосунку</string>
+    <string name="st_icon_library_hint">Для популярних застосунків — готові зображення з сайту Aerial, лише для застосунків на цьому телевізорі. Якщо вимкнути, плитки малюються з банера або значка застосунку. Зображення, вибране з телефона, завжди має перевагу.</string>
     <string name="ss_kind">Вигляд</string>
     <string name="wp_weather_city">Місцезнаходження</string>
     <string name="st_home_standard">Два ряди</string>

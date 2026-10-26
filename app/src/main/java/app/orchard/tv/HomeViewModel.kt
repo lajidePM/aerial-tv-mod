@@ -16,6 +16,7 @@ import app.orchard.tv.apps.AppEntry
 import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.LayoutOps
 import app.orchard.tv.apps.CustomIcons
+import app.orchard.tv.apps.IconLibrary
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.FOLDER_KEY_PREFIX
 import app.orchard.tv.apps.SOURCE_KEY_PREFIX
@@ -131,6 +132,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         reload()
         // A tile picture set or removed from the phone page.
         viewModelScope.launch { snapshotFlow { CustomIcons.version }.drop(1).collect { reload() } }
+        // Library pictures that arrived, or the library turned on or off.
+        viewModelScope.launch { snapshotFlow { IconLibrary.version }.drop(1).collect { reload() } }
         offerSetupOnce()
         // An input's device or name, chosen from its tile's menu or the phone page.
         viewModelScope.launch { snapshotFlow { SourceLooks.all }.drop(1).collect { if (loaded) arrange() } }
@@ -212,6 +215,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 prepareFaces()
                 DiagLog.i("$waiting more tiles in ${SystemClock.uptimeMillis() - rest} ms")
             }
+            refreshIconLibrary()
+        }
+    }
+
+    /** Ready-made pictures for the apps just loaded, in the background; Home reloads when some arrive. */
+    private fun refreshIconLibrary() {
+        val installed = all.mapTo(HashSet()) { it.packageName }
+        viewModelScope.launch {
+            if (IconLibrary.refresh(installed)) IconLibrary.changed()
         }
     }
 

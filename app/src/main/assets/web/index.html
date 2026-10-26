@@ -203,6 +203,7 @@
   .grab { width: 36px; height: 5px; border-radius: 3px; background: var(--tertiary); margin: 0 auto 14px; }
   .sheet .pic { border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--fill); width: 62%; margin: 0 auto; }
   .sheet .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .item .ithumb { width: 64px; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; margin-right: 12px; flex: none; background: var(--fill); }
   .sheet h3 { text-align: center; font-size: 17px; font-weight: 600; margin: 12px 0 2px; }
   .sheet .meta { text-align: center; font-size: 13px; color: var(--secondary); margin: 0 0 16px; }
   .sheet .list { background: var(--card); }
@@ -331,7 +332,7 @@ let state = null, stateJson = '';
 
 // The language: ?lang=ru in the address, else the one picked under More (kept on the phone), else the
 // first of the phone's preferred languages that has a table, else English. Keys are in KEYS, one array of texts per language.
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_photos", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "upload_label", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_photos", "hint_clock", "g_live", "g_live_sub", "g_daily", "g_daily_sub", "g_photo", "g_builtin", "g_auto", "toast_wallpaper", "aria_delete", "confirm_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "daily_title", "daily_caption", "rotate_title", "rotate_caption", "empty_photos", "add_second", "toast_tv_updated", "sending_n", "toast_added", "toast_no_photos", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "hint_follows", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "g_source_sub"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_photos", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "upload_label", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_photos", "hint_clock", "g_live", "g_live_sub", "g_daily", "g_daily_sub", "g_photo", "g_builtin", "g_auto", "toast_wallpaper", "aria_delete", "confirm_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "daily_title", "daily_caption", "rotate_title", "rotate_caption", "empty_photos", "add_second", "toast_tv_updated", "sending_n", "toast_added", "toast_no_photos", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "hint_follows", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "g_source_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -464,7 +465,12 @@ const TEXTS = {
   "在主屏幕显示天气",
   "屏保显示时间",
   "航拍和照片屏保。时间和地名会不时挪一点位置，避免烧屏。",
-  "信号源的实时画面当背景，没有声音。往下选 App 时换成磨砂背景。"
+  "信号源的实时画面当背景，没有声音。往下选 App 时换成磨砂背景。",
+  "图标",
+  "精选图",
+  "App 自带",
+  "我换的图片",
+  "已换图标"
  ],
  "en": [
   "Screensaver",
@@ -597,7 +603,12 @@ const TEXTS = {
   "Weather on Home",
   "Time on the screensaver",
   "Aerial and photo screensavers. The time and place name move a little now and then, so nothing burns in.",
-  "An input's live picture behind Home, without sound. Going down to the apps, it gives way to a frosted background."
+  "An input's live picture behind Home, without sound. Going down to the apps, it gives way to a frosted background.",
+  "Picture",
+  "Ready-made",
+  "From the App",
+  "My Picture",
+  "Picture changed"
  ],
  "ru": [
   "Заставка",
@@ -730,7 +741,12 @@ const TEXTS = {
   "Погода на главном экране",
   "Время на заставке",
   "Заставки с аэросъёмкой и фото. Время и название места иногда слегка сдвигаются, чтобы экран не выгорал.",
-  "Живая картинка входа за главным экраном, без звука. Когда вы переходите к приложениям ниже, фон становится матовым."
+  "Живая картинка входа за главным экраном, без звука. Когда вы переходите к приложениям ниже, фон становится матовым.",
+  "Картинка",
+  "Готовая",
+  "Из приложения",
+  "Моя картинка",
+  "Картинка изменена"
  ],
  "uk": [
   "Заставка",
@@ -863,7 +879,12 @@ const TEXTS = {
   "Погода на головному екрані",
   "Час на заставці",
   "Заставки з аерозйомкою і фото. Час і назва місця іноді трохи зсуваються, щоб екран не вигорав.",
-  "Жива картинка входу за головним екраном, без звуку. Коли ви переходите до застосунків нижче, тло стає матовим."
+  "Жива картинка входу за головним екраном, без звуку. Коли ви переходите до застосунків нижче, тло стає матовим.",
+  "Зображення",
+  "Готове",
+  "Із застосунку",
+  "Моє зображення",
+  "Зображення змінено"
  ],
  "kk": [
   "Экран қорғаушы",
@@ -996,7 +1017,12 @@ const TEXTS = {
   "Басты экранда ауа райы",
   "Экран қорғауышта уақыт",
   "Аэрожиын және фото қорғауыштары. Экран күймес үшін уақыт пен орын атауы анда-санда сәл жылжиды.",
-  "Кірістің тірі суреті басты экран артында, дыбыссыз. Төмендегі қолданбаларға өткенде күңгірт фонға ауысады."
+  "Кірістің тірі суреті басты экран артында, дыбыссыз. Төмендегі қолданбаларға өткенде күңгірт фонға ауысады.",
+  "Сурет",
+  "Дайын",
+  "Қолданбадан",
+  "Менің суретім",
+  "Сурет өзгертілді"
  ]
 };
 const LANGS = Object.keys(TEXTS);
@@ -1567,6 +1593,33 @@ function tileSheet(e, inFolder, hidden) {
       b.insertAdjacentHTML('beforeend', ICON.chev);
       b.onclick = () => deviceChooser(a, e);
       il.appendChild(b);
+    }
+    // Where the picture comes from, when the icon library has one for this app: its picture,
+    // the app's own art, or the one sent from this phone.
+    if (!a.source && a.library) {
+      const choices = [
+        { pick: 'library', label: t('icon_library'), src: `${base}library/${encodeURIComponent(a.key)}?v=${a.stamp}` },
+        { pick: 'own', label: t('icon_own'), src: `${base}tile/${encodeURIComponent(a.key)}?art=own&v=${a.stamp}` },
+      ];
+      if (a.custom) choices.push({ pick: 'custom', label: t('icon_custom'), src: `${base}tile/${encodeURIComponent(a.key)}?v=${a.stamp}` });
+      const cl = el('div', 'list'); cl.setAttribute('role', 'radiogroup'); cl.setAttribute('aria-label', t('icon_h'));
+      il.before(cl); cl.style.marginBottom = '10px';
+      for (const c of choices) {
+        const b = el('button', 'item'); b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(a.icon === c.pick));
+        const img = el('img', 'ithumb'); img.alt = ''; img.src = c.src;
+        b.append(img, el('span', 'txt', c.label));
+        b.insertAdjacentHTML('beforeend', ICON.tick);
+        if (c.pick !== 'custom') b.onclick = async () => {
+          closeSheet();
+          if (a.icon === c.pick) return;
+          try {
+            const next = await api('api/icon/pick', { app: a.key, pick: c.pick });
+            if (!next.saved) throw new Error('not saved');
+            take(next); toast(t('toast_icon_picked'));
+          } catch (err) { toast(t('toast_set_fail')); }
+        };
+        cl.appendChild(b);
+      }
     }
     // The picker opens from this tap, so iOS treats it as the user's own gesture.
     action(il, t('change_icon'), 'tint', () => { iconFor = a; $('#iconFile').click(); closeSheet(); });
