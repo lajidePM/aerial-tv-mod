@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.GraphicsLayerScope
@@ -95,6 +96,7 @@ import app.orchard.tv.ui.components.baked
 import app.orchard.tv.ui.components.frozen
 import app.orchard.tv.ui.components.smoothMask
 import app.orchard.tv.ui.components.smoothRectPath
+import app.orchard.tv.system.DiagLog
 import app.orchard.tv.ui.theme.LocalReducedMotion
 import app.orchard.tv.ui.theme.Motion
 import app.orchard.tv.ui.theme.Type
@@ -163,6 +165,8 @@ fun AppTile(
     val focusManager = LocalFocusManager.current
 
     var focused by remember { mutableStateOf(false) }
+    // Once per tile: a focused one drawn from its artwork before its face was made (issue #654).
+    val rawLogged = remember { booleanArrayOf(false) }
     var pressed by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf<Rect?>(null) }
     var longPressJob by remember { mutableStateOf<Job?>(null) }
@@ -432,7 +436,15 @@ fun AppTile(
                     scale(size.width / pw, size.height / ph, pivot = Offset.Zero) {
                         val made = face(pw, ph)
                         if (made != null) drawImage(made)
-                        else drawImage(art.back, dstSize = IntSize(pw, ph), filterQuality = FilterQuality.Medium)
+                        else {
+                            // Cut to the outline here too, not only by the layer: Redmi X50 (MiTV-NSOP0,
+                            // Novatek, Android 9) showed the focused tile square-cornered as Back
+                            // started the screensaver (issue #654). Only until the face is made.
+                            if (!rawLogged[0] && (focused || lift > 0.01f)) { rawLogged[0] = true; DiagLog.i("tile ${app.label} drawn before its face, ${pw}x$ph") }
+                            clipPath(smoothRectPath(Rect(0f, 0f, pw.toFloat(), ph.toFloat()), Corner.toPx() * pw / size.width)) {
+                                drawImage(art.back, dstSize = IntSize(pw, ph), filterQuality = FilterQuality.Medium)
+                            }
+                        }
                         art.fore?.let { fore ->
                             val at = art.foreAt
                             // Parallax: the logo travels further than the plate when the tile leans.
