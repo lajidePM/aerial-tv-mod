@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Handler
-import android.os.Looper
 import android.view.PixelCopy
 import android.view.SurfaceView
 import androidx.compose.animation.core.Animatable
@@ -136,7 +135,9 @@ fun LiveWallpaper(
         idle = true
     }
     // Set to keep moving, it plays as soon as Home shows it and keys do not stop it (issue #360).
-    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) || hold
+    // Where even 1080p dropped frames, the film stays still on Home (AerialFormats.wallpaperStep).
+    val still = AerialFormats.wallpaperStill(context)
+    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) && !still || hold
     val keepNow by rememberUpdatedState(keep)
     val standInNow by rememberUpdatedState(standIn)
 
@@ -148,6 +149,7 @@ fun LiveWallpaper(
         live.film = null
         live.stopped = false
         showing = false
+        Wallpapers.dropFilmFrost()
     }
 
     fun open(): ExoPlayer {
@@ -192,21 +194,52 @@ fun LiveWallpaper(
         }
     }
 
-    // The film on screen, opened ahead for its frames (see FrameReader), and a small key frame
-    // taken every few seconds while it moves: the glass for wherever it stops is then at hand.
+    // A small frame taken every few seconds while the film moves: the plate's glass over the
+    // moving film (Wallpapers.filmFrost), and the glass for wherever it stops, at hand. Copied off
+    // the video plane where PixelCopy reads it (TCL MT5879); else a key frame from the film's file,
+    // opened ahead (see FrameReader; Xiaomi MiTV-MFTR0).
     var glassSample by remember { mutableStateOf<GlassSample?>(null) }
     LaunchedEffect(live.film, play, showing) {
         val id = live.film?.id ?: return@LaunchedEffect
-        // Where PixelCopy reads the film (TCL MT5879), its frame is at hand without the file.
-        if (!play || pixelCopy == true) return@LaunchedEffect
-        reader.open(id)
-        // The first soon, for a film stopped moments after it moved.
-        var wait = 800L
-        while (showing) {
-            delay(wait)
-            wait = GLASS_EVERY_MS
-            val at = player?.currentPosition ?: break
-            reader.frame(id, at, 320, 180, exact = false, quiet = true)?.let { glassSample = GlassSample(id, at, it) }
+        if (!play || !showing) return@LaunchedEffect
+        if (pixelCopy == false && glassFrames) reader.open(id)
+        sampleGlass({ player }) { at ->
+            val frame = surface?.let { copyGlass(it) }
+                ?: if (pixelCopy == true) null else reader.frame(id, at, 320, 180, exact = false, quiet = true)
+            frame?.also { glassSample = GlassSample(id, at, it) }
+        }
+    }
+
+    // The film's own dropped frames, over WATCH_MS at a time while it moves: two stretches running
+    // that drop more than DROP_SHARE step the wallpaper down, from 4K to 1080p at once, from the
+    // same moment; from 1080p to still. The first stretch after it starts moving is not counted:
+    // it starts, and frames for the glass are tried then (sampleGlass).
+    LaunchedEffect(showing) {
+        if (!showing || !AerialFormats.wallpaperSteps) return@LaunchedEffect
+        delay(WATCH_MS)
+        var bad = 0
+        while (true) {
+            val p = player ?: return@LaunchedEffect
+            val a = p.videoDecoderCounters?.apply { ensureUpdated() } ?: return@LaunchedEffect
+            val dropped = a.droppedBufferCount
+            val rendered = a.renderedOutputBufferCount
+            delay(WATCH_MS)
+            val b = p.videoDecoderCounters?.apply { ensureUpdated() } ?: return@LaunchedEffect
+            if (b !== a) continue
+            val d = b.droppedBufferCount - dropped
+            val all = d + b.renderedOutputBufferCount - rendered
+            bad = if (all > 0 && d > all * DROP_SHARE) bad + 1 else 0
+            if (bad < 2) continue
+            val why = "$d of $all frames dropped in ${WATCH_MS / 1000} s, twice running, at ${p.videoFormat?.let { "${it.width}x${it.height} ${it.sampleMimeType}" }}"
+            if (AerialFormats.stepWallpaperDown(context, why) == 1) {
+                // The same films and moment, in 1080p; the paused frame stays up meanwhile.
+                val quality = AerialFormats.forWallpaper(context)
+                val all2 = Aerials.all(context)
+                val films = (0 until p.mediaItemCount).mapNotNull { i -> all2.firstOrNull { it.id == p.getMediaItemAt(i).mediaId } }
+                p.setMediaItems(films.map { AerialStream.mediaItem(it, quality, Build.VERSION.SDK_INT < Build.VERSION_CODES.N) }, p.currentMediaItemIndex, p.currentPosition)
+                p.prepare()
+            }
+            return@LaunchedEffect
         }
     }
 
@@ -215,6 +248,8 @@ fun LiveWallpaper(
         if (play) {
             val p = player ?: open().also { player = it }
             DiagLog.i("wallpaper film starts (state ${p.playbackState}, ${p.currentMediaItem?.mediaId} at ${p.currentPosition} ms)")
+            // It moves on from the frame the picture is: that picture's glass until the first sample.
+            Wallpapers.dropFilmFrost()
             // Its decoder was let go for the screensaver (LiveFilm.letDecoderGo).
             if (p.playbackState == Player.STATE_IDLE) p.prepare()
             p.playWhenReady = true
@@ -314,11 +349,29 @@ fun LiveWallpaper(
 private suspend fun capture(view: SurfaceView): Bitmap? {
     // The same TV gives the same answer: where it fails, later stops go straight to the film's
     // file; where it works, the file is not needed at all.
-    return captureOnce(view).also { pixelCopy = it != null }
+    return captureOnce(view).also { pixelCopy = it != null && !copySlow }
 }
 
 /** A moving wallpaper's current frame where this TV lets PixelCopy read its video plane; else null. */
 internal suspend fun copyFrame(view: SurfaceView): Bitmap? = if (pixelCopy == false) null else capture(view)
+
+/**
+ * A small copy of the moving film for the plate's glass, where PixelCopy reads it; else null. Three
+ * unreadable copies in a row settle that it does not, not one: a night film can read as black.
+ */
+internal suspend fun copyGlass(view: SurfaceView): Bitmap? {
+    if (pixelCopy == false) return null
+    val frame = captureOnce(view, 320, 180)
+    if (frame != null) pixelCopy = !copySlow
+    else if (++glassMisses >= 3 && pixelCopy == null) pixelCopy = false
+    if (frame != null) glassMisses = 0
+    return frame
+}
+
+private var glassMisses = 0
+
+/** Whether [copyGlass] may still read the film here: not where PixelCopy has been found not to. */
+internal val copyGlassPossible: Boolean get() = pixelCopy != false
 
 /** Whether PixelCopy read the film green here: the video plane loses its colour when composited. */
 private var copyLostColour = false
@@ -333,22 +386,107 @@ private suspend fun glassReady(live: LiveFilm) {
     live.stopped = true
 }
 
+/** Where PixelCopy calls back, off the main thread as the copy itself is. */
+private val copyCallbacks: Handler by lazy { Handler(android.os.HandlerThread("film-copy").apply { start() }.looper) }
+
+/** Whether a copy of the film has taken longer than [COPY_SLOW_MS] here: PixelCopy is then not used again. */
+private var copySlow = false
+
+private const val COPY_SLOW_MS = 150L
+
 /** Whether PixelCopy read the film in this process; null until it has been tried. */
 private var pixelCopy: Boolean? = null
 
-/** How often a small key frame is taken for the glass while the film moves. */
-private const val GLASS_EVERY_MS = 2_500L
+/** How long a stretch of the moving film is watched for dropped frames. */
+private const val WATCH_MS = 10_000L
+
+/**
+ * The share of a stretch's frames dropped that steps the wallpaper down. With nothing else going
+ * on, 0 on Xiaomi MiTV-MFTR0 and TCL MT5879 (4K); TCL dropped 16% while frames were copied for the
+ * glass, and lower-end TVs are what this is for.
+ */
+private const val DROP_SHARE = 0.05f
+
+/** How often a small frame is taken for the glass while the film moves. */
+internal const val GLASS_EVERY_MS = 2_500L
+
+/**
+ * Whether frames are taken for the glass while a film moves. Not on a TV set to Lite effects, and
+ * not once taking one has cost the film frames of its own: on TCL MT5879 each copy of a 4K film
+ * (PixelCopy), and each key frame decoded from its file beside it, held the film up 0.5-0.6 s
+ * every time, 16 frames dropped each (frames of 4K reaching the screen: 24 a second, 30 with none
+ * taken; 1080p films were not held up). Remembered for the process, as [pixelCopy] is.
+ */
+internal val glassFrames: Boolean get() = !glassCostly && !AerialSettings.lite
+
+private var glassCostly = false
+
+/**
+ * While the film moves, a frame from [take] every [GLASS_EVERY_MS] becomes the plate's glass
+ * (Wallpapers.filmFrost). Where none can be taken, or taking them would hold the film up
+ * ([glassFrames]), the plate keeps a still glass of the frame the film started from, blurred down
+ * to its broad colours so that what has moved on does not show twice through it.
+ */
+internal suspend fun sampleGlass(player: () -> ExoPlayer?, canTake: () -> Boolean = { true }, take: suspend (atMs: Long) -> Bitmap?) {
+    // The first soon, for a film stopped moments after it moved.
+    var wait = 800L
+    var costly = 0
+    while (glassFrames && canTake()) {
+        delay(wait)
+        wait = GLASS_EVERY_MS
+        val p = player() ?: return
+        val before = droppedFrames(p)
+        val frame = take(p.currentPosition)
+        // The frames the film dropped while one was taken, and just after: the copy or the decode held it up.
+        delay(GLASS_SETTLE_MS)
+        // Twice in a row, as the film can drop a few once for something else (Xiaomi MiTV-MFTR0:
+        // 26 once, as Home came back from its screensaver; none in minutes either side).
+        val cost = droppedFrames(p) - before
+        costly = if (cost >= GLASS_COST_FRAMES) costly + 1 else 0
+        if (costly >= 2) {
+            DiagLog.i("wallpaper glass: the film dropped $cost frames while one was taken, twice running; a still glass from now on")
+            glassCostly = true
+            break
+        }
+        frame?.let { Wallpapers.useFilmFrost(it) }
+    }
+    if (wait == 800L) delay(wait)
+    Wallpapers.useStillFilmFrost()
+}
+
+private fun droppedFrames(p: ExoPlayer): Int = p.videoDecoderCounters?.let { it.ensureUpdated(); it.droppedBufferCount } ?: 0
+
+private const val GLASS_SETTLE_MS = 600L
+
+/** Frames dropped around one frame taken that make it too costly; with none taken, 0 here (TCL MT5879, Xiaomi MiTV-MFTR0). */
+private const val GLASS_COST_FRAMES = 5
 
 /** A small key frame of [film] near [atMs], kept for the glass. */
 private class GlassSample(val film: String, val atMs: Long, val frame: Bitmap)
 
-private suspend fun captureOnce(view: SurfaceView): Bitmap? {
+private suspend fun captureOnce(view: SurfaceView, w: Int = view.width, h: Int = view.height): Bitmap? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || view.width <= 0 || !view.holder.surface.isValid) return null
-    val bitmap = createBitmap(view.width, view.height)
-    val result = suspendCancellableCoroutine { done ->
-        runCatching {
-            PixelCopy.request(view, bitmap, { done.resume(it) }, Handler(Looper.getMainLooper()))
-        }.onFailure { done.resume(-1) }
+    val surface = view.holder.surface
+    val bitmap = createBitmap(w, h)
+    // PixelCopy copies on the thread that asks, before it calls back. Asked on the main thread, a
+    // 4K film held it 0.5-1 s (TCL MT5879), and the keys pressed meanwhile all landed at once:
+    // a Down that stopped the film moved focus down several rows.
+    val started = android.os.SystemClock.elapsedRealtime()
+    val result = withContext(Dispatchers.IO) {
+        suspendCancellableCoroutine { done ->
+            runCatching {
+                PixelCopy.request(surface, bitmap, { done.resume(it) }, copyCallbacks)
+            }.onFailure { done.resume(-1) }
+        }
+    }
+    // The copy is made on the render thread, which the main thread waits on to draw: asked from
+    // another thread, a 4K copy still held keys up 0.6 s (TCL MT5879). A copy this slow is the
+    // last: the film's file serves from then on, decoded off the render thread, as where the
+    // copy comes back black. The film is paused when that matters, so decoding beside it is free.
+    val took = android.os.SystemClock.elapsedRealtime() - started
+    if (result == PixelCopy.SUCCESS && took > COPY_SLOW_MS) {
+        DiagLog.i("wallpaper frame copy took $took ms; the film's file from now on")
+        copySlow = true
     }
     val unread = if (result == PixelCopy.SUCCESS) unreadable(bitmap) else null
     if (unread == "green") copyLostColour = true

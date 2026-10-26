@@ -59,6 +59,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -200,6 +204,11 @@ fun HomeBackground(
     filmStopped: () -> Float = { 0f },
     /** How far Home has given way to the screensaver carrying its wallpaper on: the plate goes. */
     toSaver: () -> Float = { 0f },
+    /**
+     * The glass for a moving film (Wallpapers.filmFrost, or [frosted] until it has one): the plate
+     * stays over the film on it. Null where the film has none (an input's picture): the plate goes.
+     */
+    filmGlass: ImageBitmap? = null,
     /** The wallpaper's picture unshaded, shown [saverReveal] of the way and [saverPush] into its draw-in. */
     saverImage: ImageBitmap? = null,
     saverReveal: () -> Float = { 0f },
@@ -220,7 +229,7 @@ fun HomeBackground(
             val a = saverReveal()
             if (a > 0.01f) drawDrawingIn(saverImage, saverPush(), a)
         }
-        Plate(frosted ?: backdrop, plate, scroll, collapse, cover, filmStopped, toSaver)
+        Plate(frosted ?: backdrop, filmGlass, plate, scroll, collapse, cover, filmStopped, toSaver)
     }
 }
 
@@ -265,9 +274,15 @@ private fun Pictures(backdrop: ImageBitmap?, frosted: ImageBitmap?, scroll: () -
  * once stopped. It gives way only to a moving film, so the swap from the paused film to its
  * picture leaves it as it is. A new glass fades in over the old one, which stays whole beneath
  * it: two plates fading against each other let what is behind show through halfway.
+ *
+ * Under it, while a film moves, the film's plate ([film]): a film under the window cannot be
+ * blurred, so a small key frame of it, frosted, a few seconds old (LiveWallpaper), lies
+ * [FILM_FROST] of the way over the film, and a smoke tint and the lit edge over both. The film
+ * shows through moving, so the frame's lag reads as the glass's softness. Drawn only as the plate
+ * moves or a new frame fades in, every [GLASS_EVERY_MS]: the film plays with Compose all but still.
  */
 @Composable
-private fun Plate(glass: ImageBitmap?, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float) {
+private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float) {
     var shown by remember { mutableStateOf(glass) }
     var under by remember { mutableStateOf<ImageBitmap?>(null) }
     val swap = remember { Animatable(1f) }
@@ -293,15 +308,72 @@ private fun Plate(glass: ImageBitmap?, plate: Rect?, scroll: () -> Float, collap
     }
     val top = remember(shown) { shown?.let { PlateLayer(plateTinted(it)) } }
     val bottom = remember(under) { under?.let { PlateLayer(plateTinted(it)) } }
-    Canvas(Modifier.fillMaxSize()) {
+
+    // Each new frame is baked off the main thread: baked while drawing, as the still plate's glass
+    // is, it held up a frame every few seconds (Xiaomi MiTV-MFTR0: frames of 50-70 ms).
+    val density = LocalDensity.current
+    var screen by remember { mutableStateOf(Size.Zero) }
+    var filmTop by remember { mutableStateOf<ImageBitmap?>(null) }
+    var filmBottom by remember { mutableStateOf<ImageBitmap?>(null) }
+    var smoke by remember { mutableStateOf<ImageBitmap?>(null) }
+    val filmSwap = remember { Animatable(1f) }
+    LaunchedEffect(plate, screen) {
+        if (plate == null || screen == Size.Zero) return@LaunchedEffect
+        smoke = withContext(Dispatchers.Default) { bakePlate(smokeGlass(), screen, plate, with(density) { PlateCorner.toPx() }, with(density) { 1.2.dp.toPx() }) }
+    }
+    LaunchedEffect(film, plate, screen) {
+        if (film == null || plate == null || screen == Size.Zero) {
+            filmTop = null
+            filmBottom = null
+            return@LaunchedEffect
+        }
+        val baked = withContext(Dispatchers.Default) { bakePlate(plateTinted(film), screen, plate, with(density) { PlateCorner.toPx() }, 0f, edge = false) }
+        // Not on screen: the new frame simply takes over.
+        if (filmTop == null || cover() < 0.01f) {
+            filmTop = baked
+            filmBottom = null
+            filmSwap.snapTo(1f)
+            return@LaunchedEffect
+        }
+        filmBottom = filmTop.takeIf { filmSwap.value > 0.5f } ?: filmBottom
+        filmTop = baked
+        filmSwap.snapTo(0f)
+        filmSwap.animateTo(1f, tween(FILM_SWAP_MS, easing = Motion.EaseOut))
+        filmBottom = null
+    }
+    val frostPaint = remember { androidx.compose.ui.graphics.Paint() }
+
+    Canvas(Modifier.fillMaxSize().onSizeChanged { screen = Size(it.width.toFloat(), it.height.toFloat()) }) {
         if (plate == null) return@Canvas
+        val alpha = visibility()
+        // The film's plate, while the film shows and the plate over a picture does not hide it.
+        val base = (1f - smooth(((scroll() / collapse).coerceIn(0f, 1f) / 0.55f).coerceIn(0f, 1f))) * (1f - toSaver())
+        val frame = filmTop
+        val edge = smoke
+        if (frame != null && edge != null && cover() > 0.01f && alpha < 0.99f && base > 0.01f) {
+            val p = (scroll() / collapse).coerceIn(0f, 1f)
+            val r = plate.translate(0f, -scroll()).inflate(PlateSwell.toPx() * smooth((p / 0.55f).coerceIn(0f, 1f)))
+            val t = filmSwap.value
+            val under = filmBottom
+            // The old frame whole under the new, both in one layer laid over the film at FILM_FROST.
+            if (t < 1f && under != null) {
+                frostPaint.alpha = FILM_FROST * base
+                drawContext.canvas.saveLayer(r, frostPaint)
+                drawBaked(under, r, 1f)
+                drawBaked(frame, r, t)
+                drawContext.canvas.restore()
+            } else {
+                drawBaked(frame, r, FILM_FROST * base)
+            }
+            drawBaked(edge, r, base)
+        }
+
         // The plate rides with its row and dissolves into the frosted background: it fades
         // over the first half of the scroll, swelling a little as if lifting off, and settles
         // back the same way when focus returns to the top row. Kept small on purpose: the
         // whole screen shrinking back into the plate read as too much.
         val p = (scroll() / collapse).coerceIn(0f, 1f)
         val rest = 1f - smooth((p / 0.55f).coerceIn(0f, 1f))
-        val alpha = visibility()
         if (alpha < 0.01f) return@Canvas
         val grow = PlateSwell.toPx() * (1f - rest)
         val r = plate.translate(0f, -scroll()).inflate(grow)
@@ -324,17 +396,34 @@ private class PlateLayer(private val src: ImageBitmap) {
     fun draw(scope: androidx.compose.ui.graphics.drawscope.DrawScope, plate: Rect, at: Rect, alpha: Float) = with(scope) {
         val image = baked?.takeIf { it.first == size to plate }?.second
             ?: bakePlate(src, size, plate, PlateCorner.toPx(), 1.2.dp.toPx()).also { baked = (size to plate) to it }
-        drawImage(
-            image,
-            dstOffset = IntOffset(at.left.roundToInt(), at.top.roundToInt()),
-            dstSize = IntSize(at.width.roundToInt(), at.height.roundToInt()),
-            alpha = alpha,
-            filterQuality = FilterQuality.Low,
-        )
+        drawBaked(image, at, alpha)
     }
 }
 
+/** A plate baked at its resting place, drawn stretched to [at]. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBaked(image: ImageBitmap, at: Rect, alpha: Float) = drawImage(
+    image,
+    dstOffset = IntOffset(at.left.roundToInt(), at.top.roundToInt()),
+    dstSize = IntSize(at.width.roundToInt(), at.height.roundToInt()),
+    alpha = alpha,
+    filterQuality = FilterQuality.Low,
+)
+
 private fun smooth(x: Float) = x * x * (3f - 2f * x)
+
+/** The film plate's tint over the film and its frosted frame, as one pixel the plate stretches. */
+private fun smokeGlass(): ImageBitmap =
+    android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
+        .apply { eraseColor(FILM_SMOKE) }.asImageBitmap()
+
+/** How much of the film plate is its frosted key frame; the rest is the film itself, moving. */
+private const val FILM_FROST = 0.55f
+
+/** The film plate's smoke: a little black, so the tiles keep their contrast over a bright film. */
+private val FILM_SMOKE = android.graphics.Color.argb(46, 0, 0, 0)
+
+/** A new key frame fades in over the last: slow, as the glass is soft, and seldom (GLASS_EVERY_MS). */
+private const val FILM_SWAP_MS = 700
 
 /** The Liquid Glass plate under the top row: how far it reaches past the tiles, and its corners. */
 val PlatePadH = 26.dp
@@ -364,7 +453,7 @@ private fun plateTinted(src: ImageBitmap): ImageBitmap {
 }
 
 /** The part of [glass] (stretched over [screen]) under [plate], cut to the plate's outline, with its lit edge. */
-private fun bakePlate(glass: ImageBitmap, screen: Size, plate: Rect, radius: Float, rim: Float): ImageBitmap {
+private fun bakePlate(glass: ImageBitmap, screen: Size, plate: Rect, radius: Float, rim: Float, edge: Boolean = true): ImageBitmap {
     val w = plate.width.roundToInt().coerceAtLeast(1)
     val h = plate.height.roundToInt().coerceAtLeast(1)
     val out = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
@@ -375,7 +464,7 @@ private fun bakePlate(glass: ImageBitmap, screen: Size, plate: Rect, radius: Flo
         android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG),
     )
     canvas.drawBitmap(smoothMask(w, h, radius), 0f, 0f, android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
-    canvas.drawBitmap(glassEdge(w, h, radius, rim).asAndroidBitmap(), 0f, 0f, null)
+    if (edge) canvas.drawBitmap(glassEdge(w, h, radius, rim).asAndroidBitmap(), 0f, 0f, null)
     return out.frozen().asImageBitmap()
 }
 

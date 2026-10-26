@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import app.orchard.tv.ui.components.UhdCanvas
@@ -447,6 +448,37 @@ object Wallpapers {
         if (selectedId != LIVE) return
         backdropJob?.cancel()
         frosted = withContext(Dispatchers.Default) { Images.frost(frame) }.asImageBitmap()
+    }
+
+    /**
+     * The glass for a moving film: a small frame of it taken every few seconds while it plays
+     * (LiveWallpaper, VideoWallpaper), frosted. Null until the first, when [frosted] (the frame
+     * the film started from) stands in.
+     */
+    var filmFrost by mutableStateOf<ImageBitmap?>(null); private set
+
+    suspend fun useFilmFrost(frame: Bitmap) {
+        if (!moves()) return
+        filmFrost = withContext(Dispatchers.Default) { Images.frost(frame) }.asImageBitmap()
+    }
+
+    /**
+     * Where no frame can be taken while the film moves (LiveWallpaper.sampleGlass): the glass of the
+     * frame it started from ([frosted]), blurred down to its broad colours, so the shapes that move
+     * on behind the plate do not show twice through it.
+     */
+    suspend fun useStillFilmFrost() {
+        val start = frosted ?: return
+        if (!moves()) return
+        filmFrost = withContext(Dispatchers.Default) {
+            val src = start.asAndroidBitmap()
+            val quarter = Bitmap.createScaledBitmap(src, src.width / 4, src.height / 4, true)
+            Images.frost(Bitmap.createScaledBitmap(quarter, 16, 9, true))
+        }.asImageBitmap()
+    }
+
+    fun dropFilmFrost() {
+        filmFrost = null
     }
 
     /** Puts back the glass from before [useLiveFrost] when the exact frame could not be had. */

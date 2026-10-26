@@ -68,6 +68,7 @@ fun VideoWallpaper(
         player?.release()
         player = null
         showing = false
+        Wallpapers.dropFilmFrost()
     }
 
     suspend fun open(): ExoPlayer? {
@@ -112,10 +113,18 @@ fun VideoWallpaper(
         }
     }
 
+    // The plate's glass over the moving video, where PixelCopy reads it. Not from the file: an
+    // owner's video may be 4K HEVC, and a second decoder beside the player's may not be there.
+    LaunchedEffect(play, showing) {
+        if (!play || !showing) return@LaunchedEffect
+        sampleGlass({ player }, canTake = { copyGlassPossible }) { surface?.let { copyGlass(it) } }
+    }
+
     LaunchedEffect(play) {
         if (play) {
             val p = player ?: open()?.also { player = it } ?: return@LaunchedEffect
             DiagLog.i("video wallpaper starts (${p.currentMediaItem?.mediaId} at ${p.currentPosition} ms, idle $idle)")
+            Wallpapers.dropFilmFrost()
             if (p.playbackState == Player.STATE_IDLE) p.prepare()
             p.playWhenReady = true
             snapshotFlow { showing }.first { it }

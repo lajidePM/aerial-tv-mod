@@ -10,6 +10,7 @@ import android.provider.Settings
 import app.orchard.tv.apps.IconLibrary
 import app.orchard.tv.guard.GuardSetup
 import app.orchard.tv.system.DeviceClass
+import app.orchard.tv.wallpaper.AerialFormats
 import app.orchard.tv.wallpaper.AerialQuality
 import java.security.MessageDigest
 
@@ -299,6 +300,7 @@ object AerialSettings {
     fun chooseAerialQuality(quality: AerialQuality) {
         aerialQuality = quality
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("aerial_quality", quality.key) }
+        AerialFormats.resetWallpaperSteps(app)
     }
 
     fun chooseScreensaverMinutes(minutes: Int) {

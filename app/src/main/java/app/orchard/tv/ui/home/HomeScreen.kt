@@ -546,6 +546,7 @@ fun HomeScreen(
                 shadeMoving = AerialSettings.wallpaperAlwaysMoves || sourceInput != null,
                 filmStopped = { filmStopped },
                 toSaver = { toSaver.value },
+                filmGlass = (Wallpapers.filmFrost ?: Wallpapers.frosted).takeIf { Wallpapers.moves() && Wallpapers.backdrop != null },
                 saverImage = saverImage,
                 saverReveal = { saverReveal.value },
                 saverPush = { saverPush.value },
