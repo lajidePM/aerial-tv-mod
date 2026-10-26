@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
@@ -147,10 +148,39 @@ class MainActivity : ComponentActivity() {
 
     private var realStarted = false
 
+    /**
+     * Where the firmware ships its own FallbackHome (not one of AOSP's), leaves the locked boot to
+     * it: Aerial only comes back once the user is unlocked, by the guard or the boot receiver.
+     * Redmi Projector 4 and 5 Pro (ASU mt5873, Android 13, com.asu.settings.FallbackHome) stayed
+     * on the boot animation for good, with no network and no ADB, from 1.47 on, when Home Guard
+     * stopped crashing the process before the unlock and the locked start below got to stay in
+     * front; 1.36, before Home was direct-boot aware, booted fine (issues #684 #688). Not seen on
+     * that TV: we have none; the hand-over itself was walked on the Android 13 Google TV emulator.
+     * Once per process, so a FallbackHome that steps aside before the unlock cannot start a loop;
+     * and only when it starts, or Home would be restarted to Aerial again.
+     */
+    private fun handOverToFirmwareFallbackHome(): Boolean {
+        if (handedOverAtBoot) return false
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val fallback = runCatching { packageManager.queryIntentActivities(home, PackageManager.MATCH_SYSTEM_ONLY) }
+            .getOrDefault(emptyList())
+            .map { it.activityInfo }
+            .firstOrNull { it.packageName != packageName && it.name.endsWith(".FallbackHome") && it.name !in AOSP_FALLBACK_HOMES }
+            ?: return false
+        handedOverAtBoot = true
+        val started = runCatching {
+            startActivity(home.setClassName(fallback.packageName, fallback.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.isSuccess
+        DiagLog.i("onCreate before the user is unlocked; ${if (started) "left to" else "could not start"} ${fallback.packageName}/${fallback.name}")
+        if (started) finish()
+        return started
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         DiagLog.catchCrashes()
         if (!GuardSetup.isUserUnlocked(this)) {
             super.onCreate(null)
+            if (handOverToFirmwareFallbackHome()) return
             hideSystemBars()
             showLocked()
             return
@@ -767,6 +797,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** The system's dream did not show when asked (see dreamCheck); for this process. */
         private var dreamFails = false
+
+        /** See handOverToFirmwareFallbackHome; for this process. */
+        private var handedOverAtBoot = false
+        private val AOSP_FALLBACK_HOMES = setOf("com.android.settings.FallbackHome", "com.android.tv.settings.system.FallbackHome")
 
         /** How Home Guard and the boot receiver bring Aerial back: the same task the launcher entry uses. */
         fun bringBackIntent(context: Context): Intent =

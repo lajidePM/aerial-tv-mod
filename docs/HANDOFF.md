@@ -4,6 +4,7 @@
 
 ## 现状（2026-10-26）
 
+- **1.57（versionCode 69），2026-10-26 发布**：红米投影仪 4 / 5 Pro（ASU mt5873，Android 13）从 1.47 起重启后永久卡开机动画（不通网、ADB 连不上，只能恢复出厂，#684 #688；1.36、1.46 正常）。推断的原因：1.42 起 `MainActivity` 支持 Direct Boot，解锁前顶替了系统的 FallbackHome；1.42–1.46 守护在解锁前读 CE 存储必崩（1.47 修掉），进程一死这条路径实际没生效。这台的 FallbackHome 是固件自己的 `com.asu.settings.FallbackHome`，开机流程看来要靠它。现在解锁前如果 HOME 候选里有厂商自己的 FallbackHome（类名不是 AOSP 的 `com.android.settings.FallbackHome` / `com.android.tv.settings.system.FallbackHome`），`MainActivity` 打开它并 finish，解锁后照旧由守护 / BootReceiver 拉回（`handOverToFirmwareFallbackHome`，每个进程一次，打不开就照旧显示锁定壁纸）。小米电视的 `com.xiaomi.mitv.settings.entry.FallbackHome` 也会交出去。**没有 mt5873 真机**；只在 GoogleTV 模拟器（Android 13）上用临时把 AOSP 也算进去的测试包走过交接：FallbackHome → 原桌面 → BootReceiver 约 3 秒后拉回 Aerial，开机完成；正式包在模拟器上仍走锁定壁纸。已在两个 issue 请报告人确认能进 recovery 后再试。
 - **1.56（versionCode 68），2026-10-26 发布**：
   - 个性化去掉「App 图标：精选图 / App 自带」（户主决定）：有精选图的 App 一律用精选图，单个 App 在手机页点图标单独选（`IconLibrary.uses` 不选就是精选图）。原因是这个总开关在小米 MFTR0 上看着「没反应」：这台只有 3 个 App 有精选图，其中云视听极光、银河奇异果以前在手机页单独选过「App 自带」（单独选择优先），第一排看不出变化。户主那两个单独选择没动。以前关掉总开关的用户（比如 #654 的报告人）升级后会改用精选图。
   - #654 新线索（报告人 1.54 诊断）：按返回那一刻没有 `drawn before its face`，1.54 的猜测不成立；只在航拍 / 视频壁纸播放时出现，静态壁纸正常。MFTR0、TCL MT5879、deepfry666 的模拟器都复现不了。现在怀疑 Novatek（NSOP0）的 GPU 在窗口下面是透明（影片在下层）时处理 `ModulateAlpha` 淡出有问题。加了实验开关 `ConfigReceiver --ez saver_fade_offscreen true`（下次启动 Home 生效，诊断 display 一行会显示），让进屏保时的磁贴各自在离屏缓冲里淡出；MFTR0 上打开试过外观正常，已关回 false。等报告人试。
@@ -121,7 +122,7 @@
 - 界面字体用系统的 Roboto（Inter 的字重靠可变字体，Android 8.0 才支持）；App 图标用 PNG（自适应图标同理）。
 - Android 5.0 上无障碍服务接不到 HOME 键，守护版靠「原桌面一出现就拉回」，会闪一下原桌面。
 - 老系统不信任 Apple 的根证书，航拍视频的 HTTPS 会失败，屏保会自动改用 HTTP（`res/xml/network_security_config.xml` 只对 `sylvan.apple.com` 放行明文）。模拟器的软件解码器只支持 H.264 Baseline，解不了 Apple 的视频，所以航拍画面本身还没在 5.x 上看到过，要等真机。
-- Android 4.4 做不到：Compose 最低要求 Android 5.0。
+- Android 4.0–4.4 用单独的 Aerial Lite（`lite/`，原生 View），见 `docs/LITE.md`：Compose 最低要求 Android 5.0。
 
 ## 环境
 
@@ -188,6 +189,7 @@ adb -s $XIAOMI_TV:5555 shell cmd package compile -m speed -f app.orchard.tv
 6. **不要把 `local/` 提交到版本库**（里面有 IP 和签名密钥）。
 7. 改动系统设置前，先记下原值（写进 `local/TVS.md`），并确保 `restore.sh` 能还原。
 8. 每次改完都在真机上验证，不要只看编译通过。电视上的行为和模拟器差别很大。
+10. **Lite（`lite/`）不要引入 AndroidX、Compose 或协程**，任何新接口都要能在 Android 4.0 上跑（`./gradlew :lite:lintRelease` 的 NewApi）。Kotlin 的 `use` 不要用在 `Socket`/`ServerSocket` 上（4.4 以前它们不是 Closeable），`HashMap.putIfAbsent`、`Map.forEach { k, v -> }` 这类 Java 8 默认方法在 4.x 上不存在。
 9. **不要升级 Compose BOM 到 2025.12 及以后**（Compose 1.10 要求 Android 6.0），也不要升级到要求 minSdk 23 的 AndroidX 版本（比如 `lifecycle` 2.10 起）。升级前看 AAR 里 `AndroidManifest.xml` 的 `minSdkVersion`。
 
 ## 重新生成航拍目录
