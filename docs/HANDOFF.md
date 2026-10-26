@@ -4,11 +4,12 @@
 
 ## 现状（2026-10-26）
 
+- **1.55（versionCode 67），2026-10-26 发布**：手机 / 电脑设置页改为 Aerial 运行期间一直监听（户主要求，方便电脑随时打开）：`MainActivity.startWork` 里 `PhoneServer.listen`，不再在个性化关闭 5 分钟后停掉；地址里的令牌固定，仍是唯一的访问凭据。小米 MFTR0 和 TCL MT5879 上验证：没打开过个性化、另一个 App 在前台、关掉个性化后、force-stop 后守护拉起，带令牌访问都是 200，错令牌 404，二维码地址不变。
 - **1.54（versionCode 66），2026-10-26 发布**（[v1.54](https://github.com/pengchujin/aerial-tv/releases/tag/v1.54)）：
   - #609 TCL MT5879 上「视频」屏保（系统 dream）黑屏：视频列表在 IO 线程读完才加 AndroidView，dream 窗口第一帧之后才加进去的 SurfaceView 一直拿不到 surface，ExoPlayer 往占位 surface 解码。现在影片的 view 在第一帧就在（`VideoSaver`）。TCL 上传测试视频、切视频屏保、Somnambulator 验证：surface created、first frame、画面正常；测完删掉测试视频（按 id）、屏保改回航拍。中间推过 versionCode 62–65 的测试包，所以正式版是 66。
   - #667 开代理（Clash 类 VPN，198.18.0.1）时扫码地址是隧道地址：`PhoneServer.lanAddress` 先取 Wi-Fi / 以太网，排除 198.18.0.0/15。小米上装自建测试 VPN（`test.vpn`，只代理 Aerial、绕过局域网，同 Clash 默认）对比：1.53 给 198.18.0.1，新版给 192.168.1.73 且电脑能连上；测试 VPN 已卸载。
   - #675 屏保选「系统内置」时，个性化里「开始时间」改成只读的「跟随系统 · N 分钟」（`SystemScreensaver.firmwareDelayMs`：小米读 screen_saver_timeout，其他读 screen_off_timeout）。小米 MFTR0 上显示「1 分钟」（它的 60000），测完屏保改回航拍。
-  - 手机设置页：令牌持久保存（`phone_page` prefs），电视上显示完整地址；宽屏（≥900px）左侧导航、居中弹窗、悬停态，整页可拖入照片和视频。内置浏览器 1440 / 375 宽都看过；拖拽上传测过一次，上传会把最后一张设为壁纸，已改回 `aerial:live` 并删掉测试照片。服务仍然只在个性化打开时（+5 分钟）监听。
+  - 手机设置页：令牌持久保存（`phone_page` prefs），电视上显示完整地址；宽屏（≥900px）左侧导航、居中弹窗、悬停态，整页可拖入照片和视频。内置浏览器 1440 / 375 宽都看过；拖拽上传测过一次，上传会把最后一张设为壁纸，已改回 `aerial:live` 并删掉测试照片。（1.55 起改为一直监听，见上。）
   - 合并 PR #655（双排下键先到第二排，小米上实测）、#658（开机广播移到后台线程，没在真机验证）；#665 MiTV4C 信号源（报告人实测的 23/24，没有真机）；#664 agent.md（OPPO 安装错误串、验收第 6 条等 8 秒并允许再查一次）。
   - #654 Redmi X50 按返回进屏保时焦点磁贴变直角：MFTR0 上复现不了；推测是那台不按图层的圆角裁剪、而当时磁贴画的是原图。原图现在自己按轮廓裁，焦点磁贴走到这一步会在诊断里记一行 `drawn before its face`，等报告人反馈确认。
 - **1.53（versionCode 61），2026-10-26 发布**（[v1.53](https://github.com/pengchujin/aerial-tv/releases/tag/v1.53)）：大时钟重新排版（户主从 6 个效果图里选了「锁屏式布局 + 粗体数字」）：日期 / 粗体大时间 / 天气三行，每行按字高排版，间距 16dp、18dp。小米 MFTR0 上看过左上、右上两种（截图），户主设置测完改回大时钟、左上。没验证：俄语等长日期。

@@ -85,7 +85,6 @@ import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.weather.Weather
 import app.orchard.tv.weather.WeatherKind
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -110,17 +109,13 @@ fun WallpaperSheet(
 
     BackHandler(enabled = visible, onBack = onDismiss)
 
-    // The phone page only listens while this sheet is up, plus a few minutes so an upload that is
-    // already under way can finish.
+    // The phone page listens all along (PhoneServer.listen); the address is read again each time,
+    // as the TV's may have changed.
     LaunchedEffect(visible) {
-        if (visible) {
-            val url = withContext(Dispatchers.IO) { PhoneServer.start(context) }
-            phoneUrl = url
-            qr = url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
-        } else {
-            delay(5 * 60 * 1000L)
-            withContext(Dispatchers.IO) { PhoneServer.stop() }
-        }
+        if (!visible) return@LaunchedEffect
+        val url = withContext(Dispatchers.IO) { PhoneServer.start(context) }
+        phoneUrl = url
+        qr = url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
     }
 
     AnimatedVisibility(visible = visible, enter = fadeIn(tween(220, easing = Motion.EaseOut)), exit = fadeOut(tween(180, easing = Motion.EaseOut)), modifier = Modifier.fillMaxSize()) {

@@ -43,10 +43,9 @@ import java.security.SecureRandom
  * send photos, give an app's tile a picture of one's own, and name the weather's city. Choosing
  * pictures or typing a place with a remote is slow; with a phone it is not.
  *
- * It listens on the local network only while the wallpaper sheet is open on the TV (and a few
- * minutes after, so an upload can finish), and every address carries a random token shown only on
- * the TV (the QR code and the address under it), so another device on the network cannot use it by
- * guessing. The token stays the same from one opening to the next (see [token]).
+ * It listens on the local network while Aerial runs (see [listen]), and every address carries a
+ * random token shown only on the TV (the QR code and the address under it), so another device on
+ * the network cannot use it by guessing. The token stays the same from one start to the next.
  */
 class PhoneServer private constructor(private val context: Context, private val token: String) : NanoHTTPD(PORT) {
 
@@ -417,27 +416,32 @@ class PhoneServer private constructor(private val context: Context, private val 
         @Volatile
         private var running: PhoneServer? = null
 
-        /** Starts the server if needed and returns the address to put in the QR code, or null offline. */
+        /**
+         * Listens for as long as Aerial runs, from Home's start (MainActivity.startWork), so a
+         * computer can open the page at any time without Personalize open on the TV. On every
+         * interface: the address the TV has may change, the page stays the same.
+         */
         @Synchronized
+        fun listen(context: Context): PhoneServer? {
+            running?.let { if (it.isAlive) return it }
+            return runCatching {
+                PhoneServer(context.applicationContext, token(context)).also {
+                    it.start(SOCKET_READ_TIMEOUT, true)
+                    running = it
+                }
+            }.onFailure { Log.w(TAG, "could not listen", it) }.getOrNull()
+        }
+
+        /** The address to put in the QR code, listening first if need be, or null offline. */
         fun start(context: Context): String? {
             val ip = lanAddress(context) ?: return null
-            val server = running ?: PhoneServer(context.applicationContext, token(context)).also {
-                runCatching { it.start(SOCKET_READ_TIMEOUT, true) }.onFailure { return null }
-                running = it
-            }
+            val server = listen(context) ?: return null
             return "http://$ip:$PORT/${server.token}/"
         }
 
-        @Synchronized
-        fun stop() {
-            running?.stop()
-            running = null
-        }
-
         /**
-         * Kept from one opening to the next, so the address can be bookmarked on a computer and the
-         * phone's tab still works the next day; still random, and still only listened on while the
-         * sheet is up.
+         * Kept from one start to the next, so the address can be bookmarked on a computer and the
+         * phone's tab still works the next day.
          */
         private fun token(context: Context): String {
             val prefs = context.getSharedPreferences("phone_page", Context.MODE_PRIVATE)
