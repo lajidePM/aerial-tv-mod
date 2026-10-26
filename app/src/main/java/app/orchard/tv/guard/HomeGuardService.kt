@@ -60,6 +60,13 @@ class HomeGuardService : AccessibilityService() {
     /** Set when the user opens the stock launcher on purpose from Aerial's grid. */
     private var allowStockUntil = 0L
 
+    /**
+     * When the guard itself pressed Home to open the stock launcher from its tile. The system sends
+     * "homekey" for that press as for one on the remote; taken for the viewer's, it brought Aerial
+     * back at once (MiTV-MFFU0, Android 14, issue #680).
+     */
+    private var ownHomeAt = Long.MIN_VALUE / 2
+
     /** The last window that came to the front, as package to class; null until one does. */
     private var lastWindow: Pair<String, String>? = null
 
@@ -228,6 +235,8 @@ class HomeGuardService : AccessibilityService() {
             // Android 6) answers the Home key by starting its own launcher by component, and Home
             // resolution never happens.
             if (intent.getStringExtra("reason") != "homekey") return
+            // The guard's own press for the stock launcher's tile, not the viewer's.
+            if (SystemClock.uptimeMillis() - ownHomeAt < OWN_HOME_MS) return
             if (backOnPause) noteHomeInAerial()
             val front = lastWindow?.first
             if (front != null && front !in stockHomes) return
@@ -927,6 +936,11 @@ class HomeGuardService : AccessibilityService() {
         homeInAerialAt = now
     }
 
+    private fun pressHomeForStock(): Boolean {
+        ownHomeAt = SystemClock.uptimeMillis()
+        return performGlobalAction(GLOBAL_ACTION_HOME)
+    }
+
     private fun goHome(woke: Boolean = false) {
         if (!GuardSetup.isUserUnlocked(this)) return
         // Starting an activity can light the screen: on OPPO K9 the TV came back on by itself a few
@@ -968,6 +982,8 @@ class HomeGuardService : AccessibilityService() {
         private val TASK_CENTRE_ACTIONS = listOf("com.dangbei.recentstask.action.SHOW_RECENTS_FOR_USER")
         private const val VOLUME_REPEAT_MAX_MS = 8_000L
         private const val HOME_PAUSE_MS = 400L
+        /** "homekey" came 350 ms or more after the key while Aerial was busy (see noteHomeInAerial). */
+        private const val OWN_HOME_MS = 1_500L
         private const val DOUBLE_HOME_BROADCAST_MS = 600L
         private val VOLUME_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
 
@@ -1075,8 +1091,8 @@ class HomeGuardService : AccessibilityService() {
         fun openStockLauncher(pkg: String, startDirectly: () -> Boolean): Boolean {
             val s = instance ?: return startDirectly()
             allowStockLauncher()
-            if (s.resolvedHome() == pkg && s.performGlobalAction(GLOBAL_ACTION_HOME)) return true
-            return startDirectly() || s.performGlobalAction(GLOBAL_ACTION_HOME)
+            if (s.resolvedHome() == pkg && s.pressHomeForStock()) return true
+            return startDirectly() || s.pressHomeForStock()
         }
 
         /** Lets the stock launcher stay in front until Aerial is back: the viewer opened it on purpose. */
