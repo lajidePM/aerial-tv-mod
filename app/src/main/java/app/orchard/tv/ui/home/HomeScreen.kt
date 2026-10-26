@@ -175,6 +175,9 @@ private class GridMetrics(screenW: Dp, screenH: Dp, oneRow: Boolean, plateNames:
 /** How long the screensaver waits for the wallpaper's film to move before playing its own. */
 private const val FILM_SAVER_WAIT_MS = 10_000L
 
+/** How long the large clock's time takes back from the screensaver's corner (ShelfClock waits for it). */
+internal const val CLOCK_BACK_MS = 1000
+
 /** How long Control Center takes to come in before a picture of Home stands in for it. */
 private const val HOME_SHOT_AFTER_MS = 450L
 
@@ -293,6 +296,17 @@ fun HomeScreen(
             // A key woke it: Home comes back at once and settles in, the way it went. At 380 ms the
             // apps' part of it (60% of the way) was over in a blink and read as a cut (issue #357).
             else -> toSaver.animateTo(0f, tween(650, easing = Motion.EaseOut))
+        }
+    }
+    // The large clock's time goes back the way it came, at half the pace. On Home's 650 ms ease-out
+    // it was most of the way back in two or three frames (Xiaomi MiTV-MFTR0: 45-57 ms a frame as it
+    // wakes) and leapt; out of the corner and back are one motion run both ways.
+    val clockToSaver = remember { Animatable(0f) }
+    LaunchedEffect(carrying) {
+        when {
+            reduced -> clockToSaver.snapTo(if (carrying) 1f else 0f)
+            carrying -> clockToSaver.animateTo(1f, tween(2000, easing = Motion.EaseInOut))
+            else -> clockToSaver.animateTo(0f, tween(CLOCK_BACK_MS, easing = Motion.EaseInOut))
         }
     }
 
@@ -579,8 +593,9 @@ fun HomeScreen(
                             .padding(horizontal = metrics.margin)
                             .padding(top = metrics.clockY)
                             .graphicsLayer { alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f) },
-                        toSaver = { toSaver.value },
+                        toSaver = { clockToSaver.value },
                         saving = vm.screensaverVisible,
+                        away = carrying,
                     )
                 } else if (!clockRight) {
                     CornerClock(

@@ -11,6 +11,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -36,6 +38,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -85,6 +88,7 @@ import app.orchard.tv.ui.components.glassEdge
 import app.orchard.tv.ui.components.smoothMask
 import app.orchard.tv.ui.theme.Glyph
 import app.orchard.tv.ui.theme.GlyphIcon
+import app.orchard.tv.ui.theme.LocalReducedMotion
 import app.orchard.tv.ui.theme.Motion
 import app.orchard.tv.ui.theme.Palette
 import app.orchard.tv.ui.theme.Type
@@ -512,11 +516,29 @@ fun ShelfClock(
     toSaver: () -> Float = { 0f },
     /** The screensaver is up over Home, carrying this clock: it wanders as the screensaver's does. */
     saving: Boolean = false,
+    /** The screensaver is carrying Home's wallpaper on: the date and weather go before the time moves. */
+    away: Boolean = false,
 ) {
     val drift = if (saving) saverDrift(now) else DpOffset.Zero
     val shadow = Shadow(Color.Black.copy(alpha = 0.28f), Offset(0f, 2f), blurRadius = 18f)
     val dim = Color.White.copy(alpha = 0.72f)
-    val aside = Modifier.graphicsLayer { alpha = 1f - (toSaver() * 2.5f).coerceIn(0f, 1f) }
+    // Gone in the first 400 ms, while the time has barely set off (its 2 s ease-in-out). Fading
+    // along its progress (1.52), they were still there as the time rose through the date, and over
+    // a moving film, at 8-10 frames a second on Xiaomi MiTV-MFTR0, they read as cut away in steps.
+    // Back on Home they return once the time is nearly in place (CLOCK_BACK_MS), as they went.
+    val reduced = LocalReducedMotion.current
+    val asideGone by animateFloatAsState(
+        if (away) 1f else 0f,
+        if (reduced) snap() else if (away) tween(400, easing = Motion.EaseOut) else tween(400, delayMillis = CLOCK_BACK_MS * 7 / 10, easing = Motion.EaseOut),
+        label = "clock-aside",
+    )
+    val aside = Modifier.graphicsLayer {
+        alpha = 1f - asideGone
+        // No offscreen buffer: it would be the line's capBox, and while the line faded the Chinese,
+        // the icon and the shadow above and below it were cut off, the whole line springing open
+        // as the fade ended (the owner, Xiaomi MiTV-MFTR0).
+        compositingStrategy = CompositingStrategy.ModulateAlpha
+    }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         // On a TV set to Chinese, the Chinese calendar's date follows, as on the iPhone's lock screen.
         val lunar = if (Locale.getDefault().language == "zh") Lunar.text(now.toLocalDate()) else null
