@@ -96,6 +96,9 @@
     <string name="ss_delay">Запускать через</string>
     <string name="ss_minutes">%d мин</string>
     <string name="ss_never">Никогда</string>
+    <string name="ss_delay_system">Как в системе</string>
+    <string name="ss_delay_system_off">Как в системе · выкл.</string>
+    <string name="ss_delay_system_minutes">Как в системе · %d мин</string>
     <string name="ss_back_hint">Совет: нажмите «Назад» в верхнем ряду главного экрана, чтобы запустить заставку.</string>
     <string name="ss_back">Кнопка «Назад»</string>
     <string name="ss_back_on">Запускает её</string>

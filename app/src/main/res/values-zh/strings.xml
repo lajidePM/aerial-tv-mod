@@ -103,6 +103,9 @@
     <string name="ss_delay">开始时间</string>
     <string name="ss_minutes">%d 分钟</string>
     <string name="ss_never">从不</string>
+    <string name="ss_delay_system">跟随系统</string>
+    <string name="ss_delay_system_off">跟随系统 · 已关闭</string>
+    <string name="ss_delay_system_minutes">跟随系统 · %d 分钟</string>
     <string name="ss_back_hint">提示：在主页第一行按返回键，也可以立即开始屏保。</string>
     <string name="ss_back">返回键</string>
     <string name="ss_back_on">开始屏保</string>

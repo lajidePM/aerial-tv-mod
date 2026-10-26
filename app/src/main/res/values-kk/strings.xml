@@ -96,6 +96,9 @@
     <string name="ss_delay">Бастау уақыты</string>
     <string name="ss_minutes">%d мин</string>
     <string name="ss_never">Ешқашан</string>
+    <string name="ss_delay_system">Жүйе бойынша</string>
+    <string name="ss_delay_system_off">Жүйе бойынша · өшірулі</string>
+    <string name="ss_delay_system_minutes">Жүйе бойынша · %d мин</string>
     <string name="ss_back_hint">Кеңес: экран қорғауышты бастау үшін басты экранның жоғарғы қатарында «Артқа» түймесін басыңыз.</string>
     <string name="ss_back">«Артқа» түймесі</string>
     <string name="ss_back_on">Бастайды</string>

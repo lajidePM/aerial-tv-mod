@@ -78,6 +78,7 @@ import app.orchard.tv.wallpaper.PhoneServer
 import app.orchard.tv.wallpaper.AerialFormats
 import app.orchard.tv.wallpaper.AerialQuality
 import app.orchard.tv.wallpaper.ScreensaverMode
+import app.orchard.tv.system.SystemScreensaver
 import app.orchard.tv.wallpaper.Wallpaper
 import app.orchard.tv.wallpaper.WallpaperKind
 import app.orchard.tv.wallpaper.Wallpapers
@@ -279,7 +280,20 @@ fun WallpaperSheet(
                             listOf(true to R.string.st_on, false to R.string.st_off),
                             AerialSettings.screensaverClock, AerialSettings::chooseScreensaverClock,
                         )
-                        Choices(
+                        // The firmware's screensaver starts on the firmware's timer: Aerial's delay
+                        // did nothing there, and Xiaomi's 1 minute came before the 5 chosen (issue #675).
+                        if (Wallpapers.screensaver == ScreensaverMode.System) SettingRow(R.string.ss_delay, null, note) {
+                            val delay = remember { SystemScreensaver.firmwareDelayMs(context) }
+                            BasicText(
+                                when {
+                                    delay == null -> stringResource(R.string.ss_delay_system)
+                                    delay == 0L -> stringResource(R.string.ss_delay_system_off)
+                                    else -> stringResource(R.string.ss_delay_system_minutes, ((delay + 30_000) / 60_000).coerceAtLeast(1).toInt())
+                                },
+                                style = Type.Body.copy(color = Palette.SecondaryLabel),
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                        } else Choices(
                             R.string.ss_delay, null, note,
                             AerialSettings.screensaverChoices.map {
                                 it to if (it == AerialSettings.NEVER) stringResource(R.string.ss_never) else stringResource(R.string.ss_minutes, it)
