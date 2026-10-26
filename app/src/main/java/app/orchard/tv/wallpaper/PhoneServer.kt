@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.util.Log
 import androidx.core.content.getSystemService
@@ -440,8 +441,26 @@ class PhoneServer private constructor(private val context: Context, private val 
 
         fun lanAddress(context: Context): String? {
             val cm = context.getSystemService<ConnectivityManager>() ?: return null
-            val props = cm.getLinkProperties(cm.currentNetwork() ?: return null) ?: return null
-            return props.linkAddresses.map { it.address }.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }?.hostAddress
+            val current = cm.currentNetwork()
+            // Under a proxy app's VPN the default network is the tunnel, whose address the phone
+            // cannot reach (Clash and the like use 198.18.0.1; Xiaomi S55, issue #667). The Wi-Fi
+            // or Ethernet network under it is still in allNetworks: take its address first.
+            val networks = runCatching { cm.allNetworks.toList() }.getOrDefault(emptyList())
+            val lan = networks.filter { n ->
+                val caps = runCatching { cm.getNetworkCapabilities(n) }.getOrNull() ?: return@filter false
+                !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+            }.sortedByDescending { it == current }
+            return (lan + listOfNotNull(current)).firstNotNullOfOrNull { n ->
+                runCatching { cm.getLinkProperties(n) }.getOrNull()?.linkAddresses?.map { it.address }
+                    ?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress && !it.isLinkLocalAddress && !isBenchmark(it) }
+            }?.hostAddress
+        }
+
+        /** 198.18.0.0/15, the range proxy apps put their tunnel in; never a home network. */
+        private fun isBenchmark(address: java.net.InetAddress): Boolean {
+            val b = address.address
+            return b.size == 4 && (b[0].toInt() and 0xff) == 198 && (b[1].toInt() and 0xfe) == 18
         }
 
         /** A QR code, dark modules on white, each module [scale] pixels square. */
