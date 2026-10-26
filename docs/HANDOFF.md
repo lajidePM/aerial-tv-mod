@@ -203,6 +203,7 @@ plutil -convert json -o en.json TVIdleScreenStrings.bundle/en.lproj/Localizable.
 
 ## 可以继续做的事（按价值排序）
 
+0. **4K UI 待适配（1.52 起）**：4K 画布（`UhdCanvas`）现在只在 `ro.feature.graphics_4kui=true`、并且面板至少是界面 2 倍（显示模式或 `ro.odm.tcl.panel_resolution`）时自动打开。确定满足的只有 TCL 75Q10L（MT9655，#607），它的 HWC 是否把这一层 1:1 送显也没测过。海信 E7N、Vidda 发现 X Pro / G7、雷鸟鹤6 Ultra 25 款等 MT9655 机型芯片支持 4K 界面，但不知道固件用什么属性声明；MT5895（Sony）、MT9653、MT5879 的界面层是 1080p，不要开（#645）。系统直接给 App 4K 窗口的电视走 `canvasDensity` = 4，不经过 4K 画布。**有 4K 电视（尤其 MT9655 / Pentonic 800 / 1000）的用户来报 issue 时，顺带请他提供**：芯片型号；`adb shell getprop | grep -i -E "4k|uhd|panel|graphics"`；`adb shell dumpsys display | grep -E "supportedModes|mDefaultModeId"`；`adb shell wm size`；厂商自家桌面运行时 `adb shell dumpsys SurfaceFlinger` 里它那一层的 `sourceCrop` 和 `displayFrame`（看自家桌面是不是 3840×2160 1:1 送显）。如果用户愿意试，再请他 `--ez uhd_canvas true` 强制打开，看清晰度、卡顿和屏保位置，并同样贴 Aerial 那一层的 `sourceCrop` / `displayFrame`。收集到的结果写进 `docs/devices/`，再决定把哪些属性加进 `UhdCanvas.chipHas4kUi`。
 1. **小米上在任意 App 空闲时也用 Aerial 屏保**：守护服务能看到 `com.xiaomi.mitv.hyper.screensaver` 的窗口出现，届时打开 Aerial 的屏保 Activity 替换它（需要把屏保做成独立 Activity）。
 2. **TCL 升级完全免手动**：让桌面守护（无障碍服务）在多屏互动的推送提示框出现、而且推送的是 Aerial 时，自动点「同意」。
 3. **自动化测试**：`LayoutStore.move`、`Aerial.captionAt`、`TileArtFactory` 的图标分类、`SystemProbe` 的信号源映射都适合写单元测试。
