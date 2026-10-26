@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.TextUnit
@@ -50,6 +52,10 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -402,10 +408,11 @@ private fun darkened(src: ImageBitmap, alpha: Float): ImageBitmap {
 }
 
 /**
- * The large clock, as on the lock screen: the date (in Chinese, with the lunar one) over the time,
- * and under it the weather, the city it is for (issue #59) and today's high and low. Left or right,
- * the three lines share one edge, the tiles' edge. The digits stay proportional: tabular ones leave a narrow "1" short of
- * that edge. A soft shadow keeps them readable on bright photos. The clock screensaver shows the same.
+ * The large clock, as on the lock screen: the date (in Chinese, with the lunar one) over the time
+ * in heavy digits, and under it the weather, the city it is for (issue #59) and today's high and
+ * low. Left or right, the three lines share one edge, the tiles' edge. Each line's box is its
+ * capitals' height ([capBox]), so the gaps between them are the gaps a reader sees. A soft shadow
+ * keeps them readable on bright photos. The clock screensaver shows the same.
  */
 @Composable
 fun ShelfClock(
@@ -419,28 +426,39 @@ fun ShelfClock(
 ) {
     val drift = if (saving) saverDrift(now) else DpOffset.Zero
     val shadow = Shadow(Color.Black.copy(alpha = 0.28f), Offset(0f, 2f), blurRadius = 18f)
-    val secondary = Color.White.copy(alpha = 0.78f)
+    val dim = Color.White.copy(alpha = 0.72f)
     val aside = Modifier.graphicsLayer { alpha = 1f - (toSaver() * 2.5f).coerceIn(0f, 1f) }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         // On a TV set to Chinese, the Chinese calendar's date follows, as on the iPhone's lock screen.
         val lunar = if (Locale.getDefault().language == "zh") Lunar.text(now.toLocalDate()) else null
-        val date = dateText(now).let { if (lunar != null) "$it  $lunar" else it }
-        BasicText(date, style = Type.Title.copy(color = Color.White.copy(alpha = 0.9f), shadow = shadow), modifier = aside)
+        BasicText(
+            buildAnnotatedString {
+                append(dateText(now))
+                if (lunar != null) withStyle(SpanStyle(color = dim, fontWeight = FontWeight.W500)) { append("  $lunar") }
+            },
+            style = Type.ClockDate.copy(shadow = shadow),
+            modifier = aside.capBox(Type.ClockDate.fontSize),
+        )
         BasicText(
             timeText(now),
             style = Type.Clock.copy(shadow = shadow),
-            // The digits' cap top, in the trimmed box: the 104sp line puts it 7.6dp down, less the trim.
-            modifier = Modifier.toSaverClock(toSaver, Type.Clock.fontSize, 7.6.dp - ClockTrimTop, drift)
-                .trimmed(top = ClockTrimTop, bottom = ClockTrimBottom),
+            modifier = Modifier.padding(top = 16.dp)
+                .toSaverClock(toSaver, Type.Clock.fontSize, 0.dp, drift)
+                .capBox(Type.Clock.fontSize),
         )
         Weather.now?.takeIf { AerialSettings.showWeather }?.let { w ->
-            Row(aside, verticalAlignment = Alignment.CenterVertically) {
-                GlyphIcon(glyphFor(w), Color.White, 22.dp, Modifier.padding(end = 8.dp))
-                BasicText("${w.celsius}°", style = Type.Title.copy(color = Color.White, shadow = shadow))
-                val place = Weather.place?.takeIf { it.length <= 12 }
-                val range = if (w.high != null && w.low != null) stringResource(R.string.weather_high_low, w.high, w.low) else null
-                val detail = listOfNotNull(place, stringResource(conditionName(w.kind)), range).joinToString("  ·  ")
-                BasicText(detail, style = Type.Headline.copy(color = secondary, shadow = shadow), modifier = Modifier.padding(start = 12.dp))
+            val place = Weather.place?.takeIf { it.length <= 12 }
+            val range = if (w.high != null && w.low != null) stringResource(R.string.weather_high_low, w.high, w.low) else null
+            val detail = listOfNotNull(place, stringResource(conditionName(w.kind)), range).joinToString(" · ")
+            Row(aside.padding(top = 18.dp).capBox(Type.ClockDetail.fontSize), verticalAlignment = Alignment.CenterVertically) {
+                GlyphIcon(glyphFor(w), Color.White, 18.dp, Modifier.padding(end = 7.dp))
+                BasicText(
+                    buildAnnotatedString {
+                        append("${w.celsius}°")
+                        withStyle(SpanStyle(color = dim, fontWeight = FontWeight.W500)) { append("  $detail") }
+                    },
+                    style = Type.ClockDetail.copy(shadow = shadow),
+                )
             }
         }
     }
@@ -448,6 +466,9 @@ fun ShelfClock(
 
 /** Inter's cap top below the top of a line of natural height, as a share of the font size. */
 private const val CAP_TOP = 0.242f
+
+/** Inter's cap height (and its digits' height), as a share of the font size. */
+private const val CAP_HEIGHT = 0.727f
 
 /**
  * Carries Home's time to where the screensaver shows it, top right and at its size, as [progress]
@@ -478,17 +499,15 @@ private fun Modifier.toSaverClock(progress: () -> Float, fontSize: TextUnit, cap
 }
 
 /**
- * The clock's line box reaches well past its digits (31dp above, 32dp below, measured on the
- * Xiaomi). Trimmed so the date sits 14dp over the digits and the weather 18dp under them.
+ * Lays a line of text out as just its capitals' height, from their top to the baseline, drawn where
+ * it was: so a line's box is the ink a reader sees, and lines line up by their tops and baselines.
+ * Descenders and accents hang outside the box.
  */
-private val ClockTrimTop = 17.dp
-private val ClockTrimBottom = 14.dp
-
-/** Lays the content out [top] and [bottom] shorter than it measures, drawn where it was. */
-private fun Modifier.trimmed(top: Dp, bottom: Dp) = layout { measurable, constraints ->
+private fun Modifier.capBox(fontSize: TextUnit) = layout { measurable, constraints ->
     val p = measurable.measure(constraints)
-    val t = top.roundToPx()
-    layout(p.width, (p.height - t - bottom.roundToPx()).coerceAtLeast(0)) { p.place(0, -t) }
+    val baseline = p[FirstBaseline].takeIf { it != AlignmentLine.Unspecified } ?: p.height
+    val top = (baseline - fontSize.toPx() * CAP_HEIGHT).roundToInt().coerceAtLeast(0)
+    layout(p.width, baseline - top) { p.place(0, -top) }
 }
 
 private fun conditionName(kind: WeatherKind): Int = when (kind) {
