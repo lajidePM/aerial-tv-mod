@@ -97,7 +97,7 @@ site/update/                        电视升级页二维码打开的页面：�
 - 首页每帧只允许一次全屏绘制：壁纸和压暗层在 CPU 上预先合成；窗口背景设为 null。
 - 空闲时不能有任何持续动画（测量结果是 0 帧）。
 - 模糊（`BlurEffect`）只在控制中心 / 隐藏 App 面板打开时用。
-- 面板（控制中心、个性化、长按菜单、隐藏的 App、家长密码、移动提示）都用 `Modifier.liquidGlass`：同样取模糊版壁纸里面板身后的那一块，压到一半亮度保证白字可读，再加玻璃边缘。每个面板只填一次自己的面积，和原来的纯色一样；「跟随 App」模式没有模糊版壁纸，退回原来的深色 `Palette.Glass`。
+- 面板（控制中心、个性化、长按菜单、隐藏的 App、家长密码、移动提示）都用 `Modifier.liquidGlass`：同样取模糊版壁纸里面板身后的那一块，压到一半亮度保证白字可读，再加玻璃边缘。每个面板只填一次自己的面积，和原来的纯色一样；「跟随 App」模式没有模糊版壁纸，退回原来的深色 `Palette.Glass`。玻璃（轮廓遮罩、磨砂、边缘）录在一个 `CompositingStrategy.Offscreen` 的 `GraphicsLayer` 里，GPU 只在面板移动、尺寸变化或磨砂换图淡入时重画它，平时每帧只贴一次；以前每帧开一次面板大小的 `saveLayer` 再画遮罩、磨砂、边缘，overdraw 显示个性化面板整片 4 层以上。小米 MFTR0（静态壁纸，release，两轮 A/B）：个性化里左右移动壁纸卡片帧耗时中位 53 → 25 ms（GPU 约 29 → 14 ms），上下滚动 53 → 26 ms，重新打开中位 22 → 18 ms，但打开那一帧要建层，最慢一帧 89 → 101 ms；首页不变，控制中心中位 17 → 15–17 ms。试过个性化打开时把主页也放进离屏层，只再快约 3 ms，航拍的 SurfaceView 放进离屏层有风险，没采用。TCL MT5879 没装这一版（原版个性化左右移动中位 22 ms，这台跑 120Hz）。
 - 加任何全屏效果前，先测：`adb shell dumpsys gfxinfo app.orchard.tv framestats`。
 - 一定要装 release 版，并执行 `cmd package compile -m speed -f app.orchard.tv`。debug 版的 Compose 在电视上明显卡顿。**要在 Aerial 启动过一次之后再编译**：小米 MFTR0（Android 14）把 `speed` 当成 `speed-profile`，装完立刻编译时还没有 profile，结果还是 `verify`（解释执行）。`install.sh` 已经改成先启动、等 5 秒再编译。
 - **Baseline Profile**（`app/src/main/baseline-prof.txt`）：Aerial 自己的代码和 Compose 全部标成热点。不经过 `install.sh` 的安装（控制中心升级、多屏互动推送、U 盘）不会立刻编译，系统要等后台编译任务（空闲且充电时）才按它编译；小米上实测不会在安装时用 APK 里的 profile（`assets/dexopt/` 和 `assets/art-profile/` 都试过）。编译前后：首页磁贴出来 0.8 秒 → 0.4 秒。诊断报告的 `Compiled` 一行：Android 9+（11 除外）显示 profile 状态，`odex` 大小在所有版本上都能看出编译了没有（只 verify 时几百 KB，`speed` 时约 11 MB）。
