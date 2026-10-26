@@ -219,6 +219,8 @@ fun HomeBackground(
     saverImage: ImageBitmap? = null,
     saverReveal: () -> Float = { 0f },
     saverPush: () -> Float = { 0f },
+    /** How far Home is lifted on its shelf, apart from [scroll]: the plate goes up with the row, nothing fades. */
+    lift: () -> Float = { 0f },
 ) {
     Box(Modifier.fillMaxSize()) {
         // Over a paused film, under the pictures: the shading its picture will have. The picture
@@ -235,7 +237,7 @@ fun HomeBackground(
             val a = saverReveal()
             if (a > 0.01f) drawDrawingIn(saverImage, saverPush(), a)
         }
-        Plate(frosted ?: backdrop, filmGlass, plate, scroll, collapse, cover, filmStopped, toSaver)
+        Plate(frosted ?: backdrop, filmGlass, plate, scroll, collapse, cover, filmStopped, toSaver, lift)
     }
 }
 
@@ -289,7 +291,7 @@ private fun Pictures(backdrop: ImageBitmap?, frosted: ImageBitmap?, scroll: () -
  * moves or a new frame fades in, every [GLASS_EVERY_MS]: the film plays with Compose all but still.
  */
 @Composable
-private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float) {
+private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float, lift: () -> Float) {
     var shown by remember { mutableStateOf(glass) }
     var under by remember { mutableStateOf<ImageBitmap?>(null) }
     val swap = remember { Animatable(1f) }
@@ -361,7 +363,7 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, plate: Rect?, scroll:
         val edge = smoke
         if (edge != null && cover() > 0.01f && alpha < 0.99f && base > 0.01f) {
             val p = (scroll() / collapse).coerceIn(0f, 1f)
-            val r = plate.translate(0f, -scroll()).inflate(PlateSwell.toPx() * smooth((p / 0.55f).coerceIn(0f, 1f)))
+            val r = plate.translate(0f, -scroll() - lift()).inflate(PlateSwell.toPx() * smooth((p / 0.55f).coerceIn(0f, 1f)))
             val t = filmSwap.value
             val under = filmBottom
             // The old frame whole under the new, both in one layer laid over the film at FILM_FROST.
@@ -385,7 +387,7 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, plate: Rect?, scroll:
         val rest = 1f - smooth((p / 0.55f).coerceIn(0f, 1f))
         if (alpha < 0.01f) return@Canvas
         val grow = PlateSwell.toPx() * (1f - rest)
-        val r = plate.translate(0f, -scroll()).inflate(grow)
+        val r = plate.translate(0f, -scroll() - lift()).inflate(grow)
         val t = swap.value
         if (t < 1f) bottom?.draw(this, plate, r, alpha)
         top?.draw(this, plate, r, if (bottom != null) alpha * t else alpha)
