@@ -211,7 +211,8 @@ fun HomeBackground(
     toSaver: () -> Float = { 0f },
     /**
      * The glass for a moving film (Wallpapers.filmFrost, or [frosted] until it has one): the plate
-     * stays over the film on it. Null where the film has none (an input's picture): the plate goes.
+     * stays over the film on it. Null where the film has none (an input's picture): the plate is
+     * the smoke and the lit edge alone.
      */
     filmGlass: ImageBitmap? = null,
     /** The wallpaper's picture unshaded, shown [saverReveal] of the way and [saverPush] into its draw-in. */
@@ -283,7 +284,8 @@ private fun Pictures(backdrop: ImageBitmap?, frosted: ImageBitmap?, scroll: () -
  * Under it, while a film moves, the film's plate ([film]): a film under the window cannot be
  * blurred, so a small key frame of it, frosted, a few seconds old (LiveWallpaper), lies
  * [FILM_FROST] of the way over the film, and a smoke tint and the lit edge over both. The film
- * shows through moving, so the frame's lag reads as the glass's softness. Drawn only as the plate
+ * shows through moving, so the frame's lag reads as the glass's softness. With no [film] (an
+ * input's picture) only the smoke and the edge. Drawn only as the plate
  * moves or a new frame fades in, every [GLASS_EVERY_MS]: the film plays with Compose all but still.
  */
 @Composable
@@ -352,22 +354,24 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, plate: Rect?, scroll:
         if (plate == null) return@Canvas
         val alpha = visibility()
         // The film's plate, while the film shows and the plate over a picture does not hide it.
+        // With no frame to frost (an input's picture, which cannot be copied) it is the smoke and
+        // the lit edge alone, so the top row keeps a plate over anything.
         val base = (1f - smooth(((scroll() / collapse).coerceIn(0f, 1f) / 0.55f).coerceIn(0f, 1f))) * (1f - toSaver())
         val frame = filmTop
         val edge = smoke
-        if (frame != null && edge != null && cover() > 0.01f && alpha < 0.99f && base > 0.01f) {
+        if (edge != null && cover() > 0.01f && alpha < 0.99f && base > 0.01f) {
             val p = (scroll() / collapse).coerceIn(0f, 1f)
             val r = plate.translate(0f, -scroll()).inflate(PlateSwell.toPx() * smooth((p / 0.55f).coerceIn(0f, 1f)))
             val t = filmSwap.value
             val under = filmBottom
             // The old frame whole under the new, both in one layer laid over the film at FILM_FROST.
-            if (t < 1f && under != null) {
+            if (frame != null && t < 1f && under != null) {
                 frostPaint.alpha = FILM_FROST * base
                 drawContext.canvas.saveLayer(r, frostPaint)
                 drawBaked(under, r, 1f)
                 drawBaked(frame, r, t)
                 drawContext.canvas.restore()
-            } else {
+            } else if (frame != null) {
                 drawBaked(frame, r, FILM_FROST * base)
             }
             drawBaked(edge, r, base)
