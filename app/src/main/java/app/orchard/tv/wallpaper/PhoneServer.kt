@@ -44,8 +44,9 @@ import java.security.SecureRandom
  * pictures or typing a place with a remote is slow; with a phone it is not.
  *
  * It listens on the local network only while the wallpaper sheet is open on the TV (and a few
- * minutes after, so an upload can finish), and every address carries a random token shown only in
- * the QR code, so another device on the network cannot use it by guessing.
+ * minutes after, so an upload can finish), and every address carries a random token shown only on
+ * the TV (the QR code and the address under it), so another device on the network cannot use it by
+ * guessing. The token stays the same from one opening to the next (see [token]).
  */
 class PhoneServer private constructor(private val context: Context, private val token: String) : NanoHTTPD(PORT) {
 
@@ -420,7 +421,7 @@ class PhoneServer private constructor(private val context: Context, private val 
         @Synchronized
         fun start(context: Context): String? {
             val ip = lanAddress(context) ?: return null
-            val server = running ?: PhoneServer(context.applicationContext, newToken()).also {
+            val server = running ?: PhoneServer(context.applicationContext, token(context)).also {
                 runCatching { it.start(SOCKET_READ_TIMEOUT, true) }.onFailure { return null }
                 running = it
             }
@@ -431,6 +432,17 @@ class PhoneServer private constructor(private val context: Context, private val 
         fun stop() {
             running?.stop()
             running = null
+        }
+
+        /**
+         * Kept from one opening to the next, so the address can be bookmarked on a computer and the
+         * phone's tab still works the next day; still random, and still only listened on while the
+         * sheet is up.
+         */
+        private fun token(context: Context): String {
+            val prefs = context.getSharedPreferences("phone_page", Context.MODE_PRIVATE)
+            prefs.getString("token", null)?.takeIf { it.length == 8 }?.let { return it }
+            return newToken().also { prefs.edit().putString("token", it).apply() }
         }
 
         private fun newToken(): String {
