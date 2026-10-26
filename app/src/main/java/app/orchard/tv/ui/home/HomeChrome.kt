@@ -527,7 +527,7 @@ fun ShelfClock(
     /** The screensaver is carrying Home's wallpaper on: the date and weather go before the time moves. */
     away: Boolean = false,
 ) {
-    val drift = if (saving) saverDrift(now) else DpOffset.Zero
+    val drift = heldDrift(saving, now)
     val shadow = Shadow(Color.Black.copy(alpha = 0.28f), Offset(0f, 2f), blurRadius = 18f)
     val dim = Color.White.copy(alpha = 0.72f)
     // Gone in the first 400 ms, while the time has barely set off (its 2 s ease-in-out). Fading
@@ -581,6 +581,18 @@ fun ShelfClock(
             }
         }
     }
+}
+
+/**
+ * How far the clock has wandered with the screensaver ([saverDrift]), held once it ends: the time
+ * goes back from where it was, the wander shrinking with the rest of the way ([toSaverClock]).
+ * Dropped at once on waking, the time jumped up to 24 dp in the first frame of its way back.
+ */
+@Composable
+private fun heldDrift(saving: Boolean, now: LocalDateTime): DpOffset {
+    var held by remember { mutableStateOf(DpOffset.Zero) }
+    if (saving) held = saverDrift(now)
+    return held
 }
 
 /** Inter's cap top below the top of a line of natural height, as a share of the font size. */
@@ -645,7 +657,7 @@ private fun conditionName(kind: WeatherKind): Int = when (kind) {
  */
 @Composable
 fun CornerClock(now: LocalDateTime, modifier: Modifier = Modifier, toSaver: () -> Float = { 0f }, saving: Boolean = false) {
-    val drift = if (saving) saverDrift(now) else DpOffset.Zero
+    val drift = heldDrift(saving, now)
     val dim = Color.White.copy(alpha = 0.92f)
     val shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 8f)
     Row(modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically) {
