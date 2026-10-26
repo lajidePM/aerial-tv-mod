@@ -6,6 +6,7 @@ import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -24,6 +25,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import app.orchard.tv.MainActivity
@@ -110,7 +112,8 @@ class HomeGuardService : AccessibilityService() {
             // Its home screen only, as for window changes: PatchWall's children's mode, opened
             // from its tile, is in the same package and stays.
             val (pkg, cls) = window
-            if (cls !in stockHomes[pkg].orEmpty()) return
+            val bootCover = pkg == PATCHWALL && cls == PATCHWALL_BOOT && SystemClock.elapsedRealtime() < BOOT_WINDOW_MS
+            if (cls !in stockHomes[pkg].orEmpty() && !bootCover) return
             foregroundTakenAt = at
             if (SystemClock.uptimeMillis() - broughtBackAt < 1_000) return
             Log.i(TAG, "stock launcher $pkg in front by usage stats; bringing Aerial back")
@@ -152,6 +155,20 @@ class HomeGuardService : AccessibilityService() {
 
     /** Whether any window change has reached this binding. */
     private var sawEvent = false
+
+    /**
+     * Whether another enabled service filters keys without being marked default (flagDefault), up
+     * to Android 6. There a key goes to one service only: AccessibilityManagerService
+     * .notifyKeyEventLocked walks the bound services from the one bound last and hands the key to
+     * the first that filters keys, first among the services not marked default, then among those
+     * that are; a key that service lets go goes back to the system, not to the next one. Read from
+     * the services.jar of Mi TV 4 (MiTV4 pulpfiction, Android 6.0.1, firmware 9.1.8.2318), where
+     * Xiaomi's voice microphone service (小米语言麦克风, com.xiaomi.mitv.karaoke.service) filters
+     * keys too: marked default, the guard never got a key and Home went to PatchWall (issue #81).
+     * Not marked, it got every key there in 8 boots: started with the others, its process connects
+     * last and so is bound last.
+     */
+    private val keyFilterRival by lazy { keyFilterRival() }
 
     /**
      * On the same Mi TV 4 the guard bound at boot is sometimes deaf: bound, yet no window change
@@ -503,11 +520,27 @@ class HomeGuardService : AccessibilityService() {
         val homeWanted = wanted && !isDefaultHome()
         val cecWanted = !screenOff && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
-        val want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
+        var want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
+        if (keyFilterRival) want = want and AccessibilityServiceInfo.DEFAULT.inv()
         if (want == info.flags) return
         info.flags = want
         serviceInfo = info
         Log.i(TAG, if (want and flag != 0) "filtering keys" else "stopped filtering keys")
+    }
+
+    private fun keyFilterRival(): Boolean {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.M) return false
+        val me = ComponentName(this, HomeGuardService::class.java)
+        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+            .split(':').mapNotNull { ComponentName.unflattenFromString(it) }.toSet()
+        val installed = getSystemService<AccessibilityManager>()?.installedAccessibilityServiceList.orEmpty()
+        return installed.any { info ->
+            val name = ComponentName.unflattenFromString(info.id)
+            name != me && name in enabled &&
+                info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0 &&
+                info.flags and AccessibilityServiceInfo.DEFAULT == 0 &&
+                info.capabilities and AccessibilityServiceInfo.CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS != 0
+        }
     }
 
     /**
@@ -962,6 +995,14 @@ class HomeGuardService : AccessibilityService() {
         private const val DOUBLE_HOME_MS = 400L
         /** Android's hold on app starts after Home (stopAppSwitches), with a margin. */
         private const val APP_SWITCH_HOLD_MS = 5_500L
+        private const val PATCHWALL = "com.mitv.tvhome"
+        /**
+         * PatchWall's boot cover, which comes up over Aerial some 20 s into a boot and is no home
+         * activity. Taken over from usage stats in the boot window, at the next poll instead of at
+         * the boot recheck: 19.7 s of it before, 1.0 s with this (MiTV4 pulpfiction, Android 6.0.1;
+         * the class is the one usage stats record at every boot there).
+         */
+        private const val PATCHWALL_BOOT = "com.mitv.tvhome.BootActivity"
         /** Hisense VIDAA's launcher, invisible to window changes; see foregroundCheck. */
         private const val VIDAA_LAUNCHER = "com.jamdeo.tv.vod"
         /** Actions the firmware's own task centre answers, tried in order before SystemUI's recents. */
