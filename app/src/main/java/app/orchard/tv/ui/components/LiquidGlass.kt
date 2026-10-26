@@ -26,13 +26,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Paint as ComposePaint
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -80,39 +81,54 @@ fun Modifier.liquidGlass(corner: Dp, bottomCorners: Boolean = true): Modifier = 
             val mask = smoothMask(w, h, radius, if (bottomCorners) radius else 0f)
             val brush = shader?.let { ShaderBrush(it) }
             val flat = mask.asImageBitmap()
+            // The glass in a layer the GPU keeps: drawn again only when it moves or its picture
+            // fades, not with every frame of what lies on it. Drawn each frame, the Personalize
+            // sheet cost MiTV-MFTR0's GPU about 29 ms a frame while focus moved along its cards.
+            val glass = obtainGraphicsLayer().apply { compositingStrategy = CompositingStrategy.Offscreen }
+            var drawnAt: Offset? = null
+            var drawnRoot = IntSize.Zero
+            var drawnT = -1f
             onDrawBehind {
                 if (shader == null || brush == null || root == IntSize.Zero) {
                     drawImage(flat, dstSize = IntSize(w, h), colorFilter = ColorFilter.tint(Palette.Glass))
+                    drawGlassEdge(size, radius, bottomCorners)
                 } else if (AerialSettings.lite) {
                     // Lite (AerialSettings.lite): one solid color, the frosted wallpaper's average as
                     // the glass would dim it, without the layer the glass needs every frame, which
                     // weak GPUs feel most while a panel slides in. Solid: the plain glass color is
                     // see-through and showed the tiles under the Personalize sheet.
                     drawImage(flat, dstSize = IntSize(w, h), colorFilter = ColorFilter.tint(liteGlass(frost)))
+                    drawGlassEdge(size, radius, bottomCorners)
                 } else {
-                    fun place(s: BitmapShader, image: ImageBitmap) = s.setLocalMatrix(Matrix().apply {
-                        setScale(root.width.toFloat() / image.width, root.height.toFloat() / image.height)
-                        postTranslate(-at.x, -at.y)
-                    })
-                    place(shader, frost)
                     val t = swap()
-                    // The outline is drawn first in a layer of the panel's size and the glass kept
-                    // where it lies. One shader per draw: a ComposeShader of the glass and the mask
-                    // (1.27-1.30) came out an opaque dark slab on Xiaomi MiTV-ASTP0 (Android 9,
-                    // Mali-G31), and before Android 9 hardware drawing cannot compose two bitmaps.
-                    drawContext.canvas.saveLayer(Rect(Offset.Zero, size), ComposePaint())
-                    drawImage(flat, dstSize = IntSize(w, h))
-                    if (underShader != null && under != null && t < 1f) {
-                        // A new frosted picture fades in over the old within the outline.
-                        place(underShader, under)
-                        drawRect(ShaderBrush(underShader), colorFilter = PanelTint, blendMode = BlendMode.SrcIn)
-                        drawRect(brush, alpha = t, colorFilter = PanelTint, blendMode = BlendMode.SrcAtop)
-                    } else {
-                        drawRect(brush, colorFilter = PanelTint, blendMode = BlendMode.SrcIn)
+                    if (drawnAt != at || drawnRoot != root || drawnT != t) {
+                        drawnAt = at
+                        drawnRoot = root
+                        drawnT = t
+                        fun place(s: BitmapShader, image: ImageBitmap) = s.setLocalMatrix(Matrix().apply {
+                            setScale(root.width.toFloat() / image.width, root.height.toFloat() / image.height)
+                            postTranslate(-at.x, -at.y)
+                        })
+                        place(shader, frost)
+                        // The outline is drawn first in the layer and the glass kept where it lies.
+                        // One shader per draw: a ComposeShader of the glass and the mask (1.27-1.30)
+                        // came out an opaque dark slab on Xiaomi MiTV-ASTP0 (Android 9, Mali-G31),
+                        // and before Android 9 hardware drawing cannot compose two bitmaps.
+                        glass.record(this, layoutDirection, IntSize(w, h)) {
+                            drawImage(flat, dstSize = IntSize(w, h))
+                            if (underShader != null && under != null && t < 1f) {
+                                // A new frosted picture fades in over the old within the outline.
+                                place(underShader, under)
+                                drawRect(ShaderBrush(underShader), colorFilter = PanelTint, blendMode = BlendMode.SrcIn)
+                                drawRect(brush, alpha = t, colorFilter = PanelTint, blendMode = BlendMode.SrcAtop)
+                            } else {
+                                drawRect(brush, colorFilter = PanelTint, blendMode = BlendMode.SrcIn)
+                            }
+                            drawGlassEdge(size, radius, bottomCorners)
+                        }
                     }
-                    drawContext.canvas.restore()
+                    drawLayer(glass)
                 }
-                drawGlassEdge(size, radius, bottomCorners)
             }
         }
 }
