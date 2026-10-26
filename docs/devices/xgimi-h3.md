@@ -17,4 +17,11 @@
 
 ADB 打开之后，按仓库的正常流程安装即可。这次实测装上的是 Aerial 1.57 (69) `standard`，可以正常使用。
 
-开机后是否自动回到 Aerial、屏保接管、长按 Home 的行为，这次没有单独测量，不要沿用 Z7X 笔记里的那些结论。`ro.config.low_ram=true`，但是否因此走了「流畅」效果，这次也没有单独确认。
+## 开机与屏保
+
+与 [Z7X](xgimi-z7x.md) 在 1.22 修好之后的行为一致（本次是 1.57，不是 1.19 / 1.20）：
+
+- 重启后先显示极米桌面，几秒后自动切到 Aerial，不用按键。
+- `screensaver_enabled=1` 时，屏保接管为 `app.orchard.tv/app.orchard.tv.dream.AerialDream`。
+
+Z7X 笔记里的黑屏个例、长按 Home 和 logcat 限制，这次没有单独记录。`ro.config.low_ram=true`，但是否因此走了「流畅」效果，也没有单独确认。
