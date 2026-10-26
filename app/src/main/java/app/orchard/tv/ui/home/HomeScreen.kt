@@ -11,6 +11,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -157,6 +158,12 @@ private class GridMetrics(screenW: Dp, screenH: Dp, oneRow: Boolean, plateNames:
     /** Where a row rests once you go down into the grid: the row above stays in view. */
     val restY = screenH * 0.37f
     val screenH = screenH
+
+    /**
+     * How far Home lifts, still on its shelf, for the second row in two-row mode: enough that the
+     * focused app's name, in the gap under its row, clears the bottom edge.
+     */
+    val shelfLift = (topRowY + firstGap + pitchY * 2 + 12.dp - screenH).coerceAtLeast(0.dp)
 
     fun slot(index: Int, onTop: Boolean): Pair<Dp, Dp> {
         val row = index / COLUMNS
@@ -410,6 +417,10 @@ fun HomeScreen(
         val rows = (apps.size + COLUMNS - 1) / COLUMNS
         // With a single row of apps the two-row layout would leave the bottom of the screen empty.
         val oneRow = AerialSettings.oneRowHome || rows <= 1
+        // In two rows the second is on screen already: down to it stays on the shelf, under the
+        // same picture and plate, and only the row after it goes into the grid (issue #633: the
+        // grid's frosted picture flashed up on the way to an app in the second row).
+        val inGrid = focusedRow >= if (oneRow) 1 else 2
         // With every name shown, the top row's go on its glass plate, which grows to hold them.
         val plateNames = AerialSettings.showAllNames && AerialSettings.homePlate
         val peek = AerialSettings.peekNextRow
@@ -419,7 +430,11 @@ fun HomeScreen(
         }
         val collapsePx = with(density) { (metrics.topRowY - metrics.restY).toPx() }
 
-        val target = with(density) { metrics.scrollFor(focusedRow, rows).toPx() }
+        val target = with(density) { metrics.scrollFor(if (inGrid) focusedRow else 0, rows).toPx() }
+        val lift by animateFloatAsState(
+            with(density) { if (focusedRow > 0 && !inGrid) metrics.shelfLift.toPx() else 0f },
+            if (reduced) snap() else spring(dampingRatio = 1f, stiffness = 280f), label = "shelf-lift",
+        )
         val maxScroll = with(density) { metrics.scrollFor(rows - 1, rows).toPx() }.coerceAtLeast(0f)
         LaunchedEffect(maxScroll) { scroll.updateBounds(0f, maxScroll) }
         val pastShelf by remember(collapsePx) { derivedStateOf { scroll.value > collapsePx / 2 } }
@@ -548,6 +563,7 @@ fun HomeScreen(
                 saverImage = saverImage,
                 saverReveal = { saverReveal.value },
                 saverPush = { saverPush.value },
+                lift = { lift },
             )
 
             // Before Android 7 there is no picture of Home under Control Center (issue #466), so the
@@ -595,7 +611,7 @@ fun HomeScreen(
                 val hideBelow = oneRow && !peek
                 apps.forEachIndexed { index, app ->
                     key(app.key) {
-                        val (x, y) = metrics.slot(index, onTop = focusedRow <= 0)
+                        val (x, y) = metrics.slot(index, onTop = !inGrid)
                         val slotPx = with(density) { IntOffset(x.roundToPx(), y.roundToPx()) }
                         val slot = animateIntOffsetAsState(
                             slotPx,
@@ -643,7 +659,8 @@ fun HomeScreen(
                                 }
                             },
                             modifier = Modifier
-                                .offset { slot.value }
+                                // Lifted on the shelf with the plate; the clock above stays put.
+                                .offset { slot.value - IntOffset(0, lift.roundToInt()) }
                                 .then(
                                     if (hideBelow && index >= COLUMNS) Modifier.graphicsLayer {
                                         alpha = (scroll.value / collapsePx * 2.5f).coerceIn(0f, 1f)
@@ -707,7 +724,7 @@ fun HomeScreen(
             StatusPill(
                 now = now,
                 network = vm.network,
-                showTime = if (dragged) pastShelf else focusedRow > 0,
+                showTime = if (dragged) pastShelf else inGrid,
                 enabled = gridEnabled && moving == null,
                 focusRequester = pillRequester,
                 modifier = Modifier.graphicsLayer {
