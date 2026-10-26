@@ -96,4 +96,4 @@ HTTP 服务日志里完全没有来自电视的请求（本机 macOS 防火墙�
 
 - `wm size` 是 1920×1080 / 320dpi，`dumpsys display` 的 real 也是 1920×1080，`ro.odm.tcl.panel_resolution` = 3840x2160，`ro.feature.graphics_4kui=true`。
 - TCL 自家桌面 `com.tcl.cyberui` 拿到 3840×2160 的缓冲加 0.5 的图层缩放，HWC 1:1 送显；第三方（Aerial）是 1080p 缓冲被放大，文字发虚。`framework.jar` 里有 `isUhdActivity` / `updateUhdActivityList`、`TCL_4KUI_WINDOW_SCALE` 等，像是系统服务按名单给窗口下发 4K 缓冲。`wm size 3840x2160` 和 `display_size_forced` 都被框架拦掉。
-- 显示模式是 1080p，所以 1.51 的 4K 画布（`UhdCanvas`）不会自动打开；`--ez uhd_canvas true` 强制打开时用 `panel_resolution` 算出 2 倍。HWC 会不会像对 TCL 桌面那样把这一层 1:1 送到面板，待作者实测；名单接口能否给第三方用，待看 framework.jar / services.jar。
+- 显示模式是 1080p，所以 1.51 的 4K 画布（`UhdCanvas`）不会自动打开。之后改成按 `ro.feature.graphics_4kui` 判断（#645），面板尺寸用 `panel_resolution` 算出 2 倍，这台会自动打开；`--ez uhd_canvas false` 可关。HWC 会不会像对 TCL 桌面那样把这一层 1:1 送到面板，待作者实测；名单接口能否给第三方用，待看 framework.jar / services.jar。

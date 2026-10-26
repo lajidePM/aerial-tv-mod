@@ -37,15 +37,16 @@ import kotlin.math.roundToInt
  * buffer's pixels, twice too big. [FilmSlot] keeps it in the window, under the UI's surface, where
  * the slot is laid out.
  *
- * On by itself where the display's mode is at least twice the UI (a 4K mode under a 1080p UI, the
- * way Android TV's config_maxUiWidth leaves it: TCL 85T5M Plus #483, Redmi projector 5 Pro #504,
- * Tencent Aurora 7S #269, Skyworth 75A6E #365 report that). There the system already composes at
- * 4K, so the buffer reaches the panel as it is. Android 10+ (a public HardwareRenderer). If Home
- * then keeps missing frames because of it, the next start draws at the UI's size again ([Pace]).
- * ConfigReceiver `--ez uhd_canvas true|false` forces it either way, `--es uhd_canvas auto` goes
- * back to deciding; forcing it on also counts TCL's panel property (75Q10L, #607, not yet tried).
+ * On by itself only where the chip declares a 4K UI plane (`ro.feature.graphics_4kui`, MT9655
+ * builds) and the panel is at least twice the UI. A 4K display mode under a 1080p UI is not enough:
+ * 1.51 went by that and Sony X90K (MT5895, #645) dropped frames in Control Center and showed the
+ * 4K screensaver shrunk into the top-left corner, since its UI plane stays 1080p and 4× the pixels
+ * bought nothing. Android 10+ (a public HardwareRenderer). If Home then keeps missing frames
+ * because of it, the next start draws at the UI's size again ([Pace]). ConfigReceiver
+ * `--ez uhd_canvas true|false` forces it either way, `--es uhd_canvas auto` goes back to deciding;
+ * TCL's panel property counts for the panel's size (75Q10L, #607, not yet tried).
  * Verified on emulators: a 3840×2160 phone image with `wm size 1920x1080`, and a 3840×2160
- * Google TV image (its 1920 UI limit). Not yet on a TV.
+ * Google TV image (its 1920 UI limit), both forced on. Not yet on a TV.
  */
 object UhdCanvas {
     @Volatile private var known: Float? = null
@@ -71,7 +72,11 @@ object UhdCanvas {
         val display = context.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY) ?: return no("no display")
         val ui = context.resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
         val mode = maxOf(display.mode.physicalWidth, display.mode.physicalHeight)
-        val panel = if (forced == true) maxOf(mode, tclPanel()) else mode
+        // A 4K mode alone says nothing about the UI: most TV chips compose the UI on a 1080p
+        // graphics plane and only send video at 4K. Unless forced, only a chip that says it has a
+        // 4K UI plane gets it.
+        if (forced == null && !chipHas4kUi()) return no("auto: no 4K UI plane (mode $mode for a $ui UI)")
+        val panel = maxOf(mode, tclPanel())
         // Only whole steps up: a panel barely bigger than the UI gains nothing for 4× the pixels.
         if (ui <= 0 || panel < ui * 2) return no("mode $mode for a $ui UI")
         why = "${if (forced == true) "forced" else "auto"}: $panel for a $ui UI"
@@ -91,11 +96,16 @@ object UhdCanvas {
     private const val SLOW = "slow"
     private const val SLOW_WHY = "slow_why"
 
+    // MT9655 (Pentonic 800) builds declare their 4K UI plane: TCL 75Q10L has
+    // ro.feature.graphics_4kui=true (#607). MT5895 (Sony X90K, #645) and MT9653 have none.
+    private fun chipHas4kUi(): Boolean = systemProperty("ro.feature.graphics_4kui") == "true"
+
     // TCL reports a 1920×1080 mode on its 4K panels and names the panel in a property (75Q10L, #607).
-    private fun tclPanel(): Int = runCatching {
-        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java)
-            .invoke(null, "ro.odm.tcl.panel_resolution") as String
-    }.getOrNull()?.substringBefore('x')?.toIntOrNull() ?: 0
+    private fun tclPanel(): Int = systemProperty("ro.odm.tcl.panel_resolution")?.substringBefore('x')?.toIntOrNull() ?: 0
+
+    private fun systemProperty(key: String): String? = runCatching {
+        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, key) as String
+    }.getOrNull()
 
     /** The activity's content view: [content] laid out in the window, drawn at [scale]. */
     @RequiresApi(29)
