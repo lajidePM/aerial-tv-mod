@@ -300,6 +300,14 @@ class HomeGuardService : AccessibilityService() {
      * process, which is what brought the events back there (Aerial started by hand did too).
      */
     private val frontAfterHome = Runnable {
+        // XGIMI (Android 9, m7642) answers Home with its own Home chooser when set-home-activity did
+        // not take; it was never drawn and the remote went dead over it (issue #44). Only right
+        // after Home: the same chooser also serves apps' "open with".
+        lastWindow?.takeIf { it.first == XGIMI_FRAMEWORK && it.second.endsWith(".resolver.ResolverActivity") }?.let {
+            Log.i(TAG, "Home pressed and XGIMI's Home chooser came up; bringing Aerial back")
+            goHome()
+            return@Runnable
+        }
         if (windowsSeen != windowsAtHome) return@Runnable
         val front = frontByUsage() ?: return@Runnable
         if (front.first !in stockHomes) return@Runnable
@@ -1054,6 +1062,7 @@ class HomeGuardService : AccessibilityService() {
         private const val DEAF_AFTER_MS = 20_000L
         /** How long a stock launcher's window change may take to arrive after Home (see frontAfterHome). */
         private const val FRONT_AFTER_HOME_MS = 1_500L
+        private const val XGIMI_FRAMEWORK = "com.xgimi.xgimiframeworkui"
         private const val FOREGROUND_POLL_MS = 1_000L
         private const val FOREGROUND_LOOKBACK_MS = 10_000L
         /** How far back to look for the front when no window has been seen; see frontByUsage. */
