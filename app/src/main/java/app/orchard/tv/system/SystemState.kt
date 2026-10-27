@@ -72,11 +72,20 @@ object SystemProbe {
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
             !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
         ) {
-            caps = runCatching { cm.allNetworks.mapNotNull { cm.getNetworkCapabilities(it) } }.getOrDefault(emptyList())
-                .firstOrNull {
-                    !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
-                        (it.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))
-                } ?: caps
+            @Suppress("DEPRECATION")
+            val physicalNetworks = runCatching { cm.allNetworks }.getOrDefault(emptyArray()).mapNotNull { network ->
+                runCatching {
+                    cm.getNetworkCapabilities(network)?.takeIf {
+                        !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                            (it.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) &&
+                            cm.getNetworkInfo(network)?.isConnected == true
+                    }
+                }.getOrNull()
+            }
+            // Match the display priority below, independent of enumeration order. This does not
+            // identify the VPN's actual uplink when both physical transports are connected.
+            caps = physicalNetworks.firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) }
+                ?: physicalNetworks.firstOrNull() ?: caps
         }
         return when {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkStatus(NetKind.Ethernet)
