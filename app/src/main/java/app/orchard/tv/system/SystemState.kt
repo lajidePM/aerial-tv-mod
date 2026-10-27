@@ -426,11 +426,9 @@ object SystemProbe {
     /** CEC logical-device placeholders some input services report instead of the device's name. */
     private val GENERIC_CEC_NAME = Regex("^(Playback|Recorder|Tuner|Audio ?System|Audio|TV|Reserved)[ _]?\\d*$", RegexOption.IGNORE_CASE)
 
-    /**
-     * Physical inputs from the TV input framework, routed through the maker's own player where the
-     * generic passthrough intent has no handler (Xiaomi's China firmware).
-     */
+    /** Lists framework inputs first, then known manufacturer-specific input integrations. */
     fun sources(context: Context): List<TvSource> = frameworkSources(context)
+        .ifEmpty { XgimiMstarSources.load(context) }
         .ifEmpty { xiaomiSources(context) }
         .ifEmpty { KonkaSources.load(context) }
         .ifEmpty { tclSources(context) }
