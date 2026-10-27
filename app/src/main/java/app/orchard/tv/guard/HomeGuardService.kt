@@ -272,13 +272,45 @@ class HomeGuardService : AccessibilityService() {
             if (SystemClock.uptimeMillis() - ownHomeAt < OWN_HOME_MS) return
             if (backOnPause) noteHomeInAerial()
             val front = lastWindow?.first
-            if (front != null && front !in stockHomes) return
+            if (front != null && front !in stockHomes) {
+                windowsAtHome = windowsSeen
+                handler.removeCallbacks(frontAfterHome)
+                handler.postDelayed(frontAfterHome, FRONT_AFTER_HOME_MS)
+                return
+            }
             // The stock launcher's window change usually comes first and already brought Aerial
             // back; starting it again redid Home's resume (MiTV-MFTR0: 0.2 s apart).
             if (SystemClock.uptimeMillis() - broughtBackAt < 1_000) return
             Log.i(TAG, "Home pressed with ${front ?: "an unknown app"} in front; bringing Aerial back")
             allowStockUntil = 0L
             goHome()
+        }
+    }
+
+    private var windowsSeen = 0L
+    private var windowsAtHome = 0L
+    private var deafAfterHomeRestarted = false
+
+    /**
+     * Home pressed in another app, and no window change since: the guard may have gone deaf. On
+     * Xiaomi Box 5 Max (MiTV-AZFU0, Android 14) it did after Xiaomi Weather or Mi Home had been
+     * open, and stayed so: the last window it had seen was the app's, so Home in it left PatchWall
+     * in front, and so did Home in every app after (issue #651). Usage stats still see PatchWall
+     * come to the front; then Aerial comes back, and accessibility is switched off and on once per
+     * process, which is what brought the events back there (Aerial started by hand did too).
+     */
+    private val frontAfterHome = Runnable {
+        if (windowsSeen != windowsAtHome) return@Runnable
+        val front = frontByUsage() ?: return@Runnable
+        if (front.first !in stockHomes) return@Runnable
+        Log.i(TAG, "Home pressed, no window change since, and usage stats say ${front.first} is in front; bringing Aerial back")
+        lastWindow = front
+        allowStockUntil = 0L
+        goHome()
+        if (!deafAfterHomeRestarted) {
+            deafAfterHomeRestarted = true
+            Log.i(TAG, "no window change for that; switching accessibility off and on")
+            GuardSetup.restartAccessibility(this)
         }
     }
 
@@ -789,6 +821,7 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         sawEvent = true
+        windowsSeen++
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val cls = event.className?.toString() ?: return
@@ -1019,6 +1052,8 @@ class HomeGuardService : AccessibilityService() {
         private const val WAKE_WINDOW_MS = 15_000L
         private val BOOT_RECHECKS_MS = listOf(30_000L, 45_000L)
         private const val DEAF_AFTER_MS = 20_000L
+        /** How long a stock launcher's window change may take to arrive after Home (see frontAfterHome). */
+        private const val FRONT_AFTER_HOME_MS = 1_500L
         private const val FOREGROUND_POLL_MS = 1_000L
         private const val FOREGROUND_LOOKBACK_MS = 10_000L
         /** How far back to look for the front when no window has been seen; see frontByUsage. */
