@@ -341,7 +341,12 @@ private fun AerialSaver(
         if (first != null) listOf(first) + (all - first) else AerialStream.withOpenerFirst(context, all, quality)
     }
     val firstAtMs = remember { startAt?.takeIf { (id, _) -> films.first().id == id }?.second ?: 0L }
-    val player = remember { AerialStream.player(context, quality) }
+    val player = remember { AerialStream.player(context, quality, decodeOnScreen = true) }
+    // Over Home's picture the film's surface waits until Home's clock is in the corner: the surface
+    // clears the window's pixels under it, Home's clock with them, and from then on the
+    // screensaver's own time stands where that clock came to rest. The film loads meanwhile but
+    // waits for the surface to move, so its decoder starts on it (AerialStream.player).
+    var surfaced by remember { mutableStateOf(over == null) }
     var index by remember { mutableIntStateOf(0) }
     var failures by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf(false) }
@@ -359,7 +364,7 @@ private fun AerialSaver(
     fun load(at: Int, fromMs: Long = 0L) {
         player.setMediaItems(films.map { AerialStream.mediaItem(it, quality, aerialsOverHttp) }, at, fromMs)
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = surfaced
     }
 
     fun skip(step: Int) {
@@ -460,15 +465,12 @@ private fun AerialSaver(
         if (playing) AerialStream.prepareOpener(context, films, film, quality, aerialsOverHttp)
     }
 
-    // Over Home's picture the film's surface waits until Home's clock is in the corner: the surface
-    // clears the window's pixels under it, Home's clock with them, and from then on the
-    // screensaver's own time stands where that clock came to rest.
-    var surfaced by remember { mutableStateOf(over == null) }
     var veilPush by remember { mutableStateOf<Float?>(null) }
     LaunchedEffect(over) {
         if (over == null) return@LaunchedEffect
         delay(CARRY_MS)
         surfaced = true
+        player.playWhenReady = true
     }
     // From the surface on, the veil below draws Home's picture where Home did, and Home's own stops:
     // Home's picture is drawn in a layer of its own that the film's surface does not clear, so
