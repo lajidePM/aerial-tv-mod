@@ -1078,6 +1078,9 @@ class HomeGuardService : AccessibilityService() {
          * them for an app the viewer had opened. Panasonic DX01C (Skyworth-made, Tianci, Android 6)
          * starts this one from /system/pcfg's DEFAULT_HOMEPAGE, and it declares only the private
          * action com.skyworth.home.neo, which left it in front at power-on and on the Home key.
+         * E900V21F's LeJia is here for the other reason: it does declare CATEGORY_HOME, but the
+         * firmware keeps Home candidates out of a third-party caller's query, so that query does
+         * not return it either.
          */
         private val FIRMWARE_HOMES_WITHOUT_FILTER = mapOf(
             "com.skyworth.panasonichome" to listOf("com.skyworth.panasonichome.MainActivity"),
@@ -1088,6 +1091,13 @@ class HomeGuardService : AccessibilityService() {
             // What Tianci shows as its home, named only in persist.service.homepage.cls; the
             // package's HOME.CC is on MainActivity (Skyworth 7S70_A9, Android 8, issues #106 #461).
             "com.tianci.movieplatform" to listOf("com.coocaa.homepage.vast.HomePageActivity"),
+            // China Mobile "Mobile HD Box 6" 2024 (Skyworth E900V21F, S905L3S, Android 9): the
+            // firmware starts LeJia's DesktopActivity by component at power-on and on the Home
+            // key. It declares CATEGORY_HOME, but queryIntentActivities(HOME) from a third-party
+            // process returns nothing (the firmware filters Home candidates by signature), so
+            // resolve-activity stays on FallbackHome and set-home-activity rejects Aerial with
+            // "cannot be home". Verified on device; dumpsys and logs in the linked issue.
+            "com.mylejia.launcher" to listOf("com.mylejia.launcher.activity.DesktopActivity"),
         )
 
         /**
