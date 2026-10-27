@@ -2,14 +2,19 @@
 
 写给接手 Aerial 的人或 AI。先读这份，再读 [ARCHITECTURE.md](ARCHITECTURE.md) 和 [devices/](devices/)。
 
-## 现状（2026-10-26）
+## 现状（2026-10-27）
 
+- **1.59（versionCode 71）+ Aerial Lite 1.0（第一版，测试版）**：发版前必须在小米 MFTR0 和 TCL MT5879 上都测完（户主要求）。
+  - 适配流程（户主要求「让用户通过 Agent、按钮或 ADB 方便地适配」）：机型修正从 `SystemState` 里的 `when (Build.MODEL)` 搬到 `assets/devices.json`（`DeviceProfile`，`DeviceProfileTest` 逐条核对和旧表一致），`Brightness` / `MitvPanel` 的 MFTP0 名单变成 `ignoresPictureBacklight`；这台电视自己的修正可以覆盖内置的（控制中心「校正信号源」、`ConfigReceiver device_profile`），诊断报告输出 JSON。`ConfigReceiver` 加 `list_sources`、`open_source`。新 `tools/selftest.sh`（deploy-site 会复制到官网）、`site/adapt.md` / `site/en/adapt.md`（Agent 适配说明）。手机页「去 GitHub 反馈」预填型号、版本、修正并复制诊断。issue 模板加 Agent 入口和 `profile` 字段，`config.yml` 加适配入口；官网加「适配」一节，README 加「装好了，但有地方不对？」。详见 ARCHITECTURE「机型修正」。
+  - Lite：`install.sh` 在 Android 4.x 上自动装 Lite（`bash -s lite` 指定），`restore.sh --uninstall` 也卸载它；官网安装区加「Android 4.x」标签，README 加 Lite 一节，都注明第一版、测试版、只适配 4.0–4.4。Release 多一个 `aerial-lite.apk`。
+  - 小米 MFTR0 上测过：内置修正和旧代码一致（HW8 隐藏、调谐器改名）；`device_profile` 覆盖、非法 JSON 不保存、`list_sources`、`open_source`（小米播放器按覆盖的编号打开）；校正页：隐藏 / 取消隐藏、改名、换编号后马上用新编号打开播放器、按主页键回到校正页、恢复默认（户主的电视已恢复为内置修正）；`selftest.sh`（含 `curl | bash` 方式和 `INPUTS=1` 逐个打开 7 个信号源）；`install.sh lite`（用 `-Pnohome` 测试包）装上 Lite，首页、控制中心正常。TCL MT5879 上：多屏互动装上 1.59-guard，自检 guard、主页键通过，`INPUTS=1` 逐个打开 TCL 的 7 个信号源。`STANDBY=1` 让 TCL 进了待机，这台待机时网络休眠，ADB 唤不醒，要遥控器开机。
+  - 自检脚本修过的坑：`adb shell` 会读走 `curl | bash` 的脚本剩余部分（全部加 `</dev/null`）；守护对主页键的响应比 Aerial 回到前台晚一两秒，会盖住下一个打开的 App（每步之间等 3 秒）；TCL 的设置不是独立 Activity（改开应用列表里的一个 App）；`adb connect` 连休眠的电视要卡一分多钟（perl alarm 限时）。
 - **未发布（1.58，versionCode 70，2026-10-27）**：合并 PR #689（点「原桌面」磁贴时守护自己按的 Home 产生的 `homekey` 广播 1.5 秒内忽略，#680）、#708（Android 6 小米有不带 `flagDefault` 的按键过滤服务时守护也去掉这个标记；开机 3 分钟内用量统计认 `BootActivity`，#81）、#693（Android 6 外部缓存不可写时申请存储权限再下载更新，#592）。自己改的：开机复查时如果最后一个窗口是 Aerial 但主页没有 resume，并且用量统计里最新到前台的是原桌面的主页 Activity，就拉回（`coveredAerial`，只在开机复查用，#704 MiTV-MTEQ0 开机后 PatchWall 静默盖上）；状态胶囊按下键回到上来前的第一排磁贴（#703）；创维 sky848_9s60 固件分界写进机型笔记（#713）。TCL MT5879 上用多屏互动装 1.58-guard 测过：App 里按 Home 回到 Aerial、胶囊上下焦点、重启后两次开机复查都是「Aerial 在前，不动」，walleve 两个服务保留；模拟器（GoogleTV，Android 13）上测过「原桌面」磁贴停在原桌面、按 Home 回到 Aerial。小米 MFTR0（Android 14，standard）上测过：设置页按 Home 回到 Aerial；胶囊上下焦点回到原磁贴；「系统应用」文件夹里的「桌面」磁贴打开 PatchWall 后 10 秒不被拉回、再按 Home 回到 Aerial（#680 的路径）；重启后开机停在 HDMI 不动，22 秒后 PatchWall 冒出来被拉回，两次开机复查都是「Aerial 在前，不动」。#704 的静默覆盖 MFTR0 上不出现，只验证了不误拉；#708、#693 只在 Android 6 生效，MFTR0 上不走这两条路径，等 MTEQ0 / MiTV4 报告人确认。
 - **未发布（#659）**：① 屏保「视频」放完一遍就退回照片（Sony 85X95EK 报告，户主照片 / 每日一图看着像航拍）。`VideoSaver` 8 秒没出画面就把这段移出队列、只剩一段时退回照片；循环（REPEAT）时有的电视不再报 `onRenderedFirstFrame`，就被当成卡住。现在本次屏保里出过画面的片子不再因为卡住被移除（`shown`），REPEAT 也不再清 `playing`。小米 MFTR0 每次循环都会报第一帧，复现不了；用临时诊断包模拟「循环不报第一帧」，旧代码 15 秒片子第二遍 8 秒处切成照片，新代码记 `kept` 接着循环；正式包 15 秒片子连放 3 遍正常。Sony 上没验证。② 航拍壁纸一直播放（户主要求）：第一排上马上播、按键不停，进网格停（`Wallpapers.keepsMoving`）；「静止时 / 一直」只在「我的视频」壁纸时显示（电视和手机页）。小米上临时关掉户主的「一直」测过：回到第一排约 0.2 秒开播，左右键不停；测完改回打开。测试视频按 id 删掉，屏保改回航拍；小米音量户主要求调到 0（原来 19），没改回。
 - **1.57（versionCode 69），2026-10-26 发布**：红米投影仪 4 / 5 Pro（ASU mt5873，Android 13）从 1.47 起重启后永久卡开机动画（不通网、ADB 连不上，只能恢复出厂，#684 #688；1.36、1.46 正常）。推断的原因：1.42 起 `MainActivity` 支持 Direct Boot，解锁前顶替了系统的 FallbackHome；1.42–1.46 守护在解锁前读 CE 存储必崩（1.47 修掉），进程一死这条路径实际没生效。这台的 FallbackHome 是固件自己的 `com.asu.settings.FallbackHome`，开机流程看来要靠它。现在解锁前如果 HOME 候选里有厂商自己的 FallbackHome（类名不是 AOSP 的 `com.android.settings.FallbackHome` / `com.android.tv.settings.system.FallbackHome`），`MainActivity` 打开它并 finish，解锁后照旧由守护 / BootReceiver 拉回（`handOverToFirmwareFallbackHome`，每个进程一次，打不开就照旧显示锁定壁纸）。小米电视的 `com.xiaomi.mitv.settings.entry.FallbackHome` 也会交出去。**没有 mt5873 真机**；只在 GoogleTV 模拟器（Android 13）上用临时把 AOSP 也算进去的测试包走过交接：FallbackHome → 原桌面 → BootReceiver 约 3 秒后拉回 Aerial，开机完成；正式包在模拟器上仍走锁定壁纸。已在两个 issue 请报告人确认能进 recovery 后再试。
 - **1.56（versionCode 68），2026-10-26 发布**：
   - 个性化去掉「App 图标：精选图 / App 自带」（户主决定）：有精选图的 App 一律用精选图，单个 App 在手机页点图标单独选（`IconLibrary.uses` 不选就是精选图）。原因是这个总开关在小米 MFTR0 上看着「没反应」：这台只有 3 个 App 有精选图，其中云视听极光、银河奇异果以前在手机页单独选过「App 自带」（单独选择优先），第一排看不出变化。户主那两个单独选择没动。以前关掉总开关的用户（比如 #654 的报告人）升级后会改用精选图。
-  - #654 新线索（报告人 1.54 诊断）：按返回那一刻没有 `drawn before its face`，1.54 的猜测不成立；只在航拍 / 视频壁纸播放时出现，静态壁纸正常。MFTR0、TCL MT5879、deepfry666 的模拟器都复现不了。现在怀疑 Novatek（NSOP0）的 GPU 在窗口下面是透明（影片在下层）时处理 `ModulateAlpha` 淡出有问题。加了实验开关 `ConfigReceiver --ez saver_fade_offscreen true`（下次启动 Home 生效，诊断 display 一行会显示），让进屏保时的磁贴各自在离屏缓冲里淡出；MFTR0 上打开试过外观正常，已关回 false。等报告人试。
+  - #654 新线索（报告人 1.54 诊断）：按返回那一刻没有 `drawn before its face`，1.54 的猜测不成立；只在航拍 / 视频壁纸播放时出现，静态壁纸正常。MFTR0、TCL MT5879、deepfry666 的模拟器都复现不了。现在怀疑 Novatek（NSOP0）的 GPU 在窗口下面是透明（影片在下层）时处理 `ModulateAlpha` 淡出有问题。加了实验开关 `ConfigReceiver --ez saver_fade_offscreen true`（下次启动 Home 生效，诊断 display 一行会显示），让进屏保时的磁贴各自在离屏缓冲里淡出；MFTR0 上打开试过外观正常，已关回 false。等报告人试。报告人打开后确认正常（2026-10-26），但默认仍是 false，见「已知问题与限制」里的 #725。
 - **1.55（versionCode 67），2026-10-26 发布**：手机 / 电脑设置页改为 Aerial 运行期间一直监听（户主要求，方便电脑随时打开）：`MainActivity.startWork` 里 `PhoneServer.listen`，不再在个性化关闭 5 分钟后停掉；地址里的令牌固定，仍是唯一的访问凭据。小米 MFTR0 和 TCL MT5879 上验证：没打开过个性化、另一个 App 在前台、关掉个性化后、force-stop 后守护拉起，带令牌访问都是 200，错令牌 404，二维码地址不变。
 - **1.54（versionCode 66），2026-10-26 发布**（[v1.54](https://github.com/pengchujin/aerial-tv/releases/tag/v1.54)）：
   - #609 TCL MT5879 上「视频」屏保（系统 dream）黑屏：视频列表在 IO 线程读完才加 AndroidView，dream 窗口第一帧之后才加进去的 SurfaceView 一直拿不到 surface，ExoPlayer 往占位 surface 解码。现在影片的 view 在第一帧就在（`VideoSaver`）。TCL 上传测试视频、切视频屏保、Somnambulator 验证：surface created、first frame、画面正常；测完删掉测试视频（按 id）、屏保改回航拍。中间推过 versionCode 62–65 的测试包，所以正式版是 66。
@@ -161,8 +166,9 @@ adb -s $XIAOMI_TV:5555 shell cmd package compile -m speed -f app.orchard.tv
    ```bash
    cp app/build/outputs/apk/standard/release/app-standard-release.apk /tmp/aerial-standard.apk
    cp app/build/outputs/apk/guard/release/app-guard-release.apk /tmp/aerial-guard.apk
-   gh release create vX.Y /tmp/aerial-standard.apk /tmp/aerial-guard.apk --title "Aerial X.Y" --notes "..."
+   gh release create vX.Y /tmp/aerial-standard.apk /tmp/aerial-guard.apk /tmp/aerial-lite.apk --title "Aerial X.Y" --notes "..."
    ```
+   1.59 起附上 Lite：`./gradlew :lite:assembleRelease`（不要带 `-Pnohome`）后 `cp lite/build/outputs/apk/release/lite-release.apk /tmp/aerial-lite.apk`。Lite 的 versionCode 独立，改了 Lite 才加 1。
 4. 运行 `tools/deploy-site.sh`（在 main 上、`tools/` 已提交）。国内访问 GitHub 慢或打不开，所以官网自己放一份最新 Release 的 APK 和安装脚本：脚本把 Release 的两个 APK 下载到 `site/download/`，把 `tools/get.sh` 复制成 `site/install.sh`，把 `install.sh`、`restore.sh`、`tcast-push.py` 复制到 `site/tools/`，再部署官网；图标库的图从 `local/dangbei-icons/icons` 生成到 `site/icons/`，没有 `local/` 时脚本拒绝部署。这些副本不进版本库（见 `.gitignore`）。**每次发版都要跑一次**，否则官网上的 APK 还是旧版。`get.sh`、`install.sh` 先从官网下载，失败再从 GitHub 下载。
 5. 官网 `site/` 有中文（`index.html`）和英文（`en/index.html`）两页，共用 `style.css` 和 `app.js`（页面里的 `window.T` 放各自的文案和 Agent 提示词）。页面开头的小脚本按浏览器语言跳转，用户点过语言切换后以用户的选择为准（`localStorage` 的 `aerial-lang`）。改文案时两页都要改，README 也一样（`README.md` 中文、`README.en.md` 英文）。改了 `style.css` 或 `app.js` 要把页面里引用的 `?v=` 加 1。官网是 Cloudflare Worker 静态资源（配置见 `wrangler.jsonc`），绑定在 https://aerial.qust.me 和 https://tv.qust.me。改完官网也用 `tools/deploy-site.sh` 部署（直接 `npx wrangler@4 deploy` 会把官网上的 APK 和脚本删掉）。`site/_headers` 让图片在浏览器里缓存 7 天，所以替换截图时要把 `index.html` 里图片地址的 `?v=` 加 1，否则用户看到的还是旧图。`site/_redirects` 把旧地址 `/download/standard`、`/download/guard` 跳转到 `site/download/` 里的 APK。`site/agent.md`（中文）和 `site/en/agent.md`（英文）是给 Agent 看的安装说明，官网和 README 的 Agent 提示词只让 Agent 去读它；里面的 Windows 逐条步骤照抄了 `tools/install.sh` 和 `tools/restore.sh`，改这两个脚本时要一起改。
 
@@ -217,6 +223,7 @@ plutil -convert json -o en.json TVIdleScreenStrings.bundle/en.lproj/Localizable.
 - 手机配置页是局域网 HTTP，只靠随机令牌保护。
 - 签名用的是 debug key。想换成正式密钥，必须先在两台电视上卸载重装（会丢掉壁纸、照片和图标排序），TCL 还要走一遍当贝流程。
 - 海信等其他品牌没有在真机上验证过。
+- 按返回进屏保时焦点磁贴变直角（#654 #725）：Redmi X50（MiTV-NSOP0，Novatek `furyroad`，Android 9）打开 `saver_fade_offscreen` 后正常，但这个开关默认关着（`DiagLog.saverFadeOffscreen`），#725 的小米电视 6（MiTV-MFZPO，1.57）照样出现，报告人说上传的照片做壁纸也会。不对所有电视默认打开，是因为离屏淡出时焦点框和阴影会被裁在磁贴里（户主决定按检测打开）。我们手上的 MFTR0（Android 14）、TCL MT5879（Android 11）和模拟器（API 31）都复现不了，怀疑两台的共同点是 Android 9 的 HWUI，但 MFZPO 的芯片和系统版本还不知道。2026-10-27 已在 #725 请报告人用 adb 打开开关试，并贴诊断信息；等回复后对比两台的平台和系统版本，再在 `DiagLog.saverFadeOffscreen` 里按检测设默认值（保留 adb 开关做覆盖），注释写明在哪台验证过。
 
 ## 可以继续做的事（按价值排序）
 

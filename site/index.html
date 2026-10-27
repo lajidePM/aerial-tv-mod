@@ -33,6 +33,7 @@
       <a href="#features">功能</a>
       <a href="#how">接管原理</a>
       <a href="#install">安装</a>
+      <a href="#adapt">适配</a>
       <a href="#faq">常见问题</a>
       <a href="voices/">用户评价</a>
       <a href="https://github.com/pengchujin/aerial-tv">GitHub</a>
@@ -226,6 +227,7 @@
         <button role="tab" aria-selected="false" data-tab="cli">一行命令</button>
         <button role="tab" aria-selected="false" data-tab="manual">手动</button>
         <button role="tab" aria-selected="false" data-tab="phone">只用手机</button>
+        <button role="tab" aria-selected="false" data-tab="lite">Android 4.x</button>
       </div>
 
       <div class="panel on" data-panel="agent">
@@ -263,7 +265,38 @@
         <p class="note">这些工具是用户反馈装过的，本仓库没有逐一实测。手机工具一般不能替你完成全部设置，装好后建议再用电脑或 Agent 跑一遍验收。</p>
       </div>
 
+      <div class="panel" data-panel="lite">
+        <p><b>Aerial Lite</b> 是给 <b>Android 4.0–4.4</b> 老电视、老盒子用的单独版本，外观和完整版一样。<b>现在是第一版（1.0），属于测试版</b>，只在虚拟机和新电视上测过，真实 4.x 电视上可能还有不少小问题。Android 5.0 及以上请用上面的完整版。</p>
+        <p>一行命令（macOS / Linux）会自动认出 4.x 电视并装 Lite，也可以明确指定：</p>
+        <div class="code"><button class="copy" data-copy="liteonecmd">复制</button><pre id="liteonecmd"></pre></div>
+        <p>手动安装：下载 <a href="download/aerial-lite.apk"><b>aerial-lite.apk</b></a>，再运行（第三行用来调亮度，Android 4.0 会报错，可以忽略）：</p>
+        <div class="code"><button class="copy" data-copy="litecmd">复制</button><pre id="litecmd"></pre></div>
+        <p>也可以把 APK 拷进 U 盘，用电视的文件管理器打开安装。装好后<b>按遥控器的主页键</b>，在系统问「使用哪个应用」时选 <b>Aerial Lite</b>，再选「<b>始终</b>」。</p>
+        <p class="note">Lite 没有桌面守护：固件把主页键锁死在自家桌面时，只能从应用列表打开 Lite。也没有航拍壁纸、信号源磁贴和应用内升级（升级就是再装一次）。还原：设置 → 应用 → Aerial Lite → 清除默认设置，或者卸载它（<code>adb uninstall app.orchard.tv.lite</code>）。有问题请用<a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml&amp;title=%5BLite%5D%20">机型适配模板</a>反馈，标题写上 Lite。</p>
+      </div>
+
       <p class="note">电视问是否允许调试时，选「始终允许」。TCL 会弹「多屏互动：正在发起应用推送」，选「同意」。</p>
+    </div>
+  </div>
+</section>
+
+<section id="adapt">
+  <div class="wrap" style="max-width:860px">
+    <div class="head reveal">
+      <h2>装好了，但有地方不对？</h2>
+      <p>按主页键回到原桌面、待机或开机后停在原桌面、信号源打开的口不对、亮度条没反应：选一种方式，把你的电视适配好，再交给作者，同型号的人以后就不用再折腾。</p>
+    </div>
+    <div class="install reveal">
+      <h3 class="step"><span>1</span>交给 Agent（最省事）</h3>
+      <p>复制给能在电脑上运行命令的 Agent。它会先自检，能改的当场改好，最后整理成一份报告，你看过再提交。电视 IP 用上面第 2 步填的。</p>
+      <div class="code"><button class="copy" data-copy="adaptprompt">复制</button><pre id="adaptprompt"></pre></div>
+
+      <h3 class="step"><span>2</span>信号源不对：在电视上自己改</h3>
+      <p>控制中心 → 信号源 → 信号源设置 → 最下面的 <b>校正信号源</b>（1.59 起）。逐个「打开试试」，看电视切到哪个口，不对就「换一个编号试试」、改名字，或者标成「这台电视没有这个口」。改动马上生效。</p>
+
+      <h3 class="step"><span>3</span>用手机提交给作者</h3>
+      <p>控制中心 → 个性化，用手机扫二维码，在手机页最下面 <b>反馈问题 → 显示诊断信息 → 去 GitHub 反馈</b>：型号、版本和你改好的信号源会自动填进表单，诊断信息自动复制，粘贴进去就行。没有 GitHub 账号时，把诊断信息发给有账号的朋友代发。</p>
+      <p class="note">电脑上也可以自己跑：<code>curl -fsSL https://aerial.qust.me/tools/report.sh | TV=&lt;电视IP&gt; bash</code>（只读）和 <code>curl -fsSL https://aerial.qust.me/tools/selftest.sh | TV=&lt;电视IP&gt; bash</code>（按主页键等，看 Aerial 能不能回来），把两份输出贴进<a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a>。诊断信息不含账号、IP、Wi-Fi 名称和 App 列表。</p>
     </div>
   </div>
 </section>
@@ -316,7 +349,7 @@
       </details>
       <details>
         <summary>我的电视能用吗？</summary>
-        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.4 及更老的电视也不行（Aerial 最低要 Android 5.0）。极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题请用 <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a> 告诉我们，附上诊断信息：电脑上运行 <code>curl -fsSL https://aerial.qust.me/tools/report.sh | TV=&lt;电视IP&gt; bash</code>，或在手机配置页「更多 → 反馈问题」里复制。</p>
+        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.0–4.4 的老电视用 Aerial Lite（测试版，见安装区的「Android 4.x」），更老的不支持。极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题见上面的<a href="#adapt">「装好了，但有地方不对？」</a>。</p>
       </details>
     </div>
   </div>
@@ -339,6 +372,7 @@
     copied: '已复制',
     tclOnly: '仅 TCL：允许开机自启',
     guide: '/agent.md',
+    adaptGuide: '/adapt.md',
     prompt: (ip, keep, guide) =>
 `请帮我把开源电视桌面 Aerial 装到我的电视上，并设为开机进入的桌面。
 电视 IP：${ip}
@@ -353,6 +387,14 @@
 - adb shell settings get secure enabled_accessibility_services（里面有没有 app.orchard.tv/app.orchard.tv.guard.HomeGuardService）
 - 按主页键后的 adb shell "dumpsys window | grep mCurrentFocus"
 如果没有安装成功，直接告诉我卡在哪一步。`,
+    adapt: (ip, guide) =>
+`请按 ${guide} 给我的电视做 Aerial 适配。
+电视 IP：${ip}
+哪里不对：<比如：按主页键回到原桌面 / HDMI 2 打开的是 HDMI 1 / 待机后停在原桌面>
+
+请先完整读完说明再动手，在我的电脑上亲自运行命令，不要只把步骤告诉我。
+待机测试、重启电视之前先问我；不要卸载或停用任何系统应用。
+最后把整理好的报告给我看，我同意后再提交到 GitHub。`,
     restore: (ip, guide) =>
 `请按 ${guide} 里「还原」部分的步骤，把我电视（IP：${ip}）的桌面还原成原来的，Aerial 先不卸载。
 请在我的电脑上亲自运行命令，不要只把步骤发给我。
@@ -361,6 +403,6 @@
 - 按主页键后的 adb shell "dumpsys window | grep mCurrentFocus"（应该回到电视原来的桌面）`,
   };
 </script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

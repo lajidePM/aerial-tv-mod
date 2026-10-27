@@ -18,6 +18,7 @@ Made for Xiaomi, TCL, Skyworth, Sony and other TVs sold in China, and runs on bo
 <a href="https://github.com/pengchujin/aerial-tv/releases/latest"><img alt="Version" src="https://img.shields.io/github/v/release/pengchujin/aerial-tv?style=flat-square&label=version&color=2997ff"></a>
 <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-555555?style=flat-square"></a>
 <img alt="Android TV 5.0+" src="https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white">
+<a href="#lite"><img alt="Lite 4.0–4.4 beta" src="https://img.shields.io/badge/Lite-4.0%E2%80%934.4%20beta-f5a623?style=flat-square&logo=android&logoColor=white"></a>
 
 ![Aerial's home screen](site/img/home.jpg)
 
@@ -115,6 +116,37 @@ On Windows, use an agent, or follow the Windows steps in the [install guide](sit
 
 **Updating**: from 1.32, Control Center shows New Version when there is one; choose Download and Install there and confirm in the TV's own installer (checked on Xiaomi and TCL). Aerial comes back afterwards with every setting kept. On TVs that do not let apps install apps, updating means running the install command again: the update page has a QR code that opens this TV's command on a phone, ready to copy or to hand to an agent. 1.31 and earlier have no such button, so this once, run the install command again.
 
+<a id="lite"></a>
+
+### Android 4.0–4.4: Aerial Lite (beta)
+
+TVs and boxes on Android 4.0–4.4 cannot run the full app (its UI framework needs Android 5.0), so there is a separate **Aerial Lite**: package `app.orchard.tv.lite`, looking the same as the full app.
+
+> **Lite is at its first release (1.0), a beta.** It was tested on Android 4.0.4 / 4.4.4 emulators and on newer Xiaomi and TCL TVs, not yet on a real 4.x TV, and may still have many small problems. **It is for Android 4.0–4.4 only**; on Android 5.0 and later use the full app above. Report problems with the [device support form](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml&title=%5BLite%5D%20), with Lite in the title.
+
+**One command (macOS / Linux)**: the same command as the full app; the script installs Lite by itself on an Android 4.x TV. To ask for it:
+
+```bash
+curl -fsSL https://aerial.qust.me/install.sh | TV=192.168.1.20 bash -s lite
+```
+
+**By hand**: download [aerial-lite.apk](https://aerial.qust.me/download/aerial-lite.apk), then:
+
+```bash
+adb connect 192.168.1.20:5555
+adb install -r aerial-lite.apk
+adb shell pm grant app.orchard.tv.lite android.permission.WRITE_SECURE_SETTINGS   # for brightness; Android 4.0 refuses it, which is fine
+adb shell am start -n app.orchard.tv.lite/.HomeActivity
+```
+
+**USB drive**: copy `aerial-lite.apk` to a drive and open it with the TV's file manager.
+
+**Afterwards**: press **Home** on the remote; when Android asks which app to use, choose **Aerial Lite**, then **Always**. If no question comes and the old launcher opens, the firmware keeps Home for its own launcher: open Lite from the app list.
+
+**Differences from the full app**: no Home Guard (accessibility takeover), so Home and boot depend on Android's default home; no aerial wallpaper, My Videos wallpaper, input tiles (4.x has no TV input framework; the Inputs button opens the TV's own input panel) or in-app updates (update by installing again; settings are kept). The aerial screensaver, photos and the daily picture, clocks, folders, the press-and-hold menu, Control Center, Personalize and the phone page are all there. More in [docs/LITE.md](docs/LITE.md) (Chinese).
+
+**Undo**: on the TV, Settings → Apps → Aerial Lite → Clear defaults, then press Home and pick the old launcher; or uninstall it: `adb uninstall app.orchard.tv.lite` (the one command's `bash -s restore --uninstall` removes it too).
+
 ### Undo
 
 ```bash
@@ -171,11 +203,34 @@ Most TVs sold in China only accept their own home screen and clear third-party a
 | Tencent Aurora box | 6 / 6SE / 7S | Android 10 / 14 | ✅ 6 works; ⚠️ 7S stays on the stock home at boot ([notes](docs/devices/tencent-aurora-box.md)) |
 | Other boxes | CM311-1 (modified ATV), PPTV K55U27 | Android 9 | ✅ |
 
-- **Not supported**: LG webOS, Samsung Tizen, Huawei Vision (HarmonyOS), and Android 4.4 or older.
+- **Android 4.0–4.4**: [Aerial Lite](#lite) (first release, a beta).
+- **Not supported**: LG webOS, Samsung Tizen, Huawei Vision (HarmonyOS), and Android older than 4.0.
 - **Can't open ADB**: XGIMI H3, old LeTV sets, Honor Vision, old Konka models (no version number to tap).
 - **Slow or low-memory TVs**: from 1.48 Aerial picks Lite effects on its own (solid panels, no highlights); you can also choose it in Personalize → Effects.
 
-If yours works, or doesn't, tell us with the [device support form](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml) and its diagnostics: run `curl -fsSL https://aerial.qust.me/tools/report.sh | TV=<tv-ip> bash` on a computer (it only reads), or copy them from More → Report a Problem on the phone page. They hold no accounts, addresses, Wi-Fi names or app lists.
+<a id="adapt"></a>
+
+### Installed, but something is off? Help adapt Aerial to your TV
+
+Home goes back to the old launcher, standby or a restart ends there, an input opens the wrong port, the brightness slider does nothing. Pick one:
+
+**1. Hand it to an agent (easiest)**: send this to an agent that can run commands on your computer. It tests the TV, fixes on the spot what it can (input numbers, say), and writes a report for you to read before it is posted.
+
+```text
+Please adapt Aerial to my TV, following https://aerial.qust.me/en/adapt.md
+TV IP: <tv-ip>
+What is wrong: <e.g. Home goes back to the old launcher / HDMI 2 opens HDMI 1 / ends on the old launcher after standby>
+
+Read the whole guide first, then run the commands on my computer yourself instead of listing them.
+Ask me before a standby test or restarting the TV; do not uninstall or disable any system app.
+Show me the finished report, and post it to GitHub only once I agree.
+```
+
+**2. Wrong inputs: fix them on the TV** (from 1.59): Control Center → Inputs → Input Settings → Check Inputs at the bottom. Open each, see which port the TV switches to, and if it is wrong try another number, rename it, or mark it as a port the TV does not have. Changes apply at once.
+
+**3. Send it from your phone**: Control Center → Personalize, scan the QR code, and at the bottom of the phone page choose Report a Problem → Show Diagnostics → Report on GitHub. The model, the version and your input corrections fill the [device support form](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml), and the diagnostics are copied for you to paste.
+
+On a computer you can also run `curl -fsSL https://aerial.qust.me/tools/report.sh | TV=<tv-ip> bash` (reads only) and `curl -fsSL https://aerial.qust.me/tools/selftest.sh | TV=<tv-ip> bash` (presses Home, opens the settings, checks that Aerial comes back) and paste both into the form. The diagnostics hold no accounts, addresses, Wi-Fi names or app lists. If your TV just works, tell others with the [works-on-my-TV form](https://github.com/pengchujin/aerial-tv/issues/new?template=works.yml).
 
 ## Development
 

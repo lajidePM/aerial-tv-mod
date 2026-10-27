@@ -45,6 +45,7 @@ app/src/main/java/app/orchard/tv/
 ├── system/
 │   ├── SystemState.kt       SystemProbe：网络、音量、桌面状态、设置入口、信号源（TvInputManager + 小米路由 + 机型修正）
 │   ├── Brightness.kt        亮度：小米 picture_backlight / 标准 screen_brightness / TCL 走面板
+│   ├── DeviceProfile.kt     按机型的修正（数据在 assets/devices.json），这台电视自己的修正可以覆盖它
 │   └── Diagnostics.kt       给 GitHub issue 用的诊断报告（手机页「反馈问题」、`dumpsys activity …MainActivity report`、tools/report.sh）
 ├── guard/
 │   ├── HomeGuardService.kt  无障碍「桌面守护」：原桌面出现就切回、从磁贴进原桌面时临时拦 HOME、亮屏检查、ADB 保持
@@ -52,7 +53,7 @@ app/src/main/java/app/orchard/tv/
 │   ├── RevivalListener.kt   通知监听服务：被强杀后由系统重绑，借此复活并重开守护；10 分钟内复活 3 次以上时，看不到前台就不再抢 HOME（乐视 #63）
 │   ├── RevivalSync.kt       同步适配器（挂在 settings 上，带一个自己的账号）：系统不许通知监听的低内存 Android 9（小米 MFTP0，#72）上，强停后约 30–60 秒由同步框架拉起 Aerial 并重开守护；守护在运行时什么都不做
 │   ├── BootReceiver.kt      真正重启后的兜底
-│   └── ConfigReceiver.kt    ADB 专用配置入口（keep_adb、own_screensaver、clear_pin、export_tiles、check_update、update_test），要求发送方持有 WRITE_SECURE_SETTINGS
+│   └── ConfigReceiver.kt    ADB 专用配置入口（keep_adb、own_screensaver、clear_pin、export_tiles、check_update、update_test、device_profile、list_sources、open_source），要求发送方持有 WRITE_SECURE_SETTINGS
 └── dream/AerialDream.kt    系统级屏保（DreamService + Compose）
 
 app/src/main/assets/aerials.json   Apple 航拍目录（114 条：地址 + 中英文地名 + 时间点说明）
@@ -189,6 +190,20 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 
 三个出口：手机页 `GET api/diagnostics`（页面最下面「反馈问题」，可复制，局域网 HTTP 没有 `navigator.clipboard`，用 `execCommand`）；`adb shell dumpsys activity app.orchard.tv/.MainActivity report`；`tools/report.sh` 在它前面再加只有 shell 能读的：getprop、包信息和 appops、HOME 候选和 role、相关 settings、无障碍绑定、tv_input 硬件、系统服务里关于 Aerial 的 logcat（只按 tag 取：小米应用商店会在日志里打印已装 App 列表）。
 
+## 机型修正（system/DeviceProfile.kt）
+
+框架看不出来、只能按机型写的修正，以数据形式放在 `assets/devices.json`：按 `ro.product.model` 匹配，第一条命中的生效，`buildMajorBelow` 限定 `Build.DISPLAY` 第一个数字低于它的固件。字段：`hidden`（不显示的硬件编号）、`labels`（改名）、`xiaomiSources` / `xiaomiFallbackSources`（小米播放器的信号源编号，后者只在固件没有 `hdmiN_order` 时用）、`ignoresPictureBacklight`（有 `picture_backlight` 但不跟着变，亮度交给电视自己的滑块；`Brightness` 和 `MitvPanel` 都看它）。信号源按 TvInputInfo id 末尾的 `HWn` 编号。每条的 `note` 写明是哪台电视、哪个 issue 验证的。Lite 构建时复制 `DeviceProfile.kt` 和 `devices.json`。
+
+**这台电视自己的修正**（`system` prefs 里的 `device_profile`）整段替换内置的那一条，所以用户或 Agent 在电视上试出来的 JSON 原样就是要加进 `devices.json` 的内容。三个来源：
+
+- 控制中心 → 信号源 → 信号源设置 → 校正信号源（`CcPage.InputFix` / `InputFixOne`）：列出全部有硬件编号的输入（包括已隐藏的），逐个「打开试试」、小米上「换一个编号试试」（19–32 循环，换了马上用新编号打开）、改名（按类型轮换常用名，回到固件自己的名字就去掉覆盖）、隐藏，「恢复默认」清掉。改动在后台线程按顺序写（`HomeViewModel.profileEdits`），写完重读信号源。从校正页打开信号源后 10 分钟内按主页键回来，页面保持打开（`CHECK_RETURN_MS`）；控制中心的 `onOpen` 会关掉浮层，校正页打开后马上恢复（`openFromCheck`）。
+- ADB：`ConfigReceiver --es device_profile '<json>'`（`default` 回到内置），`--ez list_sources true` 以 JSON 列出信号源（含隐藏的、硬件编号、固件名、小米编号），`--es open_source <id>` 按磁贴的方式打开一个信号源。通过 `adb shell` 传带空格的 JSON 时，整条命令要放进一对引号里（`adb shell "am broadcast … --es device_profile '{\"6\":…}'"`），否则远端 shell 会吃掉引号。
+- 诊断报告末尾的 **Device profile** 一节输出当前生效的 JSON 和来源（`BuiltIn` / `ThisTv` / `None`）；手机页「去 GitHub 反馈」把 `ThisTv` 的那段填进 issue 表单的 `profile` 字段（GitHub 表单支持按字段 id 用 URL 参数预填），诊断全文复制到剪贴板。
+
+收到这类 issue：把 JSON 加进 `devices.json`（`models` 填上同型号的两种写法，比如 `MiTV-XXXX0` 和 `MiTV_XXXX0`，`note` 写 issue 号），`DeviceProfileTest` 跑一遍。
+
+适配流程给 Agent 的说明在 `site/adapt.md`（英文 `site/en/adapt.md`）：`tools/report.sh` 收集、`tools/selftest.sh` 实测（主页键、从别的 App 回来，可选待机、重启、逐个打开信号源并截图，最后一段 JSON 结果），按失败项试开关，整理成报告，用户同意后用 `gh issue create` 或预填表单提交。
+
 ## 信号源磁贴
 
 控制中心 → 信号源 → 信号源设置里「显示在主屏幕」的信号源和 App 一起排在网格里（`sourceEntry`）。长按菜单「接入的设备」可以选 Apple TV、PlayStation、Nintendo Switch、Xbox、游戏机、电脑、机顶盒、回音壁（`apps/SourceLooks.kt`，#172 #210）：磁贴换成设备的颜色和标志，大字是设备名，小字是端口（HDMI 1）。Apple TV、PlayStation 的标志是 Simple Icons（CC0）的路径；任天堂和微软让 Simple Icons 撤掉了自己的标志，Switch 和 Xbox 画的是掌机和手柄的轮廓。自己起的名字在手机配置页输入（`POST api/source/name`，最多 24 个字，太长先缩小字号再截断）；手机页也能给信号源磁贴传图片，文件名用键的 SHA-1（键里有 `/`）。名字和设备存在 `settings` 的 `source_looks`（JSON，按 TvInputInfo id）。控制中心的信号源页右边也显示起的名字。
@@ -249,7 +264,7 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 
 ## 系统能力（system/）
 
-- **信号源**：`TvInputManager` 列出直通输入和调谐器。装了 `com.xiaomi.mitv.tvplayer` 的走小米的 Intent（HDMI 的 `input = HW 编号 + 18`，AV=2，ATV/DTMB 各自的 Activity），否则走 `TvContract` 的通用 URI。CEC 子输入的名字用于显示设备名，`Playback_1` 这类通用名会被过滤。`DeviceProfile` 存放按机型的修正（MFTR0 隐藏不存在的 HW8，并重命名调谐器）。
+- **信号源**：`TvInputManager` 列出直通输入和调谐器。装了 `com.xiaomi.mitv.tvplayer` 的走小米的 Intent（HDMI 的 `input = HW 编号 + 18`，AV=2，ATV/DTMB 各自的 Activity），否则走 `TvContract` 的通用 URI。CEC 子输入的名字用于显示设备名，`Playback_1` 这类通用名会被过滤。`DeviceProfile` 存放按机型的修正，见下面「机型修正」。
 - **音量**：`AudioManager` 的 STREAM_MUSIC；TCL 必须加 `FLAG_SHOW_UI`（否则不会写入功放）。
 - **亮度**：见 `Brightness.kt` 的注释（小米 / 标准 / TCL 面板三种）。
 - **设置入口**：优先厂商自己的设置（小米 `com.xiaomi.mitv.settings`）。

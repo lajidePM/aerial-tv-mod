@@ -5,6 +5,7 @@
 #   TV=<tv-ip> tools/install.sh guard         # for firmwares that refuse to install a launcher
 #   KEEP_ADB=1 TV=<tv-ip> tools/install.sh    # also switch ADB back on whenever the TV turns it off
 #   TV=<tv-ip> tools/install.sh repair        # Home went back to the TV's launcher: restart Home Guard
+#   TV=<tv-ip> tools/install.sh lite          # Aerial Lite; chosen by itself on Android 4.0-4.4
 #
 # The APK comes from the latest release (aerial.qust.me's copy, else GitHub), so only adb is needed
 # (and python3 on TCL TVs).
@@ -32,7 +33,7 @@ cd "$(dirname "$0")/.."
 REPO=pengchujin/aerial-tv
 command -v adb >/dev/null || { echo "adb not found. macOS: brew install android-platform-tools; Linux: install android-tools / adb." >&2; exit 1; }
 FLAVOR="${1:-standard}"
-case "$FLAVOR" in standard|guard|repair) ;; *) echo "flavor must be standard or guard (or repair)" >&2; exit 1 ;; esac
+case "$FLAVOR" in standard|guard|repair|lite) ;; *) echo "flavor must be standard, guard or lite (or repair)" >&2; exit 1 ;; esac
 PKG=app.orchard.tv
 GUARD="$PKG/$PKG.guard.HomeGuardService"
 
@@ -74,6 +75,38 @@ restart_aerial() {
   sleep 3
   adb shell am start -W -n "$PKG/.MainActivity" >/dev/null 2>&1 || true
 }
+
+# Android 4.0-4.4 cannot run the full app (Jetpack Compose needs Android 5.0). Aerial Lite is a
+# separate package that declares HOME and has no Home Guard, so the owner picks it once in
+# Android's home chooser (docs/LITE.md). Nothing else from the steps below applies.
+SDK=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
+if [ "$FLAVOR" = lite ] || { [ -n "$SDK" ] && [ "$SDK" -lt 21 ] 2>/dev/null; }; then
+  LITE=app.orchard.tv.lite
+  [ "$FLAVOR" = lite ] || echo "This TV runs Android $(adb shell getprop ro.build.version.release | tr -d '\r'): installing Aerial Lite, the version for Android 4.0-4.4 (first release, a beta)."
+  if [ -n "${APK_FILE:-}" ]; then APK=$APK_FILE
+  elif [ "${BUILD:-0}" = 1 ]; then ./gradlew -q --console=plain :lite:assembleRelease; APK=lite/build/outputs/apk/release/lite-release.apk
+  else
+    APK="${TMPDIR:-/tmp}/aerial-lite.apk"
+    for url in "https://aerial.qust.me/download/aerial-lite.apk" "https://github.com/$REPO/releases/latest/download/aerial-lite.apk" ""; do
+      [ -n "$url" ] || { echo "Could not download aerial-lite.apk" >&2; exit 1; }
+      echo "Downloading $url" >&2
+      curl -fL --progress-bar --connect-timeout 10 -o "$APK" "$url" && break
+    done
+  fi
+  echo "Installing $APK"
+  OUT=$(adb install -r "$APK" 2>&1 | tr -d '\r') || true
+  echo "$OUT" | tail -n 2
+  echo "$OUT" | grep -q Success || { echo "Installing failed. Copy the APK to a USB drive and open it with the TV's file manager, or see https://aerial.qust.me/agent.md" >&2; exit 1; }
+  # Brightness on TVs that keep it in a secure or global setting (Xiaomi picture_backlight).
+  # Android 4.0 cannot grant it from the shell; the slider then opens the TV's picture settings.
+  adb shell pm grant "$LITE" android.permission.WRITE_SECURE_SETTINGS >/dev/null 2>&1 || true
+  adb shell am start -n "$LITE/.HomeActivity" >/dev/null 2>&1 || true
+  echo
+  echo "Aerial Lite is installed and open. Press Home on the remote; when Android asks which app to use,"
+  echo "choose Aerial Lite, then Always. If no question comes and the old launcher opens, the firmware"
+  echo "keeps Home for its own launcher: open Aerial Lite from the app list instead."
+  exit 0
+fi
 
 if [ "$FLAVOR" = repair ]; then
   adb shell pm path "$PKG" >/dev/null 2>&1 || { echo "Aerial is not installed on this TV." >&2; exit 1; }

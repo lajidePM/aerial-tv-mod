@@ -18,6 +18,7 @@
 <a href="https://github.com/pengchujin/aerial-tv/releases/latest"><img alt="版本" src="https://img.shields.io/github/v/release/pengchujin/aerial-tv?style=flat-square&label=%E7%89%88%E6%9C%AC&color=2997ff"></a>
 <a href="LICENSE"><img alt="许可证 MIT" src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-555555?style=flat-square"></a>
 <img alt="Android TV 5.0+" src="https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white">
+<a href="#lite"><img alt="Lite 4.0–4.4 测试版" src="https://img.shields.io/badge/Lite-4.0%E2%80%934.4%20%E6%B5%8B%E8%AF%95%E7%89%88-f5a623?style=flat-square&logo=android&logoColor=white"></a>
 
 ![Aerial 首页](site/img/home.jpg)
 
@@ -113,6 +114,37 @@ Windows 用 Agent 装，或照[安装说明](site/agent.md)里的 Windows 步骤
 
 **升级**：1.32 起，有新版本时控制中心会出现「有新版本」，点进去选「下载并安装」，在电视自己的安装界面确认（小米、TCL 上验证过），装完回到 Aerial，设置都保留。电视不让 App 安装应用时，升级就是再运行一次安装命令：升级页上有二维码，手机扫码能直接复制这台电视的命令，或者交给 Agent。1.31 及以前没有这个按钮，这一次还是要再运行一次安装命令。
 
+<a id="lite"></a>
+
+### Android 4.0–4.4 老电视：Aerial Lite（测试版）
+
+Android 4.0–4.4 的老电视、老盒子装不了完整版（界面框架最低要 Android 5.0），所以有一个单独的 **Aerial Lite**：包名 `app.orchard.tv.lite`，外观和完整版一样。
+
+> **Lite 现在是第一版（1.0），属于测试版。** 只在 Android 4.0.4 / 4.4.4 虚拟机，以及小米、TCL 的新电视上测过，还没在真实的 4.x 电视上用过，可能有不少小问题。**只适配 Android 4.0–4.4**；Android 5.0 及以上请用上面的完整版。遇到问题请用[机型适配模板](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml&title=%5BLite%5D%20)反馈，标题写上 Lite。
+
+**一行命令（macOS / Linux）**：和完整版是同一条命令，脚本发现电视是 Android 4.x 会自动装 Lite；也可以明确指定：
+
+```bash
+curl -fsSL https://aerial.qust.me/install.sh | TV=192.168.1.20 bash -s lite
+```
+
+**手动**：下载 [aerial-lite.apk](https://aerial.qust.me/download/aerial-lite.apk)，然后：
+
+```bash
+adb connect 192.168.1.20:5555
+adb install -r aerial-lite.apk
+adb shell pm grant app.orchard.tv.lite android.permission.WRITE_SECURE_SETTINGS   # 调亮度用；Android 4.0 会报错，可以忽略
+adb shell am start -n app.orchard.tv.lite/.HomeActivity
+```
+
+**U 盘**：把 `aerial-lite.apk` 拷进 U 盘，用电视的文件管理器打开安装。
+
+**装好以后**：按遥控器的**主页键**，系统问「使用哪个应用」时选 **Aerial Lite**，再选「**始终**」。不弹出选择、直接回到原桌面，说明固件把主页键锁在了自家桌面，这时只能从应用列表打开 Lite。
+
+**和完整版的区别**：没有桌面守护（无障碍接管），开机和主页键全靠系统的默认桌面；没有航拍壁纸、「我的视频」壁纸、信号源磁贴（4.x 没有电视输入框架，信号源按钮打开电视自己的信号源面板）、应用内升级（升级就是再装一次，设置保留）。航拍屏保、照片和每日一图、时钟、文件夹、长按菜单、控制中心、个性化、手机配置页都有。详细说明见 [docs/LITE.md](docs/LITE.md)。
+
+**还原**：电视上 设置 → 应用 → Aerial Lite → 清除默认设置，再按主页键选原来的桌面；或者直接卸载：`adb uninstall app.orchard.tv.lite`（一行命令的 `bash -s restore --uninstall` 也会卸载它）。
+
 ### 还原
 
 ```bash
@@ -169,11 +201,34 @@ curl -fsSL https://aerial.qust.me/install.sh | TV=192.168.1.20 bash -s restore
 | 腾讯极光盒子 | 6 / 6SE / 7S | Android 10 / 14 | ✅ 6 正常；⚠️ 7S 开机停在原桌面（[笔记](docs/devices/tencent-aurora-box.md)） |
 | 其他盒子 | CM311-1（改版 ATV）、PPTV K55U27 | Android 9 | ✅ |
 
-- **不支持**：LG webOS、三星 Tizen、华为鸿蒙智慧屏，以及 Android 4.4 及更老的系统。
+- **Android 4.0–4.4**：用 [Aerial Lite](#lite)（第一版，测试版）。
+- **不支持**：LG webOS、三星 Tizen、华为鸿蒙智慧屏，以及 Android 4.0 以前的系统。
 - **打不开 ADB**：极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）。
 - **老电视或内存小的电视会卡**：1.48 起自动改用「流畅」效果（面板用纯色、去掉高光），也可以在 个性化 → 效果 里手动选。
 
-你的电视能用，或者有问题，欢迎用[机型适配模板](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml)告诉我们，附上诊断信息：电脑上运行 `curl -fsSL https://aerial.qust.me/tools/report.sh | TV=<电视IP> bash`（只读，不改电视），或者在手机配置页「更多 → 反馈问题」里复制。诊断信息不含账号、IP、Wi-Fi 名称和 App 列表。
+<a id="adapt"></a>
+
+### 装好了，但有地方不对？帮 Aerial 适配你的电视
+
+按主页键回到原桌面、待机或开机后停在原桌面、信号源打开的口不对、亮度条没反应，选一种方式：
+
+**1. 交给 Agent（最省事）**：发给能在电脑上运行命令的 Agent。它会自检，能改的当场改好（比如信号源编号），最后整理成一份报告，你看过再提交。
+
+```text
+请按 https://aerial.qust.me/adapt.md 给我的电视做 Aerial 适配。
+电视 IP：<电视IP>
+哪里不对：<比如：按主页键回到原桌面 / HDMI 2 打开的是 HDMI 1 / 待机后停在原桌面>
+
+请先完整读完说明再动手，在我的电脑上亲自运行命令，不要只把步骤告诉我。
+待机测试、重启电视之前先问我；不要卸载或停用任何系统应用。
+最后把整理好的报告给我看，我同意后再提交到 GitHub。
+```
+
+**2. 信号源不对，在电视上自己改**（1.59 起）：控制中心 → 信号源 → 信号源设置 → 最下面「校正信号源」。逐个「打开试试」，看电视切到哪个口；不对就「换一个编号试试」、改名字，或者标成「这台电视没有这个口」。改动马上生效。
+
+**3. 用手机提交**：控制中心 → 个性化，扫二维码，手机页最下面「反馈问题 → 显示诊断信息 → 去 GitHub 反馈」。型号、版本和改好的信号源会自动填进[机型适配模板](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml)，诊断信息自动复制，粘贴进去就行。
+
+电脑上也可以自己跑：`curl -fsSL https://aerial.qust.me/tools/report.sh | TV=<电视IP> bash`（只读）和 `curl -fsSL https://aerial.qust.me/tools/selftest.sh | TV=<电视IP> bash`（按主页键、打开设置，看 Aerial 能不能回来），把两份输出贴进模板。诊断信息不含账号、IP、Wi-Fi 名称和 App 列表。你的电视能正常用，也欢迎用[实测可用模板](https://github.com/pengchujin/aerial-tv/issues/new?template=works.yml)告诉大家。
 
 ## 开发
 
