@@ -31,7 +31,7 @@ class DeviceProfile(
     val isEmpty get() = hiddenHardware.isEmpty() && labels.isEmpty() && xiaomiSourceIds.isEmpty() &&
         xiaomiFallbackSourceIds.isEmpty() && !ignoresPictureBacklight
 
-    /** The same fields `devices.json` uses, without the matching ones (models, buildMajorBelow). */
+    /** The same fields `devices.json` uses, without the matching ones (models, buildMajorBelow, buildAtLeast). */
     fun toJson(): JSONObject = JSONObject().apply {
         if (hiddenHardware.isNotEmpty()) put("hidden", JSONArray(hiddenHardware.sorted()))
         if (labels.isNotEmpty()) put("labels", JSONObject(labels.toSortedMap().mapKeys { it.key.toString() }))
@@ -66,7 +66,7 @@ class DeviceProfile(
         /** This model's entry in devices.json, ignoring the TV's own profile. */
         fun builtIn(context: Context): DeviceProfile? = runCatching {
             val json = context.assets.open("devices.json").bufferedReader().use { it.readText() }
-            match(json, Build.MODEL, buildMajor())
+            match(json, Build.MODEL, buildMajor(), buildMinor())
         }.getOrNull()
 
         /** The TV's own profile as stored, or null when it uses the built-in one. */
@@ -88,13 +88,18 @@ class DeviceProfile(
         }
 
         /** The first entry of [json] (devices.json) for [model] whose firmware condition holds. */
-        fun match(json: String, model: String, buildMajor: Int): DeviceProfile? {
+        fun match(json: String, model: String, buildMajor: Int, buildMinor: Int = 0): DeviceProfile? {
             val entries = JSONObject(json).getJSONArray("profiles")
             for (i in 0 until entries.length()) {
                 val entry = entries.getJSONObject(i)
                 val models = entry.getJSONArray("models")
                 if ((0 until models.length()).none { models.getString(it) == model }) continue
                 if (entry.has("buildMajorBelow") && buildMajor >= entry.getInt("buildMajorBelow")) continue
+                // "22.11": Mi TV 4 numbers its HDMI ports differently from firmware 22.11 on (#584).
+                if (entry.has("buildAtLeast")) {
+                    val (major, minor) = entry.getString("buildAtLeast").split('.').map { it.toInt() } + listOf(0)
+                    if (buildMajor < major || buildMajor == major && buildMinor < minor) continue
+                }
                 return parse(entry)
             }
             return null
@@ -117,5 +122,8 @@ class DeviceProfile(
 
         /** The first number of a build id such as Xiaomi's 22.4.15.3234, or 0. */
         private fun buildMajor(): Int = Build.DISPLAY.substringBefore('.').toIntOrNull() ?: 0
+
+        /** The second number of such a build id (4 in 22.4.15.3234), or 0. */
+        private fun buildMinor(): Int = Build.DISPLAY.split('.').getOrNull(1)?.toIntOrNull() ?: 0
     }
 }

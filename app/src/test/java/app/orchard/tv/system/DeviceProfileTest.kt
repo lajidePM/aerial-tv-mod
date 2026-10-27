@@ -42,7 +42,10 @@ class DeviceProfileTest {
     @Test fun firmwareConditionHolds() {
         assertEquals(mapOf(7 to 23), DeviceProfile.match(json, "MiTV4-ANSM0", 8)!!.xiaomiFallbackSourceIds)
         assertEquals(mapOf(7 to 23), DeviceProfile.match(json, "MiTV4A", 21)!!.xiaomiFallbackSourceIds)
-        assertNull(DeviceProfile.match(json, "MiTV4-ANSM0", 22))
+        assertNull(DeviceProfile.match(json, "MiTV4-ANSM0", 22, 4))
+        // From 22.11 the registered HDMI3 service is the HDMI 1 port, source 23 (#584).
+        assertEquals(mapOf(7 to 23, 6 to 24, 5 to 25), DeviceProfile.match(json, "MiTV4-ANSM0", 22, 11)!!.xiaomiSourceIds)
+        assertEquals("HDMI 1", DeviceProfile.match(json, "MiTV4-ANSM0", 23, 0)!!.labels[7])
     }
 
     @Test fun jsonRoundTrips() {
