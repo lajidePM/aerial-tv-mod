@@ -1296,6 +1296,8 @@ function renderWallpapers() {
   for (const [kind, title, sub] of groups) {
     // Moving: the aerial films and the owner's videos.
     let list = state.wallpapers.filter(w => w.kind === kind || (kind === 'live' && w.kind === 'video'));
+    // Each video on its own; the card that plays them in turn only for two or more (#762), as on the TV.
+    if (kind === 'live' && list.filter(w => w.kind === 'video').length < 3 && state.selected !== 'videos:mine') list = list.filter(w => w.id !== 'videos:mine');
     if (kind === 'daily' && list.length) list = [{ id: state.latestDaily, kind: 'daily', title: t('daily_title'), caption: t('daily_caption') }, ...list];
     // Two or more photos: one a day, as on the TV (#27, #194).
     if (kind === 'photo' && list.length > 1) list = [{ id: state.rotatePhotos, kind: 'photos', title: t('rotate_title'), caption: t('rotate_caption') }, ...list];
@@ -1315,7 +1317,7 @@ function renderWallpapers() {
     root.appendChild(g);
     if (sub) root.appendChild(el('p', 'foot', sub));
     // Whether keys stop the owner's videos, as on the TV; the aerial films always move.
-    if (kind === 'live' && state.selected === 'videos:mine') {
+    if (kind === 'live' && /^videos?:/.test(state.selected)) {
       const l = el('div', 'list'); l.style.marginTop = '10px';
       const row = el('label', 'item');
       const txt = el('span', 'txt', t('sw_always')); txt.appendChild(el('span', 'sub', t('sw_always_sub')));

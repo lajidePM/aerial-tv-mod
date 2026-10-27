@@ -151,7 +151,7 @@ fun WallpaperSheet(
                     SectionTitle(R.string.wp_wallpaper)
                     WallpaperRows()
                     // Only for the owner's videos: whether keys stop them. The aerial films always move.
-                    if (Wallpapers.selectedId == Wallpapers.VIDEOS) Group { note ->
+                    if (Wallpapers.isVideo()) Group { note ->
                         Choices(
                             R.string.st_play, stringResource(R.string.st_play_hint), note,
                             listOf(false to R.string.st_play_still, true to R.string.st_play_always),
@@ -337,9 +337,14 @@ private fun WallpaperRows() {
     }
     val dailyTitle = stringResource(R.string.wp_daily_latest)
     val rotateTitle = stringResource(R.string.wp_photos_rotate)
-    val list = remember(items, selected, dailyTitle, rotateTitle) {
+    val videosTitle = stringResource(R.string.wp_videos_rotate)
+    val list = remember(items, selected, dailyTitle, rotateTitle, videosTitle) {
         buildList {
-            addAll(items.filter { it.kind == WallpaperKind.Live || it.kind == WallpaperKind.Video })
+            addAll(items.filter { it.kind == WallpaperKind.Live })
+            // Each video on its own, and with two or more one card that plays them in turn (#762).
+            val videos = items.filter { it.kind == WallpaperKind.Video && it.id != Wallpapers.VIDEOS }
+            if (videos.size > 1 || selected == Wallpapers.VIDEOS) add(Wallpaper(Wallpapers.VIDEOS, WallpaperKind.Video, videosTitle))
+            addAll(videos)
             if (items.any { it.kind == WallpaperKind.Daily }) add(Wallpaper(Wallpapers.LATEST_DAILY, WallpaperKind.Daily, dailyTitle))
             addAll(items.filter { it.kind == WallpaperKind.Daily && it.id == selected })
             val photos = items.filter { it.kind == WallpaperKind.Photo }
@@ -374,7 +379,8 @@ private fun WallpaperRows() {
 @Composable
 private fun wallpaperNote(wp: Wallpaper): String? = when {
     wp.kind == WallpaperKind.Live -> stringResource(R.string.wp_live)
-    wp.kind == WallpaperKind.Video -> stringResource(R.string.wp_videos_note)
+    wp.id == Wallpapers.VIDEOS -> stringResource(R.string.wp_videos_note)
+    wp.kind == WallpaperKind.Video -> stringResource(R.string.wp_video_note)
     wp.kind == WallpaperKind.Source -> stringResource(R.string.wp_source_note)
     wp.id == Wallpapers.LATEST_DAILY -> stringResource(R.string.wp_daily_note)
     wp.id == Wallpapers.ROTATE_PHOTOS -> stringResource(R.string.wp_photos_rotate_note)

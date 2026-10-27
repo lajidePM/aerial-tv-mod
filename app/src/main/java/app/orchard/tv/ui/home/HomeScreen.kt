@@ -531,12 +531,15 @@ fun HomeScreen(
                 standIn = overlay == Overlay.None || overlay is Overlay.ControlCenter || overlay is Overlay.Wallpaper,
                 live = liveFilm,
             )
-            Wallpapers.selectedId == Wallpapers.VIDEOS -> VideoWallpaper(
-                moving = filmMoves,
-                keep = vm.resumed && !vm.screensaverVisible,
-                lastInputAt = vm.lastInputAt,
-                cover = filmCover,
-            )
+            // Anew for each choice, so another of the owner's videos does not keep the last one's player.
+            Wallpapers.isVideo() -> key(Wallpapers.selectedId) {
+                VideoWallpaper(
+                    moving = filmMoves,
+                    keep = vm.resumed && !vm.screensaverVisible,
+                    lastInputAt = vm.lastInputAt,
+                    cover = filmCover,
+                )
+            }
             sourceInput != null -> SourceWallpaper(sourceInput, show = vm.resumed && !vm.screensaverVisible, cover = filmCover)
         }
         Box(
