@@ -568,7 +568,7 @@ object SystemProbe {
                 // only switches the picture (Sony BRAVIA XR90 with an Apple TV and a PS5, issue #259).
                 val cec = infos.firstOrNull { it.parentId == info.id }
                 val generic = genericRoute(cec ?: info, kind)
-                val intent = (if (xiaomi) xiaomiRoute(info, kind, label, profile) else null)
+                val intent = (if (xiaomi) xiaomiRoute(info, kind, label, profile)?.takeIf { resolves(context, it) } else null)
                     ?: generic.takeIf { resolves(context, it) }
                     ?: droidLogicRoute(context, info)
                     ?: tclPlayer?.let { tclRoute(it, kind, label) }
@@ -860,6 +860,9 @@ object SystemProbe {
     private fun isDigitalTuner(label: String, hw: Int): Boolean = when {
         label.contains("ATV", ignoreCase = true) -> false
         label.contains("DTV", ignoreCase = true) || label.contains("DTMB", ignoreCase = true) -> true
+        // Novatek's framework label names the standard instead: "NovatekDVBT" at HW1 is the
+        // digital tuner the profile shows as DTMB (Redmi X50 MiTV-NSOP0, #738).
+        label.contains("DVB", ignoreCase = true) -> true
         else -> hw == 0
     }
 
