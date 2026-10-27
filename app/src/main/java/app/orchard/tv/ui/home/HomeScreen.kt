@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -748,11 +749,18 @@ fun HomeScreen(
                 showTime = if (dragged) pastShelf else inGrid,
                 enabled = gridEnabled && moving == null,
                 focusRequester = pillRequester,
-                modifier = Modifier.graphicsLayer {
-                    alpha = 1f - (toSaver.value * 2f).coerceIn(0f, 1f)
-                    // No offscreen buffer: it would cut the focused pill's 8% growth to a box.
-                    compositingStrategy = CompositingStrategy.ModulateAlpha
-                },
+                modifier = Modifier
+                    // Down goes back to the top-row tile Up came from, not to the nearest one,
+                    // which under the pill is the last of the row (issue #703).
+                    .focusProperties {
+                        val key = focusedKey
+                        if (key != null && apps.indexOfFirst { it.key == key } in 0 until COLUMNS) down = requester(key)
+                    }
+                    .graphicsLayer {
+                        alpha = 1f - (toSaver.value * 2f).coerceIn(0f, 1f)
+                        // No offscreen buffer: it would cut the focused pill's 8% growth to a box.
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    },
                 onFocused = { gained ->
                     // The window hands its first focus to the top-most control; the top row is where Home starts.
                     if (gained) {
