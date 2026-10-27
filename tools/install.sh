@@ -50,12 +50,52 @@ adb connect "$SERIAL" >/dev/null
 STATE=$(adb get-state 2>&1 || true)
 if [ "$STATE" != device ]; then
   case "$STATE" in
-    *unauthorized*) echo "The TV is asking \"Allow USB debugging?\". Choose Allow (and Always allow) on the TV, then run again." ;;
-    # Android 11+ TVs with only wireless debugging use a TLS port of their own and refuse an
-    # unpaired computer's certificate (TCL 85T7L Ultra, issue #480).
-    *) echo "Could not connect to $SERIAL. Check that ADB debugging is on and the IP is right. A TV that offers only wireless debugging (Android 11+) needs pairing first: adb pair <IP>:<pairing port> with the code the TV shows, then run again with TV=<IP>:<port the TV shows>." ;;
-  esac >&2
-  exit 1
+    *unauthorized*) echo "The TV is asking \"Allow USB debugging?\". Choose Allow (and Always allow) on the TV, then run again." ; exit 1 ;;
+  esac
+  # Android 11+ "Wireless debugging" never answers on 5555: adbd speaks TLS on ports that change
+  # every visit, and the first connection needs a 6-digit pairing code (TCL Q9M / Q10L and other
+  # 2026 firmwares only expose this mode, issue #31). Pair once, then put adbd back on 5555 so
+  # the runs after this one (and KEEP_ADB) work the usual way. Some TCL firmwares (Q10M, 鹤 7 Pro)
+  # have no pairing-code entry at all; the only way in there is a USB cable, then adb tcpip 5555.
+  # Android 11+ TVs with only wireless debugging use a TLS port of their own and refuse an
+  # unpaired computer's certificate (TCL 85T7L Ultra, issue #480).
+  PAIRED=0
+  if [ -n "${ADB_PAIR:-}" ] && [ -n "${ADB_CODE:-}" ] && [ -n "${ADB_CONNECT:-}" ]; then
+    adb pair "$ADB_PAIR" "$ADB_CODE" || echo "Pairing failed: check the code, it expires quickly." >&2
+    if adb connect "$ADB_CONNECT" >/dev/null && [ "$(adb get-state 2>/dev/null)" = device ]; then
+      PAIRED=1; MAIN_SERIAL="$ADB_CONNECT"
+    fi
+  elif [ -t 0 ]; then
+    echo "The TV did not accept $SERIAL. On Android 11+ it may be on wireless debugging, which pairs first:"
+    echo "on the TV open Developer options → Wireless debugging → Pair device with pairing code."
+    printf "IP:port shown on the pairing screen (blank to skip): "; read -r PAIR
+    if [ -n "$PAIR" ]; then
+      printf "6-digit pairing code: "; read -r CODE
+      adb pair "$PAIR" "$CODE" || echo "Pairing failed: check the code, it expires quickly." >&2
+      echo "The main wireless-debugging screen shows another IP:port (it changes every time)."
+      printf "IP:port to connect to: "; read -r MAIN
+      if [ -n "$MAIN" ] && adb connect "$MAIN" >/dev/null && [ "$(adb get-state 2>/dev/null)" = device ]; then
+        PAIRED=1; MAIN_SERIAL="$MAIN"
+      else
+        echo "Connecting to $MAIN did not work; read the IP:port on the wireless-debugging screen again." >&2
+      fi
+    fi
+  else
+    echo "Could not connect to $SERIAL. Check that ADB debugging is on and the IP is right. A TV that offers only wireless debugging (Android 11+) needs pairing first: adb pair <IP>:<pairing port> with the code the TV shows, then run again with TV=<IP>:<port the TV shows>." >&2
+    echo "Or rerun with ADB_PAIR=<pair-screen ip:port> ADB_CODE=<6-digit code> ADB_CONNECT=<main-screen ip:port> set." >&2
+  fi
+  if [ "$PAIRED" = 1 ]; then
+    # Plaintext 5555 keeps working without pairing again; the pairing only authorizes this key.
+    if adb tcpip 5555 >/dev/null 2>&1; then sleep 2; adb connect "$SERIAL" >/dev/null; fi
+    if [ "$(adb get-state 2>/dev/null)" = device ]; then
+      echo "Paired; adbd is back on 5555. The usual IP works for later runs."
+    else
+      export ANDROID_SERIAL="$MAIN_SERIAL"; echo "Staying on $MAIN_SERIAL for this run; the next run pairs again." >&2
+    fi
+  else
+    echo "The TV did not accept the connection. Accept \"Allow USB debugging?\" on the TV, then run again." >&2
+    exit 1
+  fi
 fi
 
 # What counts is the service Android actually runs, not the settings entry: after an update, Xiaomi
