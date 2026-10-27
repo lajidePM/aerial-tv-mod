@@ -59,6 +59,14 @@ class HomeGuardService : AccessibilityService() {
     /** HOME activities that are not ours: package to class names. Refreshed on every connect. */
     private var stockHomes: Map<String, Set<String>> = emptyMap()
 
+    /**
+     * Fallback Home activities (negative priority, kept out of stockHomes): the setup wizard's and
+     * Settings' FallbackHome, which show only for a moment at boot. One seen last says nothing about
+     * what is in front now: on Tencent 极光 BA101 (Android 14) the guard last saw
+     * com.android.provision at boot, and the launcher after it raised no window change, so both
+     * boot rechecks left the launcher in front (issue #701, the reporter's 1.61 log).
+     */
+    private var fallbackHomes: Set<Pair<String, String>> = emptySet()
 
     /** Set when the user opens the stock launcher on purpose from Aerial's grid. */
     private var allowStockUntil = 0L
@@ -514,7 +522,7 @@ class HomeGuardService : AccessibilityService() {
         // the boot rechecks, on firmwares that raise no window change for the app the viewer
         // opened (Skyworth 9S52_Q4A, Android 6, issue #489). Aerial itself says nothing about what
         // it uncovered when it died, so it stays unknown.
-        val last = lastWindow?.let { (if (coveredSilently) coveredAerial(it) else null) ?: it }
+        val last = lastWindow?.takeIf { it !in fallbackHomes }?.let { (if (coveredSilently) coveredAerial(it) else null) ?: it }
             ?: frontByUsage()?.also { Log.i(TAG, "$reason; usage stats say ${it.first} is in front") }
         // Unknown means we were only just bound, which happens after a standby kill. Any screen of
         // the stock launcher counts: when Aerial is killed, whatever was on top of the launcher's
@@ -938,6 +946,12 @@ class HomeGuardService : AccessibilityService() {
         // switch, from Aerial or the remote, was taken back at once (issue #223). It stays one
         // only where it is the Home the system resolves.
         val resolved = resolvedHome()
+        fallbackHomes = runCatching {
+            packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)
+                .filter { it.priority < 0 && it.activityInfo.packageName != packageName }
+                .filter { it.activityInfo.name != LOW_PRIORITY_HOMES[it.activityInfo.packageName] }
+                .map { it.activityInfo.packageName to it.activityInfo.name }.toSet()
+        }.getOrDefault(emptySet())
         val homes = (standard + vendor)
             // Negative priority entries are fallbacks shown only while nothing else can be Home,
             // except the ones a firmware does start.
