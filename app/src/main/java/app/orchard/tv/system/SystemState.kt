@@ -319,6 +319,7 @@ object SystemProbe {
     }
 
     fun startSettingsIntent(context: Context, intent: Intent) {
+        if (HisenseSources.open(context, intent)) return
         val activity = if (intent.component == XGIMI_SETTINGS) {
             val shown = runCatching { context.startService(intent) }.getOrNull() != null
             if (shown) return
@@ -501,6 +502,7 @@ object SystemProbe {
     fun sources(context: Context): List<TvSource> = frameworkSources(context)
         .ifEmpty { XgimiMstarSources.load(context) }
         .ifEmpty { xiaomiSources(context) }
+        .ifEmpty { HisenseSources.load(context) }
         .ifEmpty { KonkaSources.load(context) }
         .ifEmpty { tclSources(context) }
         .ifEmpty { whaleySources(context) }

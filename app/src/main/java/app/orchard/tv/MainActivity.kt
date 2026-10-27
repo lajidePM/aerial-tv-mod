@@ -76,6 +76,7 @@ import app.orchard.tv.system.MissingClipboard
 import app.orchard.tv.system.Sounds
 import app.orchard.tv.system.NetKind
 import app.orchard.tv.system.SystemProbe
+import app.orchard.tv.system.HisenseSources
 import app.orchard.tv.system.LaunchFallback
 import app.orchard.tv.system.settingsLaunchIntent
 import app.orchard.tv.update.Updates
@@ -787,6 +788,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         try {
+            if (HisenseSources.open(this, app.launchIntent())) return
             startActivity(settingsLaunchIntent(this, app.launchIntent()), options)
         } catch (e: Exception) {
             // XGIMI (GMUI): nothing answers the passthrough intent a source tile carries, so the tile
