@@ -179,7 +179,8 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 - **旧固件存储权限**：Android 6 上只有外部更新目录不可写、且缺少读或写存储权限时，才请求两项权限；允许后再点一次「下载并安装」。声明限制到 API 23，Android 7 及以后继续用内部缓存，不请求存储权限。MiTV4-ANSM0（Android 6.0.1）独立 release 测试工具验证：仅授予写权限仍无法创建目录，同时授予读、写权限后可写入官方 1.56 APK，系统安装器可解析并显示更新确认页；该安装器没有接收 `content://` APK 的入口，因此保留旧系统的外部缓存 + `file://` 路径。尚未用官方签名的新版本验证完整覆盖升级。
 
 - **下载并安装**：先从官网 `download/aerial-<flavor>.apk` 下载，失败再从 GitHub `releases/latest/download`（不用第三方 GitHub 代理）。下载后检查包名、签名（和这台电视上的 Aerial 比）和 versionCode，不对就不打开安装器，并在页上说明原因（`Updates.Failure`）。改过包名的版本（OPPO）不显示按钮。
-- **交给系统安装器**：用 `ACTION_VIEW` + FileProvider（`res/xml/update_files.xml`，Android 7 以下用 `file://`）打开系统安装器，不用 PackageInstaller session：TCL 的安装校验只放行由 `com.android.packageinstaller` 发起的安装，`ACTION_VIEW` 时发起者就是系统安装器（和当贝一样）。要 `REQUEST_INSTALL_PACKAGES`：小米有「安装未知应用」设置页，没开时跳过去；TCL 没有这个页面，靠 `install.sh` 用 `appops set … REQUEST_INSTALL_PACKAGES allow` 放行。
+- **安卓 13 及以上先用安装会话**（`Updates.installBySession`，#723）：`ACTION_VIEW` 的安装在安卓 13 起记成本地文件（`packageSource=3`），系统把 `ACCESS_RESTRICTED_SETTINGS` 设成 deny，TCL T966D5（安卓 14）上守护随之被关。会话声明 `PACKAGE_SOURCE_OTHER`，系统照样弹确认（`UpdateResult` 收到 `STATUS_PENDING_USER_ACTION` 后打开确认页）；会话失败时退回下面的 `ACTION_VIEW`。已经是 deny 的不会因为后来的升级变回 allow，要 `appops set app.orchard.tv ACCESS_RESTRICTED_SETTINGS allow`。安卓 13 TV 模拟器上验证过。
+- **交给系统安装器**（安卓 12 及以下）：用 `ACTION_VIEW` + FileProvider（`res/xml/update_files.xml`，Android 7 以下用 `file://`）打开系统安装器，不用 PackageInstaller session：TCL 的安装校验只放行由 `com.android.packageinstaller` 发起的安装，`ACTION_VIEW` 时发起者就是系统安装器（和当贝一样）。要 `REQUEST_INSTALL_PACKAGES`：小米有「安装未知应用」设置页，没开时跳过去；TCL 没有这个页面，靠 `install.sh` 用 `appops set … REQUEST_INSTALL_PACKAGES allow` 放行。
 - **装完回到 Aerial**：安装会杀掉 Aerial 的任务，露出底下的东西（小米上是 PatchWall 的详情页，不是原桌面的 HOME Activity，守护原来的规则不管）。所以打开安装器前记下时间（`GuardSetup.noteInstallerOpened`，用 commit 立刻写盘），新进程的守护在 15 分钟内看到原桌面的任意页面就拉回 Aerial；在安装器里取消、回到 Aerial 时清掉这个记录。
 - **二维码**：装不上的电视（以及 1.31 及以前的版本）还是要再运行一次安装命令。升级页不再显示长命令，而是一个二维码，打开 `https://aerial.qust.me/update/#v=…&f=…&tv=<局域网IP>`（参数放在 `#` 后面，浏览器不会发给服务器），页面上先是 Agent 提示词，再是电视上的按钮说明和可复制的安装命令。
 - 测试：`ConfigReceiver --ez check_update true` 立刻检查新版本；`--ez update_test true` 让「下载并安装」改用 `Android/data/app.orchard.tv/files/update-test.apk`（到 Aerial 重启为止），发版前就能测整条流程。做法：装一个只把 `versionName` 改低的包，推一个带新代码的包当 update-test.apk。
@@ -213,7 +214,7 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 
 ## 开机信号源
 
-控制中心 → 信号源 → 信号源设置 →「开机时打开」（`AerialSettings.bootSource`，issue #25）。也可以开机打开一个 App（`AerialSettings.bootApp`，按包名，比如直播 App，一般会接着播上次的频道）：在主屏幕长按 App 或信号源磁贴，选「开机时打开」，再选一次是「开机时不再打开」；两者只能有一个，信号源设置页里选了 App 时显示在列表里，选「不打开」清除。设了开机打开的对象时，控制中心主页「个性化」下面多一行「开机时打开 ……›」，点进信号源设置。每次选择、更换、取消，屏幕顶部都出现一条玻璃提示，4 秒后消失（`HomeViewModel.chooseBootTarget` / `notify`，`Overlays.NoticeBanner`），更换时写明换掉的是哪个。国内电视的「开机」大多是从待机唤醒，所以三条路径都会触发 `MainActivity.openBootSource`：真重启后第一次启动（按 `Settings.Global.BOOT_COUNT` 每次开机只开一次）；守护在亮屏、复活或开机后把 Aerial 拉回前台时带上 `EXTRA_WOKE`（Aerial 被杀掉的小米）；Aerial 本来就在前台时自己收到的亮屏广播（TCL）。15 秒内重复触发只开一次。如果唤醒时 CEC 已经切到了某个信号源，守护不会拉回 Aerial，这一次也就不再打开设定的信号源。
+控制中心 → 信号源 → 信号源设置 →「开机时打开」（`AerialSettings.bootSource`，issue #25）。也可以开机打开一个 App（`AerialSettings.bootApp`，按包名，比如直播 App，一般会接着播上次的频道）：在主屏幕长按 App 或信号源磁贴，选「开机时打开」，再选一次是「开机时不再打开」；两者只能有一个，信号源设置页里选了 App 时显示在列表里，选「不打开」清除。设了开机打开的对象时，控制中心主页「个性化」下面多一行「开机时打开 ……›」，点进信号源设置。每次选择、更换、取消，屏幕顶部都出现一条玻璃提示，4 秒后消失（`HomeViewModel.chooseBootTarget` / `notify`，`Overlays.NoticeBanner`），更换时写明换掉的是哪个。国内电视的「开机」大多是从待机唤醒，所以三条路径都会触发 `MainActivity.openBootSource`：真重启后第一次启动（按 `Settings.Global.BOOT_COUNT` 每次开机只开一次）；守护在亮屏、复活或开机后把 Aerial 拉回前台时带上 `EXTRA_WOKE`（Aerial 被杀掉的小米）；Aerial 本来就在前台时自己收到的亮屏广播（TCL）。15 秒内重复触发只开一次。另外每次开机、每次唤醒（中间屏幕关过）最多开一次（`system/BootOpen.kt`，#766）：打开的时间和最近一次息屏（MainActivity 和守护都记）存在 `system` 偏好里，按开机时刻（墙钟 − elapsedRealtime，允许 2 分钟误差）区分是不是这次开机；酷开杀掉 Aerial 后从 App 回来是冷启动，守护又当成唤醒，以前会再开一次，形成循环。Lite 只按开机记。如果唤醒时 CEC 已经切到了某个信号源，守护不会拉回 Aerial，这一次也就不再打开设定的信号源。
 
 ## 遥控器按键
 
@@ -244,7 +245,8 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
   - 锁定期间只记窗口，不启动界面、不拦 HOME；凭据加密存储里的偏好（keep_adb、屏保）解锁后再读
   - ACTION_USER_UNLOCKED → 1.5 秒后按下面的规则接管。TCL 75S365C 上从解锁到 Aerial 7.6 秒 → 约 2 秒
 运行：HomeGuardService
-  - onKeyEvent(HOME) → 不是默认桌面时吞掉按键，打开 Aerial（Android 11 及以下一直开着按键过滤，见 filterKeys）
+  - onKeyEvent(HOME) → 不是默认桌面时吞掉按键，打开 Aerial（Android 11 及以下一直开着按键过滤，见 filterKeys；接着手柄 `SOURCE_GAMEPAD` 且前台是别的 App 时不过滤，#774：过滤时每个手柄事件都要经 system_server 主线程重新注入，MFTR0 安卓 11 串流时卡死重启。不看 joystick 位：TCL MT5879 的红外接收器带这一位）
+  - 守护「聋」了（#651）：重启无障碍在安卓 6 以上改成把 Aerial 从列表拿出再放回（只改 `accessibility_enabled` 不会重新绑定）；发现聋之后，按主页键起每 150 ms 查一次用量统计，直到收到窗口事件。开机复查时最后看到的窗口如果是负优先级的 HOME（开机向导、FallbackHome，`fallbackHomes`），当作前台未知，问用量统计（#701）
   - TYPE_WINDOW_STATE_CHANGED → 原桌面的 HOME Activity 到前台 → 打开 Aerial
   - 亮屏、开机、复活、解锁 → 等 1.5 秒，前台还是原桌面（或者不知道）才打开 Aerial（takeOverOnceSettled）。
     只有 Activity 窗口算前台，浮层和对话框不算（TCL 语音助手）。前台是信号源时不动：CEC 切过去的，
