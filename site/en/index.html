@@ -226,6 +226,7 @@
         <button role="tab" aria-selected="false" data-tab="cli">One command</button>
         <button role="tab" aria-selected="false" data-tab="manual">Manual</button>
         <button role="tab" aria-selected="false" data-tab="phone">Phone only</button>
+        <button role="tab" aria-selected="false" data-tab="usb">USB drive</button>
         <button role="tab" aria-selected="false" data-tab="lite">Android 4.x</button>
       </div>
 
@@ -261,6 +262,18 @@
           <li>Install Aerial from the app (standard build; try the guard build if that is refused), then grant permissions one by one as in Windows item 3 of the <a href="agent.md">install guide</a> and start the app as in item 6.</li>
         </ol>
         <p class="note">Users have installed Aerial this way; we have not tested each tool. Phone tools usually can't finish every setting, so once it's installed, run the check with a computer or an agent if you can.</p>
+      </div>
+
+      <div class="panel" data-panel="usb">
+        <p>No computer, and no need for steps 1 and 2 above: copy the APK to a USB drive, plug it into the TV, and open it with the TV's file manager to install.</p>
+        <ul>
+          <li><a href="../download/aerial-standard.apk"><b>aerial-standard.apk</b></a>: try this first on Android 5.0 and later.</li>
+          <li><a href="../download/aerial-guard.apk"><b>aerial-guard.apk</b></a>: use this if the first is refused because the TV won't install home-screen apps.</li>
+          <li><a href="../download/aerial-lite.apk"><b>aerial-lite.apk</b></a>: old TVs on Android 4.0-4.4 (see Android 4.x).</li>
+        </ul>
+        <p>Once it's installed, <b>press Home on the remote</b>. If Android asks which app to use, choose <b>Aerial</b>, then <b>Always</b>, and you're done; stock Android TV usually works this way.</p>
+        <p>If Home goes straight back to the old home screen without asking (most Chinese-brand TVs): open Aerial from the app list. It shows "Make Aerial Your Home Screen", whose entries open the TV's settings for the home guard (Accessibility) and notification access. If the TV's settings don't have them, Aerial works only as an ordinary app opened from the app list; to take over Home, set it up once with a computer or an agent (it installs over, settings stay).</p>
+        <p class="note">Whether Home, power-on and wake come back to Aerial after a USB-only install depends on those entries being in the TV's settings; a computer install is the most reliable. Later updates: choose "New version" in Control Center, or install from the USB drive again.</p>
       </div>
 
       <div class="panel" data-panel="lite">

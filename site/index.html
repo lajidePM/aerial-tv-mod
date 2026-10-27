@@ -227,6 +227,7 @@
         <button role="tab" aria-selected="false" data-tab="cli">一行命令</button>
         <button role="tab" aria-selected="false" data-tab="manual">手动</button>
         <button role="tab" aria-selected="false" data-tab="phone">只用手机</button>
+        <button role="tab" aria-selected="false" data-tab="usb">U 盘</button>
         <button role="tab" aria-selected="false" data-tab="lite">Android 4.x</button>
       </div>
 
@@ -263,6 +264,18 @@
           <li>在工具里安装 Aerial（standard 版；装不上时试 guard 版），再按 <a href="agent.md">安装说明</a> 的 Windows 第 3 步逐条授权、第 6 步启动 App。</li>
         </ol>
         <p class="note">这些工具是用户反馈装过的，本仓库没有逐一实测。手机工具一般不能替你完成全部设置，装好后建议再用电脑或 Agent 跑一遍验收。</p>
+      </div>
+
+      <div class="panel" data-panel="usb">
+        <p>不用电脑，也不用上面的第 1、2 步：把 APK 拷进 U 盘，插到电视上，用电视自带的文件管理器打开安装。</p>
+        <ul>
+          <li><a href="download/aerial-standard.apk"><b>aerial-standard.apk</b></a>：Android 5.0 及以上先装这个。</li>
+          <li><a href="download/aerial-guard.apk"><b>aerial-guard.apk</b></a>：上面那个装不上、提示不允许安装桌面类 App 时换这个。</li>
+          <li><a href="download/aerial-lite.apk"><b>aerial-lite.apk</b></a>：Android 4.0–4.4 的老电视（见「Android 4.x」）。</li>
+        </ul>
+        <p>装好后<b>按遥控器的主页键</b>：系统问「使用哪个应用」时选 <b>Aerial</b>，再选「<b>始终</b>」，就设好了，原生 Android TV 一般是这样。</p>
+        <p>直接回到原来的桌面、不问（国产电视大多这样）：从「我的应用」打开 Aerial，它会弹出「设为主屏幕」，按里面的入口去电视设置里打开桌面守护（无障碍）和通知使用权。电视设置里没有这些入口时，Aerial 只能当普通 App 从应用列表打开，要接管主页键就得用电脑或 Agent 设置一次（覆盖安装，设置不丢）。</p>
+        <p class="note">只用 U 盘装时，按主页键、开机、待机醒来能不能回到 Aerial，要看电视设置里有没有这几个入口；用电脑装最稳。以后升级可以在控制中心里点「有新版本」，也可以再用 U 盘装一次。</p>
       </div>
 
       <div class="panel" data-panel="lite">

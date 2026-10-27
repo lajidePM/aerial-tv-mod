@@ -112,6 +112,16 @@ adb shell am start -n app.orchard.tv/.MainActivity
 
 Windows 用 Agent 装，或照[安装说明](site/agent.md)里的 Windows 步骤。
 
+**U 盘（不用电脑）**：下载 APK 拷进 U 盘，用电视的文件管理器打开安装。
+
+| 下载 | 用在 |
+|---|---|
+| [aerial-standard.apk](https://aerial.qust.me/download/aerial-standard.apk) | Android 5.0 及以上，先装这个 |
+| [aerial-guard.apk](https://aerial.qust.me/download/aerial-guard.apk) | standard 装不上、提示不允许安装桌面类 App 时 |
+| [aerial-lite.apk](https://aerial.qust.me/download/aerial-lite.apk) | Android 4.0–4.4（见下面的 [Aerial Lite](#lite)） |
+
+装好后按主页键：系统问「使用哪个应用」时选 Aerial、再选「始终」就设好了（原生 Android TV 一般是这样）。直接回到原桌面、不问（国产电视大多这样）时，从「我的应用」打开 Aerial，它会弹出「设为主屏幕」，按里面的入口去电视设置里打开桌面守护（无障碍）和通知使用权；电视设置里没有这些入口时，Aerial 只能当普通 App 用，要接管主页键还得用上面的命令或 Agent 设置一次（覆盖安装，不丢设置）。
+
 **升级**：1.32 起，有新版本时控制中心会出现「有新版本」，点进去选「下载并安装」，在电视自己的安装界面确认（小米、TCL 上验证过），装完回到 Aerial，设置都保留。电视不让 App 安装应用时，升级就是再运行一次安装命令：升级页上有二维码，手机扫码能直接复制这台电视的命令，或者交给 Agent。1.31 及以前没有这个按钮，这一次还是要再运行一次安装命令。
 
 <a id="lite"></a>

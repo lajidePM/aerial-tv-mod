@@ -93,6 +93,16 @@ At the end, paste the raw output of these commands from the "Check" section, not
 
 Phone apps and web chats, including Doubao on a phone, only tell you the steps; they can't run anything. Use a desktop build that can (Doubao for desktop or Doubao Work, WorkBuddy, Qwen for desktop, Trae, Claude Code, Codex…). When the agent says it's done, check that the `mCurrentFocus` output it pastes includes `app.orchard.tv`.
 
+**USB drive (no computer)**: copy an APK to a USB drive and open it with the TV's file manager.
+
+| Download | For |
+|---|---|
+| [aerial-standard.apk](https://aerial.qust.me/download/aerial-standard.apk) | Android 5.0 and later; try this first |
+| [aerial-guard.apk](https://aerial.qust.me/download/aerial-guard.apk) | when standard is refused because the TV won't install home-screen apps |
+| [aerial-lite.apk](https://aerial.qust.me/download/aerial-lite.apk) | Android 4.0-4.4 (see [Aerial Lite](#lite) below) |
+
+Then press Home: if Android asks which app to use, choose Aerial, then Always, and you're done (stock Android TV usually works this way). If Home goes straight back to the old launcher without asking (most Chinese-brand TVs), open Aerial from the app list; it shows "Make Aerial Your Home Screen", whose entries open the TV's settings for the home guard (Accessibility) and notification access. If the TV's settings don't have them, Aerial works only as an ordinary app; to take over Home, run the command below or hand it to an agent once (it installs over, settings stay).
+
 **Without a computer**: users have installed Aerial with the phone apps Beetle ADB (甲壳虫 ADB 助手) and Super Xiaoai (超级小爱); we haven't tested each one. The steps are the same as the Windows ones above; once it's installed, run the check from a computer if you can (see [Check](site/en/agent.md#check-required)).
 
 **One command (macOS / Linux)**:
