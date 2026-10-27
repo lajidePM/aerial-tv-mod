@@ -73,6 +73,8 @@ val copyAerials by tasks.registering(Copy::class) {
     from(rootProject.file("app/src/main/assets/aerials.json"))
     from(rootProject.file("app/src/main/res/font/inter.ttf"))
     from(rootProject.file("app/src/main/assets/cities-cn.tsv"))
+    // Per-model corrections, read by DeviceProfile (MitvPanel and Brightness ask it).
+    from(rootProject.file("app/src/main/assets/devices.json"))
     // The phone page, the full app's own.
     from(rootProject.file("app/src/main/assets/web")) { into("web") }
     into(layout.projectDirectory.dir("lite-assets"))
@@ -87,6 +89,7 @@ val copySources by tasks.registering(Copy::class) {
     from(rootProject.file("app/src/main/java/app/orchard/tv/apps/CustomIcons.kt"))
     from(rootProject.file("app/src/main/java/app/orchard/tv/wallpaper/ScreensaverVideos.kt"))
     from(rootProject.file("app/src/main/java/app/orchard/tv/system/MitvPanel.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/system/DeviceProfile.kt"))
     into(sharedSources.map { it.dir("app/orchard/tv/lite") })
     // Into Lite's package; Compose's state and AndroidX's prefs.edit {} come from Lite's Shims.kt.
     filter { line ->

@@ -49,7 +49,16 @@ data class TvSource(
     /** What HDMI-CEC says is plugged in, e.g. "Apple TV". */
     val deviceName: String?,
     val intent: Intent,
-)
+    /** The hardware id a framework input ends in (`.../HW5`), which DeviceProfile keys on. */
+    val hardware: Int? = null,
+    /** The framework's own label, before DeviceProfile renames it. */
+    val firmwareLabel: String? = null,
+    /** Hidden by DeviceProfile; only in [SystemProbe.inputsToCheck]. */
+    val hidden: Boolean = false,
+) {
+    /** The Xiaomi tvplayer source id this input opens, or null when it does not go through it. */
+    val xiaomiInput: Int? get() = intent.takeIf { it.component?.packageName == SystemProbe.XIAOMI_PLAYER && it.hasExtra("input") }?.getIntExtra("input", 0)
+}
 
 enum class HomeStatus { Default, Guarded, NotDefault }
 
@@ -411,7 +420,7 @@ object SystemProbe {
 
     // ---- Inputs ----
 
-    private const val XIAOMI_PLAYER = "com.xiaomi.mitv.tvplayer"
+    const val XIAOMI_PLAYER = "com.xiaomi.mitv.tvplayer"
     private const val DROIDLOGIC_PLAYER = "com.droidlogic.tvsource"
 
     /** CEC logical-device placeholders some input services report instead of the device's name. */
@@ -454,17 +463,24 @@ object SystemProbe {
         ComponentName("com.tcl.ui_mediaCenter", "com.tcl.ui_mediaCenter.main.MainActivity"),
     )
 
-    private fun frameworkSources(context: Context): List<TvSource> {
+    /**
+     * Every framework input with a hardware id, hidden ones too, for Control Center's input check
+     * (CcPage.InputFix): what DeviceProfile can correct.
+     */
+    fun inputsToCheck(context: Context): List<TvSource> =
+        frameworkSources(context, withHidden = true).filter { it.hardware != null }
+
+    private fun frameworkSources(context: Context, withHidden: Boolean = false): List<TvSource> {
         val tim = context.getSystemService<TvInputManager>() ?: return emptyList()
         val infos = runCatching { tim.tvInputList }.getOrNull() ?: return emptyList()
         val xiaomi = isInstalled(context, XIAOMI_PLAYER)
         val tclPlayer = tclPlayer(context)
-        val profile = DeviceProfile.current()
+        val profile = DeviceProfile.current(context)
 
         return infos
             .filter { it.parentId == null && (it.isPassthroughInput || it.type == TvInputInfo.TYPE_TUNER) }
             .filter { Build.VERSION.SDK_INT < 24 || runCatching { !it.isHidden(context) }.getOrDefault(true) }
-            .filter { hw(it.id) !in profile.hiddenHardware }
+            .filter { info -> withHidden || hw(info.id).let { it == null || it !in profile.hiddenHardware } }
             .mapNotNull { info ->
                 val kind = when (info.type) {
                     TvInputInfo.TYPE_HDMI -> SourceKind.Hdmi
@@ -491,11 +507,14 @@ object SystemProbe {
                     ?.takeIf { it.isNotBlank() && !GENERIC_CEC_NAME.matches(it) }
                 TvSource(
                     id = info.id,
-                    label = profile.labels[hw(info.id)] ?: label,
+                    label = hw(info.id)?.let { profile.labels[it] } ?: label,
                     kind = kind,
                     connected = device != null || state == TvInputManager.INPUT_STATE_CONNECTED && kind != SourceKind.Tuner,
                     deviceName = device,
                     intent = intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    hardware = hw(info.id),
+                    firmwareLabel = label,
+                    hidden = hw(info.id)?.let { it in profile.hiddenHardware } == true,
                 )
             }
             .let { tunersApart(context, it) }
@@ -713,7 +732,7 @@ object SystemProbe {
         else -> SourceKind.Other
     }
 
-    private fun hw(id: String): Int? = Regex("/HW(\\d+)$").find(id)?.groupValues?.get(1)?.toIntOrNull()
+    fun hw(id: String): Int? = Regex("/HW(\\d+)$").find(id)?.groupValues?.get(1)?.toIntOrNull()
 
     private fun xiaomiRoute(info: TvInputInfo, kind: SourceKind, label: String, profile: DeviceProfile): Intent? {
         val n = hw(info.id) ?: return null
@@ -782,63 +801,4 @@ object SystemProbe {
 
     private fun isInstalled(context: Context, pkg: String) =
         runCatching { context.packageManager.getPackageInfo(pkg, 0); true }.getOrDefault(false)
-}
-
-/**
- * Per-model corrections the framework cannot tell us. MiTV-MFTR0 registers a fourth HDMI input
- * (HW8) with no connector behind it, and its two tuners are better named by what they receive.
- * MiTV-MFFU1 (Redmi monitor G Pro 27U) registers its DP port (HW9) and its USB-C port (HW10) both
- * as DisplayPort; its tvplayer knows them as source 29 and 30 (#62, found in its MonitorUtils).
- * MiTV-ANTL0 (L42R7-RA, Amlogic, Android 5.1) registers only one HDMI input, HW6, labelled
- * HDMI2, but it is the HDMI 1 port and source 23 (#64, from the reporter's logcat).
- * MiTV4-ANSM0 (Mi TV 4, Amlogic, Android 6.0.1) registers an HDMI input only for a port with a
- * device in it. On older firmwares HW7 is source 23 on some boards (#191, the reporter scanned
- * sources 1–32; Mi TV 4A, L32M5-AZ, #313) and 25 on others (#492), which the firmware's
- * hdmi3_order tells apart; 23 stays the fallback. Firmware 22.x numbers the ports as the general
- * rule does (#375).
- * MiTV-MFZP0 (77" OLED, mt9950, Android 9) registers HW4–HW7 as HDMI 1–4 but has three ports:
- * HW7 has none behind it, and its tvplayer numbers them hw + 19 (#311, the reporter's local build).
- */
-private class DeviceProfile(
-    val hiddenHardware: Set<Int?> = emptySet(),
-    val labels: Map<Int?, String> = emptyMap(),
-    /** Xiaomi tvplayer source ids for inputs that have no rule or another one, by hardware id. */
-    val xiaomiSourceIds: Map<Int, Int> = emptyMap(),
-    /** Like [xiaomiSourceIds], but only where the firmware has no hdmiN_order of its own. */
-    val xiaomiFallbackSourceIds: Map<Int, Int> = emptyMap(),
-) {
-    companion object {
-        fun current(): DeviceProfile = when (Build.MODEL) {
-            // NSOP0 / Novatek, firmware 22.7.26.1365: real input sessions map 23/24/25 to HW6/5/4.
-            "MiTV_NSOP0", "MiTV-NSOP0" -> DeviceProfile(
-                labels = mapOf(6 to "HDMI 1", 5 to "HDMI 2", 4 to "HDMI 3", 3 to "TV", 1 to "DTMB", 0 to "AV"),
-                xiaomiSourceIds = mapOf(6 to 23, 5 to 24, 4 to 25),
-            )
-            "MiTV_MFTR0", "MiTV-MFTR0" -> DeviceProfile(
-                hiddenHardware = setOf(8),
-                labels = mapOf(1 to "ATV", 0 to "DTMB", 2 to "AV", 6 to "HDMI 2 (eARC)"),
-            )
-            "MiTV_MFFU1", "MiTV-MFFU1" -> DeviceProfile(
-                labels = mapOf(9 to "DP", 10 to "USB-C"),
-                xiaomiSourceIds = mapOf(9 to 29, 10 to 30),
-            )
-            "MiTV_ANTL0", "MiTV-ANTL0" -> DeviceProfile(
-                labels = mapOf(6 to "HDMI 1"),
-                xiaomiSourceIds = mapOf(6 to 23),
-            )
-            // Firmware 22.x knows each port by its own number, and HW7 is HDMI 3 = 25 by the
-            // general rule (MiTV4-ANSM0 22.4.15.3234, issue #375: 23/24/25 opened HDMI 1/2/3).
-            "MiTV4-ANSM0", "MiTV4_ANSM0", "MiTV4A" ->
-                if (xiaomiFirmwareMajor() >= 22) DeviceProfile()
-                else DeviceProfile(xiaomiFallbackSourceIds = mapOf(7 to 23))
-            "MiTV_MFZP0", "MiTV-MFZP0" -> DeviceProfile(
-                hiddenHardware = setOf(7),
-                xiaomiSourceIds = mapOf(4 to 23, 5 to 24, 6 to 25),
-            )
-            else -> DeviceProfile()
-        }
-
-        /** The first number of a Xiaomi build id such as 22.4.15.3234, or 0. */
-        private fun xiaomiFirmwareMajor(): Int = Build.DISPLAY.substringBefore('.').toIntOrNull() ?: 0
-    }
 }

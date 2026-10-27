@@ -120,6 +120,8 @@ fun ControlCenter(
             CcPage.Main -> onClose()
             CcPage.Inputs -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
             CcPage.InputSettings -> vm.overlay = Overlay.ControlCenter(CcPage.Inputs)
+            CcPage.InputFix -> vm.overlay = Overlay.ControlCenter(CcPage.InputSettings)
+            CcPage.InputFixOne -> vm.overlay = Overlay.ControlCenter(CcPage.InputFix)
             CcPage.Update, CcPage.Setup -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
         }
     }
@@ -177,6 +179,8 @@ fun ControlCenter(
                         CcPage.Main -> MainPage(vm, now, visible, onOpen)
                         CcPage.Inputs -> InputsPage(vm, visible, onOpen)
                         CcPage.InputSettings -> InputSettingsPage(vm, visible)
+                        CcPage.InputFix -> InputFixPage(vm, visible)
+                        CcPage.InputFixOne -> InputFixOnePage(vm, visible, onOpen)
                         CcPage.Update -> UpdatePage(vm, visible)
                         CcPage.Setup -> SetupPage(vm, visible, onOpen)
                     }
@@ -561,13 +565,7 @@ private fun InputsPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.c
         val connected = stringResource(R.string.input_connected)
         vm.sources.forEachIndexed { i, source ->
             MenuRow(
-                glyph = when (source.kind) {
-                    SourceKind.Hdmi, SourceKind.DisplayPort -> Glyph.Hdmi
-                    SourceKind.Tuner -> Glyph.Antenna
-                    SourceKind.Av -> Glyph.Av
-                    SourceKind.Usb -> Glyph.Usb
-                    SourceKind.Other -> Glyph.Input
-                },
+                glyph = inputGlyph(source.kind),
                 text = source.label,
                 // What the owner named the input on its tile, else what HDMI-CEC reports.
                 trailing = SourceLooks.of(source.id)?.let { it.name ?: it.device?.let { d -> stringResource(d.label) } }
@@ -647,7 +645,108 @@ private fun InputSettingsPage(vm: HomeViewModel, takeFocus: Boolean) {
             style = Type.Caption,
             modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp),
         )
+
+        // Only inputs the framework lists by hardware id can be corrected (DeviceProfile).
+        if (vm.sources.any { it.hardware != null }) {
+            Spacer(Modifier.height(18.dp))
+            MenuRow(Glyph.Switches, stringResource(R.string.cc_input_fix), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.InputFix) }, trailing = "›")
+        }
     }
+}
+
+/**
+ * This TV's own corrections to its inputs (DeviceProfile): an input that opens another port, a
+ * port that is not there, a wrong name. Each change is kept at once; what is right goes to the
+ * maintainer from the phone page's report, and then into devices.json for every TV of the model.
+ */
+@Composable
+private fun InputFixPage(vm: HomeViewModel, takeFocus: Boolean) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        vm.loadInputsToCheck()
+        if (!takeFocus) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
+    Column(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
+        MenuRow(Glyph.ChevronLeft, stringResource(R.string.cc_input_fix), focusRequester = first, onClick = { vm.overlay = Overlay.ControlCenter(CcPage.InputSettings) })
+        BasicText(
+            stringResource(R.string.cc_input_fix_hint),
+            style = Type.Caption,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp),
+        )
+        val hidden = stringResource(R.string.cc_input_fix_hidden)
+        vm.inputsToCheck.forEach { source ->
+            MenuRow(
+                glyph = inputGlyph(source.kind),
+                text = source.label,
+                trailing = if (source.hidden) hidden else source.xiaomiInput?.let { "#$it" },
+                onClick = {
+                    vm.checkingInput = source.hardware
+                    vm.overlay = Overlay.ControlCenter(CcPage.InputFixOne)
+                },
+            )
+        }
+        if (vm.ownProfile) {
+            Spacer(Modifier.height(10.dp))
+            // The row goes with the corrections it drops; focus goes back to the top first.
+            MenuRow(Glyph.Trash, stringResource(R.string.cc_input_fix_reset), destructive = true, onClick = {
+                runCatching { first.requestFocus() }
+                vm.resetInputCheck()
+            })
+        }
+        BasicText(
+            stringResource(R.string.cc_input_fix_send),
+            style = Type.Caption,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp),
+        )
+    }
+}
+
+@Composable
+private fun InputFixOnePage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.content.Intent) -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (!takeFocus) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
+    val source = vm.inputsToCheck.firstOrNull { it.hardware == vm.checkingInput }
+    Column(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
+        MenuRow(Glyph.ChevronLeft, source?.label ?: stringResource(R.string.cc_input_fix), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.InputFix) })
+        if (source == null) return@Column
+        // What the firmware calls it, for the owner comparing it with the port's printed name.
+        BasicText(
+            listOfNotNull(source.firmwareLabel, "HW${source.hardware}", source.xiaomiInput?.let { "#$it" }).joinToString(" · "),
+            style = Type.Caption,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp),
+        )
+        MenuRow(inputGlyph(source.kind), stringResource(R.string.cc_input_fix_open), focusRequester = first, onClick = { vm.openInCheck(source, onOpen) })
+        BasicText(
+            stringResource(R.string.cc_input_fix_open_hint),
+            style = Type.Caption,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp),
+        )
+        source.xiaomiInput?.let { id ->
+            MenuRow(Glyph.Switches, stringResource(R.string.cc_input_fix_number, id), onClick = { vm.tryNextXiaomiInput(source, onOpen) })
+        }
+        MenuRow(Glyph.Pencil, stringResource(R.string.cc_input_fix_name), trailing = "${source.label} ›", onClick = { vm.nextInputLabel(source) })
+        Spacer(Modifier.height(6.dp))
+        ChoiceRow(
+            text = stringResource(R.string.cc_input_fix_hide),
+            selected = source.hidden,
+            focusRequester = null,
+            onClick = { vm.setInputHidden(source, !source.hidden) },
+        )
+    }
+}
+
+private fun inputGlyph(kind: SourceKind) = when (kind) {
+    SourceKind.Hdmi, SourceKind.DisplayPort -> Glyph.Hdmi
+    SourceKind.Tuner -> Glyph.Antenna
+    SourceKind.Av -> Glyph.Av
+    SourceKind.Usb -> Glyph.Usb
+    SourceKind.Other -> Glyph.Input
 }
 
 /** A row in a list of choices: the chosen one carries a check, as in tvOS settings. */

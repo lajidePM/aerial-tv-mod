@@ -16,14 +16,13 @@ import android.provider.Settings
  */
 object Brightness {
     private const val XIAOMI_BACKLIGHT = "picture_backlight"
-    /** MiTV-MFTP0 has picture_backlight but ignores it (the full app's issues #284, #335). */
-    private val IGNORES_BACKLIGHT_SETTING = setOf("MiTV-MFTP0", "MiTV_MFTP0")
     private var mitvLevel: Int? = null
 
     private fun installed(context: Context, pkg: String) = runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
 
     private fun usesXiaomiBacklight(context: Context) = Build.VERSION.SDK_INT >= 17 &&
-        Build.MODEL !in IGNORES_BACKLIGHT_SETTING &&
+        // MiTV-MFTP0 has picture_backlight but ignores it (the full app's issues #284, #335).
+        !DeviceProfile.current(context).ignoresPictureBacklight &&
         runCatching { Settings.Global.getString(context.contentResolver, XIAOMI_BACKLIGHT) }.getOrNull() != null
 
     private fun storedLevel(context: Context): Int? =

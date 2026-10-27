@@ -161,6 +161,16 @@
     <string name="cc_inputs_boot_none">Ничего, оставаться в Aerial</string>
     <string name="cc_inputs_boot_hint">Переключаться на этот источник при включении телевизора или выходе из ожидания. Кнопка «Домой» по-прежнему возвращает в Aerial.</string>
     <string name="cc_inputs_pin_hint">Закреплённые источники появляются плитками в начале главного экрана; выберите одну, чтобы сразу переключиться. Удерживайте плитку, чтобы переместить или убрать её.</string>
+    <string name="cc_input_fix">Проверка источников</string>
+    <string name="cc_input_fix_hint">Если источник открывает не тот порт или в списке есть порт, которого у этого телевизора нет, исправьте это здесь. Изменения применяются сразу и хранятся только на этом телевизоре.</string>
+    <string name="cc_input_fix_hidden">Скрыт</string>
+    <string name="cc_input_fix_open">Открыть</string>
+    <string name="cc_input_fix_open_hint">Посмотрите, на какой порт переключится телевизор, и нажмите «Домой», чтобы вернуться сюда.</string>
+    <string name="cc_input_fix_number">Другой номер (%1$d)</string>
+    <string name="cc_input_fix_name">Название</string>
+    <string name="cc_input_fix_hide">У этого телевизора нет такого порта</string>
+    <string name="cc_input_fix_reset">Вернуть по умолчанию</string>
+    <string name="cc_input_fix_send">Когда всё верно, отправьте исправления со страницы на телефоне («Сообщить о проблеме» внизу), чтобы они появились у всех телевизоров этой модели.</string>
     <string name="menu_unpin_source">Убрать с главного экрана</string>
     <string name="menu_source_device">Подключённое устройство</string>
     <string name="menu_source_plain">По умолчанию</string>
