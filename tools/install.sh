@@ -5,7 +5,8 @@
 #   TV=<tv-ip> tools/install.sh guard         # for firmwares that refuse to install a launcher
 #   KEEP_ADB=1 TV=<tv-ip> tools/install.sh    # also switch ADB back on whenever the TV turns it off
 #   TV=<tv-ip> tools/install.sh repair        # Home went back to the TV's launcher: restart Home Guard
-#   TV=<tv-ip> tools/install.sh lite          # Aerial Lite; chosen by itself on Android 4.0-4.4
+#   TV=<tv-ip> tools/install.sh lite          # Aerial Lite; chosen by itself on Android 4.0-4.4,
+#                                             # refused on 5.0+ (FORCE_LITE=1 to try it there)
 #
 # The APK comes from the latest release (aerial.qust.me's copy, else GitHub), so only adb is needed
 # (and python3 on TCL TVs).
@@ -79,8 +80,21 @@ restart_aerial() {
 # Android 4.0-4.4 cannot run the full app (Jetpack Compose needs Android 5.0). Aerial Lite is a
 # separate package that declares HOME and has no Home Guard, so the owner picks it once in
 # Android's home chooser (docs/LITE.md). Nothing else from the steps below applies.
+# Each build is refused on the other side of 5.0: Android rejects the full app below 5.0 by itself,
+# but nothing stops Lite (minSdk 14) on a newer TV, where it would add a second HOME candidate next
+# to Aerial and the stock launcher. FORCE_LITE=1 is for trying Lite on a new TV (docs/LITE.md).
 SDK=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
-if [ "$FLAVOR" = lite ] || { [ -n "$SDK" ] && [ "$SDK" -lt 21 ] 2>/dev/null; }; then
+OLD_ANDROID=0
+[ -n "$SDK" ] && [ "$SDK" -lt 21 ] 2>/dev/null && OLD_ANDROID=1
+if [ "$FLAVOR" = lite ] && [ "$OLD_ANDROID" = 0 ] && [ "${FORCE_LITE:-0}" != 1 ]; then
+  echo "This TV runs Android $(adb shell getprop ro.build.version.release | tr -d '\r'): Aerial Lite is only for Android 4.0-4.4. Run the command without \"lite\" to install Aerial." >&2
+  exit 1
+fi
+if [ "$OLD_ANDROID" = 1 ] && [ -n "${1:-}" ] && [ "$FLAVOR" != lite ]; then
+  echo "This TV runs Android $(adb shell getprop ro.build.version.release | tr -d '\r'), and Aerial needs 5.0 or newer. Run the command without \"$FLAVOR\" to install Aerial Lite, the version for Android 4.0-4.4." >&2
+  exit 1
+fi
+if [ "$FLAVOR" = lite ] || [ "$OLD_ANDROID" = 1 ]; then
   LITE=app.orchard.tv.lite
   [ "$FLAVOR" = lite ] || echo "This TV runs Android $(adb shell getprop ro.build.version.release | tr -d '\r'): installing Aerial Lite, the version for Android 4.0-4.4 (first release, a beta)."
   if [ -n "${APK_FILE:-}" ]; then APK=$APK_FILE

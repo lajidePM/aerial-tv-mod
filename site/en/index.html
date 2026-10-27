@@ -264,13 +264,10 @@
       </div>
 
       <div class="panel" data-panel="lite">
-        <p><b>Aerial Lite</b> is a separate app for old TVs and boxes on <b>Android 4.0-4.4</b>, looking the same as the full app. <b>This is its first release (1.0), a beta</b>: it was tested on emulators and newer TVs only, and real 4.x TVs may still show small problems. On Android 5.0 and later, use the full app above.</p>
-        <p>The one-line command (macOS / Linux) recognizes a 4.x TV and installs Lite by itself, or ask for it:</p>
-        <div class="code"><button class="copy" data-copy="liteonecmd">Copy</button><pre id="liteonecmd"></pre></div>
-        <p>By hand: download <a href="../download/aerial-lite.apk"><b>aerial-lite.apk</b></a>, then run (the third line is for the brightness slider; Android 4.0 refuses it, which is fine):</p>
-        <div class="code"><button class="copy" data-copy="litecmd">Copy</button><pre id="litecmd"></pre></div>
-        <p>A USB drive and the TV's file manager work too. Then <b>press Home on the remote</b>; when Android asks which app to use, choose <b>Aerial Lite</b>, then <b>Always</b>.</p>
-        <p class="note">Lite has no Home Guard: where the firmware keeps Home for its own launcher, open Lite from the app list. No aerial wallpaper, input tiles or in-app updates either (updating is installing again). To undo: Settings → Apps → Aerial Lite → Clear defaults, or uninstall it (<code>adb uninstall app.orchard.tv.lite</code>). Report problems with the <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml&amp;title=%5BLite%5D%20">device support form</a>, with Lite in the title.</p>
+        <p><b>Aerial Lite</b> is a separate app for old TVs and boxes on <b>Android 4.0-4.4</b>, looking the same as the full app. <b>This is its first release (1.0), a beta</b>: it was tested on emulators and newer TVs only, and real 4.x TVs may still show small problems.</p>
+        <p><b>Nothing extra to do</b>: the Agent and One command tabs both check the TV's Android version first, then install Lite on 4.x and the full app on 5.0 and later, never the wrong one.</p>
+        <p>Without a computer: copy <a href="../download/aerial-lite.apk"><b>aerial-lite.apk</b></a> to a USB drive and open it with the TV's file manager (on 4.x TVs only). Then <b>press Home on the remote</b>; when Android asks which app to use, choose <b>Aerial Lite</b>, then <b>Always</b>.</p>
+        <p class="note">Lite has no Home Guard: where the firmware keeps Home for its own launcher, open Lite from the app list. No aerial wallpaper, input tiles or in-app updates either (updating is installing again). To undo: Settings → Apps → Aerial Lite → Clear defaults, or uninstall it. Report problems with the <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml&amp;title=%5BLite%5D%20">device support form</a>, with Lite in the title.</p>
       </div>
 
       <p class="note">When the TV asks to allow debugging, choose Always allow. On TCL, accept the 多屏互动 (screen sharing) prompt with 同意 (Agree).</p>

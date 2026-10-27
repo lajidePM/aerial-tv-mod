@@ -80,11 +80,11 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 adb install -r lite/build/outputs/apk/release/lite-release.apk
 ```
 
-`tools/install.sh` 在 `ro.build.version.sdk` 低于 21 时自动装 Lite（`install.sh lite` 明确指定）：下载 `aerial-lite.apk`（官网，失败再 GitHub Release），`adb install -r`，`pm grant WRITE_SECURE_SETTINGS`（亮度；4.0 不支持 shell 授权，失败忽略），打开 `HomeActivity`，然后提示用户按 HOME 键，在系统弹出的选择框里选 Aerial Lite 并选「始终」（4.x 没有能从 shell 设默认桌面的命令）。`tools/restore.sh --uninstall` 也会卸载 Lite。
+`tools/install.sh` 在 `ro.build.version.sdk` 低于 21 时自动装 Lite（`install.sh lite` 明确指定）。两边互相拒绝：5.0 及以上写 `lite` 会报错退出（系统不拦 Lite，装上会多一个 HOME 候选），要在新电视上试 Lite 时加 `FORCE_LITE=1`，并且用 `-Pnohome` 的包；4.x 上明确写 `standard`/`guard`/`repair` 也报错退出（完整版本来就装不上）。流程：下载 `aerial-lite.apk`（官网，失败再 GitHub Release），`adb install -r`，`pm grant WRITE_SECURE_SETTINGS`（亮度；4.0 不支持 shell 授权，失败忽略），打开 `HomeActivity`，然后提示用户按 HOME 键，在系统弹出的选择框里选 Aerial Lite 并选「始终」（4.x 没有能从 shell 设默认桌面的命令）。`tools/restore.sh --uninstall` 也会卸载 Lite。
 
 发版：1.59 起 Release 里多一个 `aerial-lite.apk`（`lite/build/outputs/apk/release/lite-release.apk` 改名），官网 `download/aerial-lite.apk` 由 `tools/deploy-site.sh` 一起下载。注意 `-Pnohome` 构建会覆盖同一个输出文件，发版前要重新 `./gradlew :lite:assembleRelease`。第一版（versionName 1.0，versionCode 1）在官网和 README 标为测试版。
 
-**在装着完整版的电视上试 Lite**：用 `./gradlew :lite:assembleRelease -Pnohome` 构建。这个包不声明 HOME（新增一个 HOME 候选可能让系统清掉现在的默认桌面），只作为普通 App 出现在 Aerial 的网格里。
+**在装着完整版的电视上试 Lite**：用 `./gradlew :lite:assembleRelease -Pnohome` 构建，`FORCE_LITE=1 BUILD=1 TV=… tools/install.sh lite` 安装。这个包不声明 HOME（新增一个 HOME 候选可能让系统清掉现在的默认桌面），只作为普通 App 出现在 Aerial 的网格里。
 
 ## 接手说明（2026-10-27）
 

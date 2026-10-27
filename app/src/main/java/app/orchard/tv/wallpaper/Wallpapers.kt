@@ -16,6 +16,7 @@ import app.orchard.tv.ui.components.UhdCanvas
 import app.orchard.tv.BuildConfig
 import app.orchard.tv.guard.GuardSetup
 import app.orchard.tv.settings.AerialSettings
+import app.orchard.tv.system.DiagLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -140,8 +141,8 @@ object Wallpapers {
     var backdrop by mutableStateOf<ImageBitmap?>(null); private set
 
     /**
-     * The same picture frosted: blurred small and darkened. The glass under the top row samples it,
-     * and the whole screen turns to it once focus goes down into the grid, as on tvOS.
+     * The same picture frosted: blurred small. The glass under the top row, the grid and the
+     * panels sample it.
      */
     var frosted by mutableStateOf<ImageBitmap?>(null); private set
 
@@ -454,7 +455,9 @@ object Wallpapers {
     suspend fun useLiveFrost(frame: Bitmap) {
         if (selectedId != LIVE) return
         backdropJob?.cancel()
-        frosted = withContext(Dispatchers.Default) { Images.frost(frame) }.asImageBitmap()
+        // The frame the plate's glass was made from while the film moved: that glass, at once.
+        frosted = filmFrost?.takeIf { frame === filmFrostOf }
+            ?: withContext(Dispatchers.Default) { Images.frost(frame) }.asImageBitmap()
     }
 
     /**
@@ -463,10 +466,12 @@ object Wallpapers {
      * the film started from) stands in.
      */
     var filmFrost by mutableStateOf<ImageBitmap?>(null); private set
+    private var filmFrostOf: Bitmap? = null
 
     suspend fun useFilmFrost(frame: Bitmap) {
         if (!moves()) return
         filmFrost = withContext(Dispatchers.Default) { Images.frost(frame) }.asImageBitmap()
+        filmFrostOf = frame
     }
 
     /**
@@ -477,6 +482,7 @@ object Wallpapers {
     suspend fun useStillFilmFrost() {
         val start = frosted ?: return
         if (!moves()) return
+        filmFrostOf = null
         filmFrost = withContext(Dispatchers.Default) {
             val src = start.asAndroidBitmap()
             val quarter = Bitmap.createScaledBitmap(src, src.width / 4, src.height / 4, true)
@@ -486,6 +492,43 @@ object Wallpapers {
 
     fun dropFilmFrost() {
         filmFrost = null
+        filmFrostOf = null
+    }
+
+    private val clipGlassDir by lazy { File(app.filesDir, "clip-glass").apply { mkdirs() } }
+    private val clipGlassMade = mutableSetOf<String>()
+
+    /**
+     * The grid's glass while the aerial wallpaper shows [clip][showClipGlass]: one for each film,
+     * made once from the first frame taken of it ([keepClipGlass]) and kept on disk, so the grid
+     * comes in on the same glass wherever the film stopped, and a film met again has it at once
+     * (issue #727: a glass made where the film stopped came in seconds late, or changed in sight).
+     */
+    var clipGlass by mutableStateOf<Pair<String, ImageBitmap>?>(null); private set
+
+    /** Shows [clip]'s glass if it has one: from memory, else from disk. */
+    suspend fun showClipGlass(clip: String?) {
+        if (clip == null || clipGlass?.first == clip) return
+        val file = File(clipGlassDir, "$clip.png")
+        val bmp = withContext(Dispatchers.IO) { if (file.exists()) BitmapFactory.decodeFile(file.path) else null }
+        if (bmp != null) clipGlass = clip to bmp.asImageBitmap()
+    }
+
+    /** [frame], a small frame of [clip], becomes its glass unless it has one already. */
+    suspend fun keepClipGlass(clip: String, frame: Bitmap, showing: () -> String?) {
+        if (clip in clipGlassMade) return
+        clipGlassMade += clip
+        val file = File(clipGlassDir, "$clip.png")
+        val bmp = withContext(Dispatchers.IO) {
+            if (file.exists()) return@withContext BitmapFactory.decodeFile(file.path)
+            val started = System.nanoTime()
+            val frost = Images.frost(frame)
+            DiagLog.i("clip glass made in ${(System.nanoTime() - started) / 1_000_000} ms")
+            runCatching { file.outputStream().use { frost.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+                .onFailure { Log.w(TAG, "could not keep the clip's glass", it) }
+            frost
+        } ?: return
+        if (showing() == clip) clipGlass = clip to bmp.asImageBitmap()
     }
 
     /** Puts back the glass from before [useLiveFrost] when the exact frame could not be had. */

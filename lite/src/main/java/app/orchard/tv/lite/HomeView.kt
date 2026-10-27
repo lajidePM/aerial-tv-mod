@@ -48,14 +48,6 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
     private val tiles = ArrayList<TileView>()
     private val names = ArrayList<TextView>()
     private val hint = TextView(context)
-    /** In the grid, rows scrolling up under the status pill fade into black (the full app's 120-unit gradient). */
-    private val topFade = object : View(context) {
-        private val paint = Paint()
-        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-            paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0xFF000000.toInt(), 0xD1000000.toInt(), 0), floatArrayOf(0f, 0.5f, 1f), android.graphics.Shader.TileMode.CLAMP)
-        }
-        override fun onDraw(canvas: Canvas) = canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-    }
     val clock = ClockView(context)
     val pill = StatusPill(context)
     /** The pill, and the small clock beside it when it is on the right. */
@@ -91,10 +83,6 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         addView(layer, LayoutParams(Ui.screenW, Ui.screenH))
         layer.addView(plate, LayoutParams(Ui.screenW, Ui.pxi(TILE_H + 2 * PLATE_PAD_V + PLATE_NAME_ROOM)))
         plate.visibility = INVISIBLE
-
-        topFade.alpha = 0f
-        topFade.visibility = INVISIBLE
-        addView(topFade, LayoutParams(LayoutParams.MATCH_PARENT, Ui.pxi(120f)))
 
         topRight.orientation = LinearLayout.HORIZONTAL
         topRight.gravity = Gravity.CENTER_VERTICAL
@@ -266,17 +254,14 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
             val lift = if (row > 0 && !grid) shelfLift else 0f
             val to = -Ui.px(scrollFor(if (grid) row else 0) + lift)
             val top = if (grid) 0f else 1f
-            topFade.visibility = VISIBLE
             if (animate && smooth) {
                 layer.animate().translationY(to).setDuration(260).setInterpolator(EASE).start()
                 clock.animate().alpha(top).setDuration(180).start()
                 plate.animate().alpha(top).setDuration(200).start()
-                topFade.animate().alpha(1f - top).setDuration(200).start()
             } else {
                 layer.translationY = to
                 clock.alpha = top
                 plate.alpha = top
-                topFade.alpha = 1f - top
             }
             pill.showTime = grid
             if (gridChanged || !animate || wasGrid != grid) host.inGrid(grid)
@@ -445,16 +430,6 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         override fun onDraw(canvas: Canvas) {
             baked?.let { canvas.drawBitmap(it, left, 0f, paint) }
         }
-
-        companion object {
-            /** The plate's tint: the frosted picture a little darker, lifted with white, so it reads as milky glass. */
-            val PLATE_TINT = android.graphics.ColorMatrixColorFilter(floatArrayOf(
-                0.8f, 0f, 0f, 0f, 30f,
-                0f, 0.8f, 0f, 0f, 30f,
-                0f, 0f, 0.8f, 0f, 30f,
-                0f, 0f, 0f, 1f, 0f,
-            ))
-        }
     }
 
     /**
@@ -534,3 +509,11 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         }
     }
 }
+
+/** The plate's tint: the frosted picture a little darker, lifted with white, so it reads as milky glass. The grid's background too. */
+internal val PLATE_TINT = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+    0.8f, 0f, 0f, 0f, 30f,
+    0f, 0.8f, 0f, 0f, 30f,
+    0f, 0f, 0.8f, 0f, 30f,
+    0f, 0f, 0f, 1f, 0f,
+))

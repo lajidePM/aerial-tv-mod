@@ -1,6 +1,6 @@
 # Installing Aerial (for AI agents)
 
-You are helping the user install Aerial (an open-source home screen for Android TV, https://github.com/pengchujin/aerial-tv) on their TV and make it the home screen the TV starts into. Everything goes through adb on the user's computer; the TV doesn't need root.
+You are helping the user install Aerial (an open-source home screen for Android TV, https://github.com/pengchujin/aerial-tv) on their TV and make it the home screen the TV starts into. Android 5.0 and later get the full app, Android 4.0-4.4 get Aerial Lite, decided by the Android version in step 2½. Everything goes through adb on the user's computer; the TV doesn't need root.
 
 ## Rules
 
@@ -39,7 +39,7 @@ adb devices
 
 The TV is connected once `adb devices` lists it as `device`.
 
-- **`unauthorized`**: the TV is asking "Allow USB debugging?". Ask the user to choose Allow and check Always allow, then run `adb devices` again.
+- **`unauthorized`**: the TV is asking "Allow USB debugging?". Ask the user to choose Allow and check Always allow, then run `adb devices` again. Android 4.0-4.2.1 has no such prompt; don't wait for it.
 - **`failed to connect`, `Connection refused` or a timeout**: ADB debugging is off on the TV, or the IP is wrong. Ask the user to turn it on as below, then try again. Menus on Chinese firmware are in Chinese, so their names are in brackets.
 
 | TV | How to turn on ADB |
@@ -56,7 +56,23 @@ The TV's IP address is usually under Settings → Network → the connected netw
 
 **Users without a computer**: some users installed Aerial with the phone apps 甲壳虫 ADB 助手 (Beetle ADB) and 超级小爱 (Super Xiaoai); we have not tested each one. They can follow steps 2 and 3 here on a phone (phone ADB tools usually can't run every command); once installed, run "Check" again from a computer or an agent where possible.
 
+## Step 2½: Check the Android version (required)
+
+```
+adb shell getprop ro.build.version.sdk
+adb shell getprop ro.build.version.release
+```
+
+Aerial comes in two builds. **Pick by the first number and install only that one**:
+
+- **21 or higher** (Android 5.0+): the full Aerial (package `app.orchard.tv`); go on to step 3. **Don't install `aerial-lite.apk`**: Android won't stop it, but it adds a second home-screen candidate and the TV may drop its current default launcher.
+- **14 to 20** (Android 4.0-4.4): Aerial Lite (package `app.orchard.tv.lite`). **Skip step 3 and "Check"** and follow "Android 4.0-4.4: Aerial Lite" below instead. The full app can't be installed on these TVs (`INSTALL_FAILED_OLDER_SDK`).
+- **Below 14** (Android 3.x or older): not supported; tell the user.
+- **No output, or an error**: find out why first (is the connection still there, does `adb devices` say `device`); don't guess the version.
+
 ## Step 3: Install
+
+This step and "Check" are for Android 5.0 and later only.
 
 ### macOS / Linux: one command
 
@@ -159,6 +175,41 @@ After the last command, ask the user to answer the prompt in the top-right corne
 
 If the TV has no 多屏互动: `adb push Aerial.apk /sdcard/Download/Aerial.apk`, then ask the user to open it with a file manager or the Dangbei store's local install (本地安装) on the TV.
 
+## Android 4.0-4.4: Aerial Lite
+
+Only when the number from step 2½ is 14 to 20. Lite is at its first release (1.0), a beta, not yet tested on a real 4.x TV; tell the user so. It has **no Home Guard**: Home goes through Android's "which app" chooser, where the user picks it once with Always; where the firmware keeps Home for its own launcher, Lite can only be opened from the app list, and you must not call that a takeover. A 4.x shell usually has no `grep`, so filter on the computer (`grep` on macOS / Linux, `findstr` on Windows).
+
+**macOS / Linux**: the same command as the full app; the script sees 4.x and installs Lite by itself:
+
+```bash
+curl -fsSL https://aerial.qust.me/install.sh | TV=<IP> bash
+```
+
+**Windows**, one at a time:
+
+```powershell
+curl.exe -fL -o aerial-lite.apk https://aerial.qust.me/download/aerial-lite.apk
+adb install -r aerial-lite.apk
+adb shell pm grant app.orchard.tv.lite android.permission.WRITE_SECURE_SETTINGS
+adb shell am start -n app.orchard.tv.lite/.HomeActivity
+```
+
+If the site's download fails, use `https://github.com/pengchujin/aerial-tv/releases/latest/download/aerial-lite.apk`. `adb install` must print `Success`. The third line is for the brightness slider; Android 4.0 refuses it, which is fine.
+
+**Make it the home screen**: Android 4.x has no command for this. Ask the user to **press Home on the remote**; when Android asks which app to use, choose **Aerial Lite**, then **Always** (some systems say "Set as default").
+
+**Check (required)**; paste the raw output to the user:
+
+```
+adb shell dumpsys package app.orchard.tv.lite | grep versionName
+adb shell input keyevent 3
+adb shell "sleep 5; dumpsys window" | grep mCurrentFocus
+```
+
+(On Windows use `findstr` instead of `grep`.) Line 1 has `versionName`: installed. Line 3 contains `app.orchard.tv.lite`: Home opens Lite, done. If line 3 shows the old launcher or the chooser, ask the user to press Home once on the physical remote and pick Always, then run line 3 again; if it still isn't Lite, tell the user plainly that this firmware won't let another app be the home screen and Lite opens from the app list.
+
+**Undo**: on the TV, Settings → Apps → Aerial Lite → **Clear defaults**; to remove it, `adb uninstall app.orchard.tv.lite`.
+
 ## Check (required)
 
 Run each of these and paste the **raw output** to the user:
@@ -230,7 +281,7 @@ Then:
 - **Home opens the TV's own launcher again after a while**: try the same stop-and-open first.
 - **Check line 4 is 0 and line 3 does not list Aerial**: some firmwares block sideloaded accessibility services. Ask the user to allow Aerial's autostart and accessibility in the TV's security or permissions app, then run `adb shell am start -n app.orchard.tv/.MainActivity` and check again.
 - **Forgot the parental PIN**: `adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigReceiver --ez clear_pin true` turns it off.
-- **Not supported**: LG webOS, Samsung Tizen, Huawei Vision (HarmonyOS), and Android 4.4 or older (Aerial needs Android 5.0). TVs that cannot open ADB, such as XGIMI H3, old LeTV sets, Honor Vision and old Konka models (no version number to tap), can't be used yet.
+- **Not supported**: LG webOS, Samsung Tizen, Huawei Vision (HarmonyOS), and Android 3.x or older (Android 4.0-4.4 gets Aerial Lite, above). TVs that cannot open ADB, such as XGIMI H3, old LeTV sets, Honor Vision and old Konka models (no version number to tap), can't be used yet.
 
 ## What users ask
 
