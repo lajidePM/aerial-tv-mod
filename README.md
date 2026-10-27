@@ -68,6 +68,17 @@
 | **其他 Android TV** | 设置 → 设备偏好设置 → 关于 → 连按「内部版本号」7 次，再在开发者选项里打开「USB 调试」 |
 
 电视的 IP 在「设置 → 网络 → 已连接的网络」里。第一次连接时，电视会问是否允许调试，选「始终允许」。
+
+**Android 11 及以上用无线连接，第一次要先配对**（索尼 BRAVIA Android 14、Google TV 等，#747）：这类电视的「无线调试」和低版本不一样，不能直接 `adb connect <IP>:5555`。在电视上打开 设置 → 系统 → 开发者选项 → **无线调试** → **使用配对码配对设备**，把配对码屏幕上的 IP:端口和 6 位配对码输入电脑：
+
+```bash
+adb pair 192.168.1.20:37115   # 电视配对码屏幕上的端口（示例，以电视显示为准）
+# 提示 Enter pairing code 时输入电视上的 6 位配对码
+adb connect 192.168.1.20:39201   # 无线调试主页面上的另一组 IP:端口（示例）
+```
+
+连上后照常安装。想让以后直接用 `<电视IP>:5555`，连上时再运行一次 `adb tcpip 5555`；配过对的电脑不用再配对。`install.sh` 和[安装说明](site/agent.md)里的 Agent 会引导这一步。
+
 更细的分品牌说明（包括打不开 ADB 的机型）见 [docs/devices/adb-by-brand.md](docs/devices/adb-by-brand.md)。
 
 ### 2. 安装
@@ -99,7 +110,7 @@
 curl -fsSL https://aerial.qust.me/install.sh | KEEP_ADB=1 TV=192.168.1.20 bash
 ```
 
-**手动**：下载 [aerial-standard.apk](https://aerial.qust.me/download/aerial-standard.apk)，然后：
+**手动**：下载 [aerial-standard.apk](https://aerial.qust.me/download/aerial-standard.apk)，然后（Android 11 以上的无线调试要先按第 1 步配对，把第一行换成无线调试主页面的 IP:端口，其余不变）：
 
 ```bash
 adb connect 192.168.1.20:5555
