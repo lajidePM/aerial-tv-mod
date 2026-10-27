@@ -228,7 +228,6 @@
         <button role="tab" aria-selected="false" data-tab="manual">手动</button>
         <button role="tab" aria-selected="false" data-tab="phone">只用手机</button>
         <button role="tab" aria-selected="false" data-tab="usb">U 盘</button>
-        <button role="tab" aria-selected="false" data-tab="lite">Android 4.x</button>
       </div>
 
       <div class="panel on" data-panel="agent">
@@ -271,19 +270,14 @@
         <ul>
           <li><a href="download/aerial-standard.apk"><b>aerial-standard.apk</b></a>：Android 5.0 及以上先装这个。</li>
           <li><a href="download/aerial-guard.apk"><b>aerial-guard.apk</b></a>：上面那个装不上、提示不允许安装桌面类 App 时换这个。</li>
-          <li><a href="download/aerial-lite.apk"><b>aerial-lite.apk</b></a>：Android 4.0–4.4 的老电视（见「Android 4.x」）。</li>
+          <li><a href="download/aerial-lite.apk"><b>aerial-lite.apk</b></a>：Android 4.0–4.4 的老电视、老盒子用的 Aerial Lite（测试版）。「交给 Agent」和「一行命令」会自动选 Lite，不会装错。</li>
         </ul>
         <p>装好后<b>按遥控器的主页键</b>：系统问「使用哪个应用」时选 <b>Aerial</b>，再选「<b>始终</b>」，就设好了，原生 Android TV 一般是这样。</p>
         <p>直接回到原来的桌面、不问（国产电视大多这样）：从「我的应用」打开 Aerial，它会弹出「设为主屏幕」，按里面的入口去电视设置里打开桌面守护（无障碍）和通知使用权。电视设置里没有这些入口时，Aerial 只能当普通 App 从应用列表打开，要接管主页键就得用电脑或 Agent 设置一次（覆盖安装，设置不丢）。</p>
         <p class="note">只用 U 盘装时，按主页键、开机、待机醒来能不能回到 Aerial，要看电视设置里有没有这几个入口；用电脑装最稳。以后升级可以在控制中心里点「有新版本」，也可以再用 U 盘装一次。</p>
+        <p class="note">Aerial Lite 外观和完整版一样，但没有桌面守护：装好后按主页键选 <b>Aerial Lite</b>、再选「始终」；固件把主页键锁死在自家桌面时，只能从应用列表打开。也没有航拍壁纸、信号源磁贴和应用内升级（升级就是再装一次）。还原：设置 → 应用 → Aerial Lite → 清除默认设置，或者卸载它。有问题请用<a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a>反馈，标题写上 Lite。</p>
       </div>
 
-      <div class="panel" data-panel="lite">
-        <p><b>Aerial Lite</b> 是给 <b>Android 4.0–4.4</b> 老电视、老盒子用的单独版本，外观和完整版一样。<b>现在是第一版（1.0），属于测试版</b>，只在虚拟机和新电视上测过，真实 4.x 电视上可能还有不少小问题。</p>
-        <p><b>不用单独操作</b>：「交给 Agent」和「一行命令」会先看电视的系统版本，4.x 装 Lite，5.0 及以上装完整版，不会装错。</p>
-        <p>没有电脑时：下载 <a href="download/aerial-lite.apk"><b>aerial-lite.apk</b></a> 拷进 U 盘，用电视的文件管理器打开安装（只装在 4.x 电视上）。装好后<b>按遥控器的主页键</b>，在系统问「使用哪个应用」时选 <b>Aerial Lite</b>，再选「<b>始终</b>」。</p>
-        <p class="note">Lite 没有桌面守护：固件把主页键锁死在自家桌面时，只能从应用列表打开 Lite。也没有航拍壁纸、信号源磁贴和应用内升级（升级就是再装一次）。还原：设置 → 应用 → Aerial Lite → 清除默认设置，或者卸载它。有问题请用<a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a>反馈，标题写上 Lite。</p>
-      </div>
 
       <p class="note">电视问是否允许调试时，选「始终允许」。TCL 会弹「多屏互动：正在发起应用推送」，选「同意」。</p>
     </div>
@@ -356,7 +350,7 @@
       </details>
       <details>
         <summary>我的电视能用吗？</summary>
-        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.0–4.4 的老电视用 Aerial Lite（测试版，见安装区的「Android 4.x」），更老的不支持。老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题见上面的<a href="#adapt">「装好了，但有地方不对？」</a>。</p>
+        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.0–4.4 的老电视用 Aerial Lite（测试版，见安装区的「U 盘」，Agent 和一行命令会自动装它），更老的不支持。老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题见上面的<a href="#adapt">「装好了，但有地方不对？」</a>。</p>
       </details>
     </div>
   </div>

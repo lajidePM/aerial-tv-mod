@@ -227,7 +227,6 @@
         <button role="tab" aria-selected="false" data-tab="manual">Manual</button>
         <button role="tab" aria-selected="false" data-tab="phone">Phone only</button>
         <button role="tab" aria-selected="false" data-tab="usb">USB drive</button>
-        <button role="tab" aria-selected="false" data-tab="lite">Android 4.x</button>
       </div>
 
       <div class="panel on" data-panel="agent">
@@ -269,19 +268,14 @@
         <ul>
           <li><a href="../download/aerial-standard.apk"><b>aerial-standard.apk</b></a>: try this first on Android 5.0 and later.</li>
           <li><a href="../download/aerial-guard.apk"><b>aerial-guard.apk</b></a>: use this if the first is refused because the TV won't install home-screen apps.</li>
-          <li><a href="../download/aerial-lite.apk"><b>aerial-lite.apk</b></a>: old TVs on Android 4.0-4.4 (see Android 4.x).</li>
+          <li><a href="../download/aerial-lite.apk"><b>aerial-lite.apk</b></a>: Aerial Lite (a beta) for old TVs and boxes on Android 4.0-4.4. The Agent and One command tabs pick Lite on their own, never the wrong one.</li>
         </ul>
         <p>Once it's installed, <b>press Home on the remote</b>. If Android asks which app to use, choose <b>Aerial</b>, then <b>Always</b>, and you're done; stock Android TV usually works this way.</p>
         <p>If Home goes straight back to the old home screen without asking (most Chinese-brand TVs): open Aerial from the app list. It shows "Make Aerial Your Home Screen", whose entries open the TV's settings for the home guard (Accessibility) and notification access. If the TV's settings don't have them, Aerial works only as an ordinary app opened from the app list; to take over Home, set it up once with a computer or an agent (it installs over, settings stay).</p>
         <p class="note">Whether Home, power-on and wake come back to Aerial after a USB-only install depends on those entries being in the TV's settings; a computer install is the most reliable. Later updates: choose "New version" in Control Center, or install from the USB drive again.</p>
+        <p class="note">Aerial Lite looks the same as the full app but has no Home Guard: once it's installed, press Home and choose <b>Aerial Lite</b>, then Always; where the firmware keeps Home for its own launcher, open Lite from the app list. No aerial wallpaper, input tiles or in-app updates either (updating is installing again). To undo: Settings → Apps → Aerial Lite → Clear defaults, or uninstall it. Report problems with the <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">device support form</a>, with Lite in the title.</p>
       </div>
 
-      <div class="panel" data-panel="lite">
-        <p><b>Aerial Lite</b> is a separate app for old TVs and boxes on <b>Android 4.0-4.4</b>, looking the same as the full app. <b>This is its first release (1.0), a beta</b>: it was tested on emulators and newer TVs only, and real 4.x TVs may still show small problems.</p>
-        <p><b>Nothing extra to do</b>: the Agent and One command tabs both check the TV's Android version first, then install Lite on 4.x and the full app on 5.0 and later, never the wrong one.</p>
-        <p>Without a computer: copy <a href="../download/aerial-lite.apk"><b>aerial-lite.apk</b></a> to a USB drive and open it with the TV's file manager (on 4.x TVs only). Then <b>press Home on the remote</b>; when Android asks which app to use, choose <b>Aerial Lite</b>, then <b>Always</b>.</p>
-        <p class="note">Lite has no Home Guard: where the firmware keeps Home for its own launcher, open Lite from the app list. No aerial wallpaper, input tiles or in-app updates either (updating is installing again). To undo: Settings → Apps → Aerial Lite → Clear defaults, or uninstall it. Report problems with the <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">device support form</a>, with Lite in the title.</p>
-      </div>
 
       <p class="note">When the TV asks to allow debugging, choose Always allow. On TCL, accept the 多屏互动 (screen sharing) prompt with 同意 (Agree).</p>
     </div>
@@ -354,7 +348,7 @@
       </details>
       <details>
         <summary>Will it work on my TV?</summary>
-        <p>Check the <a href="https://github.com/pengchujin/aerial-tv/blob/main/README.en.md#supported-tvs">list</a>. If yours isn't there, probably. Stock Android TV and Google TV are the easiest. LG webOS, Samsung Tizen and Huawei Vision (HarmonyOS) run different systems and can't take Aerial; Android 4.0-4.4 TVs get Aerial Lite (a beta, see Android 4.x under Install); older ones are not supported. Some TVs can't open ADB at all, such as old LeTV sets, Honor Vision and old Konka models (no version number to tap). Slow or low-memory TVs pick Lite effects on their own; you can also choose it in Personalize → Effects. If something goes wrong, see <a href="#adapt">Installed, but something is off?</a> above.</p>
+        <p>Check the <a href="https://github.com/pengchujin/aerial-tv/blob/main/README.en.md#supported-tvs">list</a>. If yours isn't there, probably. Stock Android TV and Google TV are the easiest. LG webOS, Samsung Tizen and Huawei Vision (HarmonyOS) run different systems and can't take Aerial; Android 4.0-4.4 TVs get Aerial Lite (a beta, see USB drive under Install; the agent and the one-line command install it on their own); older ones are not supported. Some TVs can't open ADB at all, such as old LeTV sets, Honor Vision and old Konka models (no version number to tap). Slow or low-memory TVs pick Lite effects on their own; you can also choose it in Personalize → Effects. If something goes wrong, see <a href="#adapt">Installed, but something is off?</a> above.</p>
       </details>
     </div>
   </div>
