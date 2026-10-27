@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -463,15 +464,21 @@ private fun AerialSaver(
     // clears the window's pixels under it, Home's clock with them, and from then on the
     // screensaver's own time stands where that clock came to rest.
     var surfaced by remember { mutableStateOf(over == null) }
+    var veilPush by remember { mutableStateOf<Float?>(null) }
     LaunchedEffect(over) {
         if (over == null) return@LaunchedEffect
         delay(CARRY_MS)
         surfaced = true
     }
-    // Once the film covers it, Home's picture can stop.
-    LaunchedEffect(over, playing) {
-        if (over != null && playing) {
-            delay(1600)
+    // From the surface on, the veil below draws Home's picture where Home did, and Home's own stops:
+    // Home's picture is drawn in a layer of its own that the film's surface does not clear, so
+    // until it stopped the film showed only all at once, 1.6 s after its first frame (MiTV-MFTR0).
+    LaunchedEffect(over, surfaced) {
+        if (over != null && surfaced) {
+            withFrameNanos { }
+            withFrameNanos { }
+            // Home stops drawing it in, so the veil holds it where it had got to.
+            veilPush = over.push()
             over.covered = true
         }
     }
@@ -493,7 +500,7 @@ private fun AerialSaver(
     if (over == null) Box(Modifier.fillMaxSize().graphicsLayer { alpha = veil }.background(Color.Black))
     else if (surfaced) Canvas(Modifier.fillMaxSize()) {
         // The veil is Home's picture, where it had drawn in to, until the film moves.
-        if (picture != null && veil > 0.01f) drawDrawingIn(picture, over.push(), veil) else if (picture == null) drawRect(Color.Black, alpha = veil)
+        if (picture != null && veil > 0.01f) drawDrawingIn(picture, veilPush ?: over.push(), veil) else if (picture == null) drawRect(Color.Black, alpha = veil)
     }
     Labels(
         if (playing) caption ?: film.captionAt(((if (index == 0) firstAtMs else 0L) / 1000).toInt()) else null, now,
