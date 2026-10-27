@@ -1,126 +1,115 @@
 package app.orchard.tv.lite
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.text.TextUtils
-import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import app.orchard.tv.lite.Ui.textPx
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 /**
- * Home: the clock, the settings button and the grid of tiles, over the window's background (the
- * baked wallpaper), which is the only full-screen draw.
+ * Home, laid out as the full app's HomeScreen with its defaults (one row, the next peeking, the
+ * glass plate, the focused app's name only off the plate): the clock top left, the status pill
+ * top right, the tiles over the window's background (the baked wallpaper, the only full-screen
+ * draw).
  *
- * Every tile is its own View, laid out once at (0, 0) and placed by translation; focus scales it.
- * Translation, scale and alpha are View properties, so with hardware acceleration they change
- * without the app recording any drawing again, which keeps Dalvik's main thread nearly idle while
- * the focus moves. Nothing animates when no key is pressed.
+ * Every tile is its own View, laid out once and placed by translation; focus scales it. These are
+ * View properties, so with hardware acceleration they change without recording any drawing again,
+ * which keeps Dalvik's main thread nearly idle while the focus moves. Nothing animates when no key
+ * is pressed.
  */
 class HomeView(context: Context, private val host: Host) : FrameLayout(context) {
     interface Host {
         fun launch(app: AppEntry)
-        fun openMenu(app: AppEntry)
-        fun openSettings()
+        fun openMenu(app: AppEntry, tile: View)
+        fun openControlCenter()
         fun startSaver()
         fun saveOrder(keys: List<String>)
+        /** Home went down into the grid (the frosted background) or back to the top row. */
+        fun inGrid(grid: Boolean)
     }
 
     private val layer = FrameLayout(context)
+    private val plate = PlateView(context)
     private val tiles = ArrayList<TileView>()
     private val name = TextView(context)
-    /**
-     * Fades by alpha when Home scrolls. Not overlapping: HWUI then applies the alpha to each draw
-     * rather than to an offscreen layer it would allocate for every frame of the fade (Android 4.1+;
-     * 4.0 never asks).
-     */
-    private val clock = object : LinearLayout(context) {
-        override fun hasOverlappingRendering() = false
-    }
-    private val date = TextView(context)
-    private val time = TextView(context)
-    private val pill = TextView(context)
+    val clock = ClockView(context)
+    val pill = StatusPill(context)
     private val press = Press()
     private val handler = Handler(Looper.getMainLooper())
 
-    /** The focused tile; [PILL] for the settings button. */
+    /** The focused tile; [PILL] for the status pill. */
     private var focus = 0
     private var row = 0
     private var moving = false
+
+    // The full app's GridMetrics, in canvas units.
+    private val canvasH = Ui.canvasH
+    private val topRowY = canvasH - PITCH - 12f
+    private val restY = canvasH * 0.37f
 
     init {
         clipChildren = false
         layer.clipChildren = false
         addView(layer, LayoutParams(Ui.screenW, Ui.screenH))
+        layer.addView(plate, LayoutParams(Ui.screenW, Ui.pxi(TILE_H + 2 * PLATE_PAD_V)))
+        plate.translationY = Ui.px(topRowY - PLATE_PAD_V)
+        plate.visibility = INVISIBLE
 
-        clock.orientation = LinearLayout.VERTICAL
-        date.apply {
-            setTextColor(Ui.WHITE)
-            textPx(19f)
-            typeface = Ui.bold
-            includeFontPadding = false
-            setShadowLayer(Ui.px(6f), 0f, Ui.px(1f), 0x66000000)
-        }
-        time.apply {
-            setTextColor(Ui.WHITE)
-            textPx(96f)
-            typeface = Ui.bold
-            includeFontPadding = false
-            setShadowLayer(Ui.px(8f), 0f, Ui.px(2f), 0x55000000)
-        }
-        clock.addView(date)
-        clock.addView(time, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = Ui.pxi(6f)
-        })
         addView(clock, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
             leftMargin = Ui.pxi(MARGIN)
-            topMargin = Ui.pxi(60f)
+        })
+        placeClock()
+        addView(pill, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.TOP).apply {
+            topMargin = Ui.pxi(28f)
+            rightMargin = Ui.pxi(MARGIN - 14f)
         })
 
-        pill.apply {
-            text = context.getString(R.string.settings)
-            textPx(15f)
-            typeface = Ui.bold
-            gravity = Gravity.CENTER
-            setPadding(Ui.pxi(16f), 0, Ui.pxi(16f), 0)
-        }
-        stylePill(false)
-        addView(pill, LayoutParams(LayoutParams.WRAP_CONTENT, Ui.pxi(32f), Gravity.END or Gravity.TOP).apply {
-            topMargin = Ui.pxi(24f)
-            rightMargin = Ui.pxi(MARGIN)
-        })
-
-        // Fixed size, so changing its text only redraws it rather than laying Home out again.
+        // Type.Headline, centred under the tile, with the full app's soft shadow. Fixed size, so
+        // changing its text only redraws it rather than laying Home out again.
         name.apply {
             setTextColor(Ui.WHITE)
             textPx(15f)
-            typeface = Ui.bold
+            typeface = Ui.font(600)
             gravity = Gravity.CENTER_HORIZONTAL
             setSingleLine()
             ellipsize = TextUtils.TruncateAt.END
             includeFontPadding = false
-            setShadowLayer(Ui.px(4f), 0f, Ui.px(1f), 0x99000000.toInt())
+            setShadowLayer(Ui.px(4f), 0f, 0f, 0x99000000.toInt())
+            visibility = INVISIBLE
         }
-        layer.addView(name, LayoutParams(Ui.pxi(TILE_W + 60f), Ui.pxi(24f)))
+        layer.addView(name, LayoutParams(Ui.pxi(TILE_W + 36f), Ui.pxi(24f)))
     }
 
     var apps: List<AppEntry> = emptyList()
         private set
+
+    /** The large clock (date, big time, weather) instead of the small line; from Personalize. */
+    fun setLargeClock(large: Boolean) {
+        clock.large = large
+        placeClock()
+    }
+
+    private fun placeClock() {
+        (clock.layoutParams as LayoutParams).topMargin = Ui.pxi(if (clock.large) CLOCK_Y else 28f)
+        clock.requestLayout()
+    }
+
+    /** The glass for the plate: the frosted wallpaper, tinted as the full app's PlateTint. */
+    fun setGlass(frost: Bitmap?) {
+        plate.glass = frost
+        plate.rebake()
+    }
 
     /** Shows [list], keeping the focus on the same app when it is still there. */
     fun setApps(list: List<AppEntry>) {
@@ -130,13 +119,15 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         tiles.clear()
         for (app in list) {
             val t = old.remove(app.key) ?: TileView(context).also {
-                layer.addView(it, 0, LayoutParams(Ui.pxi(TILE_W + 2 * PAD), Ui.pxi(TILE_H + 2 * PAD)))
+                layer.addView(it, 1, LayoutParams(Ui.pxi(TILE_W + 2 * TILE_EXT), Ui.pxi(TILE_H + 2 * TILE_EXT)))
             }
             t.entry = app
+            t.invalidate()
             tiles += t
         }
         for (t in old.values) layer.removeView(t)
         apps = list
+        plate.visibility = if (list.isEmpty()) INVISIBLE else VISIBLE
         if (focus != PILL) {
             focus = list.indexOfFirst { it.key == focusedKey }.takeIf { it >= 0 } ?: focus.coerceAtMost(list.size - 1).coerceAtLeast(0)
         }
@@ -153,17 +144,17 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         showFocus(animate = false)
     }
 
-    private fun stylePill(focused: Boolean) {
-        pill.setTextColor(if (focused) Ui.INK else Ui.WHITE)
-        @Suppress("DEPRECATION")
-        pill.setBackgroundDrawable(GradientDrawable().apply {
-            setColor(if (focused) Ui.WHITE else Ui.PILL)
-            cornerRadius = Ui.px(16f)
-        })
-    }
-
     private fun x(i: Int) = MARGIN + (i % COLS) * (TILE_W + GAP)
-    private fun y(i: Int) = ROW0 + (i / COLS) * PITCH
+    private fun y(i: Int) = topRowY + (i / COLS) * PITCH
+
+    /** The full app's GridMetrics.scrollFor: rows rest at 37% of the screen, the row above in view. */
+    private fun scrollFor(row: Int): Float {
+        if (row <= 0) return 0f
+        val rows = (apps.size + COLS - 1) / COLS
+        val wanted = topRowY + PITCH * row - restY
+        val bottom = topRowY + PITCH * rows + 36f - canvasH
+        return minOf(wanted, maxOf(bottom, topRowY + PITCH - restY))
+    }
 
     /**
      * Without hardware acceleration (4.x boxes with no GPU driver for it, Android-x86) every frame
@@ -173,45 +164,52 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
     private val smooth get() = isHardwareAccelerated
 
     private fun place(animate: Boolean) {
+        plate.translationY = Ui.px(topRowY - PLATE_PAD_V)
         tiles.forEachIndexed { i, t ->
-            val tx = Ui.px(x(i) - PAD)
-            val ty = Ui.px(y(i) - PAD)
+            val tx = Ui.px(x(i) - TILE_EXT)
+            val ty = Ui.px(y(i) - TILE_EXT)
             if (animate && smooth) t.animate().translationX(tx).translationY(ty).setDuration(180).setInterpolator(EASE).start()
             else { t.translationX = tx; t.translationY = ty }
         }
     }
 
     private fun showFocus(animate: Boolean) {
-        stylePill(focus == PILL)
+        pill.focusedLook = focus == PILL
         tiles.forEachIndexed { i, t ->
             val on = i == focus
-            t.ring = on
-            t.lifted = on && moving
-            val s = if (!on) 1f else if (moving) 1.18f else FOCUS_SCALE
-            if (animate && smooth) t.animate().scaleX(s).scaleY(s).setDuration(150).setInterpolator(EASE).start()
+            t.lifted = on
+            t.moving = on && moving
+            val s = if (on) FOCUS_SCALE else 1f
+            if (animate && smooth) t.animate().scaleX(s).scaleY(s).setDuration(160).setInterpolator(EASE).start()
             else { t.scaleX = s; t.scaleY = s }
         }
+        val newRow = if (focus == PILL) 0 else focus / COLS
+        // Names: only the focused app's, and none on the plate (the full app's default).
         val app = apps.getOrNull(focus)
-        if (focus == PILL || app == null) {
+        if (focus == PILL || app == null || (newRow == 0 && !moving)) {
             name.visibility = INVISIBLE
         } else {
             name.visibility = VISIBLE
             name.text = if (moving) context.getString(R.string.move_hint) else app.label
             name.translationX = Ui.px(x(focus) + TILE_W / 2) - name.layoutParams.width / 2f
-            name.translationY = Ui.px(y(focus) + TILE_H + TILE_H * (FOCUS_SCALE - 1) / 2 + 10f)
+            name.translationY = Ui.px(y(focus) + TILE_H + 10f + TILE_H * (FOCUS_SCALE - 1) / 2 + (RING_GAP + RING_WIDTH) * FOCUS_SCALE)
         }
-        val newRow = if (focus == PILL) 0 else focus / COLS
         if (newRow != row || !animate) {
+            val wasGrid = row > 0
             row = newRow
-            val to = if (row == 0) 0f else Ui.px(SCROLLED_ROW_Y - y(focus))
-            val clockAlpha = if (row == 0) 1f else 0f
+            val to = -Ui.px(scrollFor(row))
+            val top = if (row == 0) 1f else 0f
             if (animate && smooth) {
-                layer.animate().translationY(to).setDuration(220).setInterpolator(EASE).start()
-                clock.animate().alpha(clockAlpha).setDuration(180).start()
+                layer.animate().translationY(to).setDuration(260).setInterpolator(EASE).start()
+                clock.animate().alpha(top).setDuration(180).start()
+                plate.animate().alpha(top).setDuration(200).start()
             } else {
                 layer.translationY = to
-                clock.alpha = clockAlpha
+                clock.alpha = top
+                plate.alpha = top
             }
+            pill.showTime = row > 0
+            if (wasGrid != (row > 0) || !animate) host.inGrid(row > 0)
         }
     }
 
@@ -220,17 +218,17 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         if (press.onKey(e, click = {
                 when {
                     moving -> finishMove()
-                    focus == PILL -> host.openSettings()
+                    focus == PILL -> host.openControlCenter()
                     app != null -> host.launch(app)
                 }
-            }, longPress = { if (focus != PILL && app != null && !moving) host.openMenu(app) })) return true
+            }, longPress = { if (focus != PILL && app != null && !moving) host.openMenu(app, tiles[focus]) })) return true
         when (e.keyCode) {
             KeyEvent.KEYCODE_BACK -> {
                 if (e.action == KeyEvent.ACTION_UP) back()
                 return true
             }
             KeyEvent.KEYCODE_MENU -> {
-                if (e.action == KeyEvent.ACTION_UP && focus != PILL && app != null && !moving) host.openMenu(app)
+                if (e.action == KeyEvent.ACTION_UP && focus != PILL && app != null && !moving) host.openMenu(app, tiles[focus])
                 return true
             }
         }
@@ -245,6 +243,7 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         return true
     }
 
+    /** Back: in the grid, to the top row; on the top row, the screensaver (tvOS). */
     private fun back() {
         when {
             moving -> finishMove()
@@ -304,12 +303,10 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
     /** The clock, redrawn once a minute on the minute and at no other time. */
     private val tick = object : Runnable {
         override fun run() {
+            clock.refresh()
+            pill.requestLayout()
+            pill.invalidate()
             val now = System.currentTimeMillis()
-            val locale = Locale.getDefault()
-            val cal = Calendar.getInstance()
-            time.text = SimpleDateFormat(if (DateFormat.is24HourFormat(context)) "H:mm" else "h:mm", locale).format(Date(now))
-            val d = SimpleDateFormat(datePattern(locale), locale).format(Date(now))
-            date.text = if (locale.language == "zh") Lunar.text(cal)?.let { "$d  $it" } ?: d else d
             handler.postDelayed(this, 60_000 - now % 60_000 + 50)
         }
     }
@@ -325,37 +322,70 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         super.onDetachedFromWindow()
     }
 
-    /** DateFormat.getBestDateTimePattern is Android 4.3; the languages Aerial speaks, by hand. */
-    private fun datePattern(locale: Locale) = when (locale.language) {
-        "zh" -> "M月d日 EEEE"
-        "en" -> "EEEE, MMMM d"
-        else -> "EEEE, d MMMM"
-    }
-
-    /** One tile: its bitmap and, when focused, a white ring drawn inside the View's padding. */
-    class TileView(context: Context) : View(context) {
-        lateinit var entry: AppEntry
-        var ring = false
-            set(v) { if (field != v) { field = v; invalidate() } }
-        var lifted = false
-            set(v) { if (field != v) { field = v; invalidate() } }
+    /**
+     * The Liquid Glass plate under the top row (tvOS 26), the row's full width: the frosted
+     * wallpaper behind it, tinted milky and cut to its outline with a lit edge, baked once.
+     */
+    private class PlateView(context: Context) : View(context) {
+        var glass: Bitmap? = null
+        private var baked: Bitmap? = null
         private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-        private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = Ui.px(2.5f)
+        private val left = Ui.px(MARGIN - PLATE_PAD_H)
+
+        fun rebake() {
+            val g = glass ?: run { baked = null; invalidate(); return }
+            val top = Ui.px(Ui.canvasH - PITCH - 12f - PLATE_PAD_V)
+            val at = RectF(left, top, Ui.px(MARGIN + (COLS - 1) * (TILE_W + GAP) + TILE_W + PLATE_PAD_H), top + Ui.px(TILE_H + 2 * PLATE_PAD_V))
+            baked = Shapes.glass(g, Ui.screenW, Ui.screenH, at, Ui.px(32f), Ui.px(1.2f), PLATE_TINT)
+            invalidate()
         }
-        private val dst = Rect()
-        private val ringRect = RectF()
 
         override fun onDraw(canvas: Canvas) {
-            val p = Ui.pxi(PAD)
-            dst.set(p, p, width - p, height - p)
+            baked?.let { canvas.drawBitmap(it, left, 0f, paint) }
+        }
+
+        companion object {
+            /** The plate's tint: the frosted picture a little darker, lifted with white, so it reads as milky glass. */
+            val PLATE_TINT = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+                0.8f, 0f, 0f, 0f, 30f,
+                0f, 0.8f, 0f, 0f, 30f,
+                0f, 0f, 0.8f, 0f, 30f,
+                0f, 0f, 0f, 1f, 0f,
+            ))
+        }
+    }
+
+    /**
+     * One tile: its face (the picture cut to the continuous outline, made at focused size), and
+     * when focused the full app's baked shadow under it and its high-contrast ring around it, all
+     * inside the View's margin so the focus scale carries them.
+     */
+    class TileView(context: Context) : View(context) {
+        lateinit var entry: AppEntry
+        var lifted = false
+            set(v) { if (field != v) { field = v; invalidate() } }
+        var moving = false
+            set(v) { if (field != v) { field = v; invalidate() } }
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        private val dst = Rect()
+        private val tmp = RectF()
+
+        override fun onDraw(canvas: Canvas) {
+            val ext = Ui.pxi(TILE_EXT)
+            val w = width - 2 * ext
+            val h = height - 2 * ext
+            dst.set(ext, ext, ext + w, ext + h)
+            if (lifted) {
+                val s = Shapes.shadow(w, h, Ui.px(CORNER), Ui.px(14f))
+                val drop = Ui.px(12f)
+                tmp.set(ext - s.ext, ext - s.ext + drop, ext + w + s.ext, ext + h + s.ext + drop)
+                canvas.drawBitmap(s.image, null, tmp, paint)
+            }
             canvas.drawBitmap(entry.tile, null, dst, paint)
-            if (ring) {
-                val o = Ui.px(4f)
-                ringRect.set(dst.left - o, dst.top - o, dst.right + o, dst.bottom + o)
-                stroke.color = if (lifted) 0xFFFFD60A.toInt() else Ui.WHITE
-                canvas.drawRoundRect(ringRect, Ui.px(RADIUS + 4f), Ui.px(RADIUS + 4f), stroke)
+            if (lifted) {
+                val r = Shapes.ring(w, h, Ui.px(CORNER), Ui.px(RING_GAP), Ui.px(RING_WIDTH), Ui.px(1f), if (moving) 0xFFFFD60A.toInt() else Ui.WHITE)
+                tmp.set(ext - r.ext, ext - r.ext, ext + w + r.ext, ext + h + r.ext)
+                canvas.drawBitmap(r.image, null, tmp, paint)
             }
         }
     }
@@ -367,15 +397,17 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
         const val GAP = 28f
         const val TILE_W = (960f - 2 * MARGIN - (COLS - 1) * GAP) / COLS
         const val TILE_H = TILE_W * 9 / 16
-        /** Room around a tile's picture for the focus ring. */
-        const val PAD = 8f
-        const val RADIUS = 10f
-        const val FOCUS_SCALE = 1.12f
-        /** The first row sits low, under the clock, as in the full app. */
-        const val ROW0 = 300f
-        const val PITCH = TILE_H + 48f
-        /** Where the focused row sits once Home has scrolled past the first. */
-        const val SCROLLED_ROW_Y = 200f
+        const val PITCH = TILE_H + 50f
+        const val FOCUS_SCALE = 1.15f
+        const val CORNER = 12f
+        const val RING_GAP = 5f
+        const val RING_WIDTH = 3f
+        /** Room around a tile for its shadow and ring. */
+        const val TILE_EXT = 36f
+        const val PLATE_PAD_H = 26f
+        const val PLATE_PAD_V = 20f
+        /** Top of the large clock: the date's capitals, just under the status pill. */
+        const val CLOCK_Y = 80f
         private val EASE = DecelerateInterpolator(1.6f)
     }
 }

@@ -8,9 +8,9 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
-import android.util.DisplayMetrics
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
@@ -24,7 +24,10 @@ class AppEntry(
     val leanback: Boolean,
     /** False for apps on the system image, which cannot be uninstalled. */
     val removable: Boolean,
+    /** The tile as Home draws it: its picture cut to the continuous outline, at focused size. */
     val tile: Bitmap,
+    /** A quick stand-in, until [AppCatalog.load] has made the real tile. */
+    val placeholder: Boolean = false,
 ) {
     fun launchIntent(): Intent = Intent(Intent.ACTION_MAIN)
         .addCategory(if (leanback) CATEGORY_LEANBACK_LAUNCHER else Intent.CATEGORY_LAUNCHER)
@@ -38,14 +41,62 @@ class AppEntry(
 }
 
 /**
- * Every launchable app, one tile per package, and the TV's own launcher. Tiles are drawn once per
- * app version and kept as PNGs in cache/tiles, so a cold start only decodes small files.
+ * Every launchable app, one tile per package, on the full app's rules (apps/Apps.kt): TV entries
+ * first, then phone ones and the firmware's hidden ones; the TV's own launcher as 原桌面; Aerial's
+ * own tiles for firmware apps; the icon library's picture before the app's banner or icon.
+ * Tiles are made once per app version and kept as PNGs in cache/tiles.
  */
 object AppCatalog {
     private const val TAG = "AerialLite"
+    /** Xiaomi's app store declares only this category, not CATEGORY_LAUNCHER (MiTV-MFTR0). */
+    private const val CATEGORY_APPSTORE_LAUNCHER = "android.intent.category.APPSTORE_LAUNCHER"
 
-    fun load(context: Context, w: Int, h: Int, radius: Float): List<AppEntry> {
+    /** Firmware apps with no launcher category at all (Xiaomi MiTV-MFTR0). */
+    private val UNLISTED_ENTRIES = listOf(
+        ComponentName("com.xiaomi.mitv.mediaexplorer", "com.xiaomi.mitv.mediaexplorer.NewScraperMainEntryActivity"),
+        ComponentName("com.xiaomi.smarthome.tv", "com.xiaomi.smarthome.tv.ui.MainActivity"),
+    )
+
+    /** Firmware apps drawn as Aerial's own tiles, by package, as in the full app. */
+    private val SYSTEM_TILES = mapOf(
+        "com.xiaomi.mitv.settings" to SystemTile.Settings,
+        "com.mitv.gallery" to SystemTile.Photos,
+        "com.xiaomi.mitv.calendar" to SystemTile.Calendar,
+        "com.xiaomi.tweather" to SystemTile.Weather,
+        "com.xiaomi.mitv.smartshare" to SystemTile.Cast,
+        "com.xiaomi.mitv.tvmanager" to SystemTile.Security,
+        "com.xiaomi.mitv.appstore" to SystemTile.Store,
+        "com.xiaomi.mitv.mediaexplorer" to SystemTile.Media,
+        "com.tcl.settings" to SystemTile.Settings,
+        "com.tcl.tvsmartalbum" to SystemTile.Photos,
+        "com.tcl.common.weather" to SystemTile.Weather,
+        "com.tcl.MultiScreenInteraction_TV" to SystemTile.Cast,
+        "com.tcl.guard" to SystemTile.Security,
+        "com.tcl.appmarket2" to SystemTile.Store,
+        "com.tcl.ui_mediaCenter" to SystemTile.Media,
+        "com.tcl.browser" to SystemTile.Browser,
+    )
+
+    /** Firmwares that declare the standard categories; only for system apps without a TV banner. */
+    private val SYSTEM_CATEGORIES = listOf(
+        "android.intent.category.APP_GALLERY" to SystemTile.Photos,
+        "android.intent.category.APP_CALENDAR" to SystemTile.Calendar,
+        "android.intent.category.APP_BROWSER" to SystemTile.Browser,
+        "android.intent.category.APP_MARKET" to SystemTile.Store,
+        CATEGORY_APPSTORE_LAUNCHER to SystemTile.Store,
+    )
+
+    /** The packages of the last load, for the icon library. */
+    @Volatile var installed: Set<String> = emptySet(); private set
+
+    /**
+     * With [quick], apps whose tile is not on disk yet get a stand-in at once ([TileFactory.quick])
+     * instead of the real one, so Home shows on the first start without waiting for every tile.
+     * Without it, every tile is made and kept, and [onBatch] hears of them five at a time.
+     */
+    fun load(context: Context, quick: Boolean = false, onBatch: ((List<AppEntry>) -> Unit)? = null): List<AppEntry> {
         val pm = context.packageManager
+        IconLibrary.init(context)
         val found = LinkedHashMap<String, Pair<ActivityInfo, Boolean>>()
         fun add(category: String, leanback: Boolean) {
             for (r in pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)) {
@@ -55,6 +106,11 @@ object AppCatalog {
         }
         add(AppEntry.CATEGORY_LEANBACK_LAUNCHER, true)
         add(Intent.CATEGORY_LAUNCHER, false)
+        add(CATEGORY_APPSTORE_LAUNCHER, false)
+        for (component in UNLISTED_ENTRIES) {
+            val info = runCatching { pm.getActivityInfo(component, 0) }.getOrNull() ?: continue
+            if (info.exported && info.isEnabled && info.applicationInfo.enabled && !found.containsKey(info.packageName)) found[info.packageName] = info to false
+        }
         // The TV's own launcher, which some firmwares declare only as a Home.
         val stockHomes = HashSet<String>()
         for (r in pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)) {
@@ -64,6 +120,19 @@ object AppCatalog {
             stockHomes += info.packageName
         }
         found.remove(context.packageName)
+        // The full app is a Home too; it is never one of Lite's tiles.
+        found.remove("app.orchard.tv")
+
+        val byCategory = HashMap<String, SystemTile>()
+        for ((category, tile) in SYSTEM_CATEGORIES) {
+            for (r in pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)) {
+                if (!byCategory.containsKey(r.activityInfo.packageName)) byCategory[r.activityInfo.packageName] = tile
+            }
+        }
+        pm.resolveActivity(Intent(android.provider.Settings.ACTION_SETTINGS), 0)?.let {
+            if (!byCategory.containsKey(it.activityInfo.packageName)) byCategory[it.activityInfo.packageName] = SystemTile.Settings
+        }
+        installed = found.keys.toSet()
 
         val dir = File(context.cacheDir, "tiles").apply { mkdirs() }
         val index = context.getSharedPreferences("tiles", Context.MODE_PRIVATE)
@@ -73,26 +142,43 @@ object AppCatalog {
         try {
             val jobs = found.values.map { (info, leanback) ->
                 pool.submit(Callable {
-                    runCatching { entry(pm, info, leanback, info.packageName in stockHomes, homeLabel, dir, index, w, h, radius) }
+                    runCatching { entry(pm, info, leanback, byCategory, info.packageName in stockHomes, homeLabel, dir, index, quick) }
                         .onFailure { Log.w(TAG, "left ${info.packageName} out of Home", it) }
                         .getOrNull()
                 })
             }
-            return jobs.mapNotNull { it.get() }
+            val out = ArrayList<AppEntry>()
+            val batch = ArrayList<AppEntry>()
+            for (job in jobs) {
+                val e = job.get() ?: continue
+                out += e
+                if (onBatch != null) {
+                    batch += e
+                    if (batch.size == 5) { onBatch(ArrayList(batch)); batch.clear() }
+                }
+            }
+            if (onBatch != null && batch.isNotEmpty()) onBatch(batch)
+            return out
         } finally {
             pool.shutdown()
         }
     }
 
+    /** The face's size and outline: the tile at its 1.15× focus, 12-unit corners, a half-unit rim, as AppTile. */
+    val faceW get() = Ui.pxi(HomeView.TILE_W * HomeView.FOCUS_SCALE)
+    val faceH get() = Ui.pxi(HomeView.TILE_H * HomeView.FOCUS_SCALE)
+
     private fun entry(
-        pm: PackageManager, info: ActivityInfo, leanback: Boolean, stockHome: Boolean, homeLabel: String,
-        dir: File, index: android.content.SharedPreferences, w: Int, h: Int, radius: Float,
+        pm: PackageManager, info: ActivityInfo, leanback: Boolean, byCategory: Map<String, SystemTile>, stockHome: Boolean,
+        homeLabel: String, dir: File, index: android.content.SharedPreferences, quick: Boolean = false,
     ): AppEntry {
         val pkg = info.packageName
-        val stamp = runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L)
+        val stamp = runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L) + IconLibrary.stamp(pkg) + if (stockHome) 1 else 0
         val system = (info.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
         val component = ComponentName(pkg, info.name)
-        val key = "$stamp|$w|$h"
+        val fw = faceW
+        val fh = faceH
+        val key = "v2|$stamp|$fw|$fh"
         val file = File(dir, "$pkg.png")
         val cached = index.getString(pkg, null)
         if (cached != null && cached.startsWith("$key|") && file.exists()) {
@@ -102,26 +188,60 @@ object AppCatalog {
             }
         }
         val label = runCatching { info.loadLabel(pm).toString().trim() }.getOrDefault("").ifEmpty { pkg }
-        val tile = TileArt.fromIcon(icon(pm, info), w, h, radius)
+        if (quick) {
+            val icon = runCatching { info.loadIcon(pm) }.getOrNull() ?: pm.defaultActivityIcon
+            val art = TileFactory.quick(icon)
+            val face = Shapes.face(art, fw, fh, Ui.px(12f * HomeView.FOCUS_SCALE), Ui.px(0.5f * HomeView.FOCUS_SCALE))
+            art.recycle()
+            return AppEntry(pkg, if (stockHome) homeLabel else label, component, leanback, !system, face, placeholder = true)
+        }
+        val banner = banner(pm, info, leanback)
+        val own = if (stockHome) SystemTile.Home
+            else if (system) SYSTEM_TILES[pkg] ?: byCategory[pkg]?.takeIf { banner == null } else null
+        // Aerial's own tiles for firmware apps keep their look; any other app's ready-made picture
+        // comes before what Aerial would draw from its banner or icon.
+        val library = if (own == null) IconLibrary.load(pkg) else null
+        val recipe = TileRecipes.of(pkg)
+        val art = runCatching {
+            when {
+                library != null -> TileFactory.fromBanner(BitmapDrawable(android.content.res.Resources.getSystem(), library))
+                own != null -> TileFactory.forSystem(own)
+                recipe?.glyph != null -> TileFactory.glyphTile(recipe.top ?: 0, recipe.bottom ?: 0, recipe.glyph)
+                banner != null && recipe?.useIcon != true -> TileFactory.fromBanner(banner)
+                else -> TileFactory.fromIcon(densest(pm, info, info.iconResource) ?: info.loadIcon(pm), recipe)
+            }
+        }.recoverCatching {
+            Log.w(TAG, "could not draw the tile of $pkg; using its icon", it)
+            TileFactory.fromIcon(info.loadIcon(pm), null)
+        }.recoverCatching {
+            TileFactory.fromIcon(pm.defaultActivityIcon, null)
+        }.getOrThrow()
+        val face = Shapes.face(art, fw, fh, Ui.px(12f * HomeView.FOCUS_SCALE), Ui.px(0.5f * HomeView.FOCUS_SCALE))
+        art.recycle()
         runCatching {
-            FileOutputStream(file).use { tile.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            FileOutputStream(file).use { face.compress(Bitmap.CompressFormat.PNG, 100, it) }
             index.edit().putString(pkg, "$key|$label").apply()
         }
-        return AppEntry(pkg, if (stockHome) homeLabel else label, component, leanback, !system, tile)
+        return AppEntry(pkg, if (stockHome) homeLabel else label, component, leanback, !system, face)
     }
 
     /**
-     * The densest icon the app ships: loadIcon picks the screen's bucket, which on a 160 dpi TV is
-     * 48 px, soft on a 120 px tile. getDrawableForDensity came in Android 4.0.3.
+     * The densest bucket the app ships: loadIcon picks the screen's, 48 px on a 160 dpi TV, soft on
+     * a tile. getDrawableForDensity came in Android 4.0.3.
      */
-    private fun icon(pm: PackageManager, info: ActivityInfo): Drawable {
-        val res = info.iconResource
-        if (res != 0 && Build.VERSION.SDK_INT >= 15) {
-            runCatching {
-                pm.getResourcesForApplication(info.applicationInfo).getDrawableForDensity(res, DisplayMetrics.DENSITY_XHIGH)
-            }.getOrNull()?.let { return it }
-        }
-        return runCatching { info.loadIcon(pm) }.getOrNull() ?: pm.defaultActivityIcon
+    private fun densest(pm: PackageManager, info: ActivityInfo, res: Int): Drawable? {
+        if (res == 0 || Build.VERSION.SDK_INT < 15) return null
+        return runCatching {
+            @Suppress("DEPRECATION")
+            pm.getResourcesForApplication(info.applicationInfo).getDrawableForDensity(res, 640)
+        }.getOrNull()
+    }
+
+    /** The app's TV banner (Android 5.0+); a "banner" that is not wide is its icon declared again. */
+    private fun banner(pm: PackageManager, info: ActivityInfo, leanback: Boolean): Drawable? {
+        if (!leanback || Build.VERSION.SDK_INT < 21) return null
+        val d = densest(pm, info, info.bannerResource) ?: runCatching { info.loadBanner(pm) }.getOrNull()
+        return d?.takeIf { it.intrinsicWidth >= it.intrinsicHeight * 4 / 3 }
     }
 
     /** Drops the cached tiles of apps no longer installed. */

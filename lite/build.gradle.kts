@@ -66,13 +66,65 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
-// The aerial catalog, copied from the full app at build time rather than kept twice.
+// Shared with the full app and copied from it at build time rather than kept twice: the aerial
+// catalog, the Inter font and the Chinese city list (assets), the glyphs' path data, the hand-made
+// tile recipes and the city lookup (sources, moved into Lite's package).
 val copyAerials by tasks.registering(Copy::class) {
     from(rootProject.file("app/src/main/assets/aerials.json"))
+    from(rootProject.file("app/src/main/res/font/inter.ttf"))
+    from(rootProject.file("app/src/main/assets/cities-cn.tsv"))
     into(layout.projectDirectory.dir("lite-assets"))
 }
-tasks.named("preBuild") { dependsOn(copyAerials) }
+val sharedSources = layout.buildDirectory.dir("generated/shared")
+val copySources by tasks.registering(Copy::class) {
+    from(rootProject.file("app/src/main/java/app/orchard/tv/ui/theme/GlyphPaths.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/apps/TileRecipes.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/weather/Cities.kt"))
+    into(sharedSources.map { it.dir("app/orchard/tv/lite") })
+    filter { line ->
+        line.replace("package app.orchard.tv.ui.theme", "package app.orchard.tv.lite")
+            .replace("package app.orchard.tv.apps", "package app.orchard.tv.lite")
+            .replace("package app.orchard.tv.weather", "package app.orchard.tv.lite")
+            .replace("app.orchard.tv.ui.theme.Glyph", "app.orchard.tv.lite.Glyph")
+    }
+}
+android.sourceSets["main"].java.srcDir(sharedSources)
+// The full app's wording in all five languages, so menus and Control Center say the same thing.
+val sharedRes = layout.buildDirectory.dir("generated/sharedRes")
+val copyStrings by tasks.registering(Copy::class) {
+    from(rootProject.file("app/src/main/res")) {
+        include("values*/strings.xml")
+        rename("strings.xml", "app_strings.xml")
+    }
+    into(sharedRes)
+    // Lite keeps its own name.
+    filter { line -> if (line.contains("name=\"app_name\"")) "" else line }
+}
+android.sourceSets["main"].res.srcDir(sharedRes)
+tasks.named("preBuild") { dependsOn(copyAerials, copySources, copyStrings) }
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+}
+
+// `./gradlew :lite:assembleRelease -Pnohome`: a build for trying Lite on a TV that runs the full
+// app, as a plain app from Aerial's grid. Without the HOME declaration it leaves the TV's choice
+// of Home alone (a new Home candidate can reset it).
+if (project.hasProperty("nohome")) {
+    val noHomeManifest = layout.buildDirectory.file("generated/nohome/AndroidManifest.xml")
+    val stripHome by tasks.registering {
+        val src = file("src/main/AndroidManifest.xml")
+        inputs.file(src)
+        outputs.file(noHomeManifest)
+        doLast {
+            val text = src.readText().replace(
+                Regex("""\s*<intent-filter>\s*<action android:name="android.intent.action.MAIN" />\s*<category android:name="android.intent.category.HOME" />.*?</intent-filter>""", RegexOption.DOT_MATCHES_ALL),
+                "",
+            )
+            check(!text.contains("category.HOME")) { "the HOME filter is still there" }
+            noHomeManifest.get().asFile.apply { parentFile.mkdirs() }.writeText(text)
+        }
+    }
+    android.sourceSets["main"].manifest.srcFile(noHomeManifest)
+    tasks.named("preBuild") { dependsOn(stripHome) }
 }

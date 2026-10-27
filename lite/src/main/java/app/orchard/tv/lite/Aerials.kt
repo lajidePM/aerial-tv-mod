@@ -17,7 +17,6 @@ import java.security.cert.CertificateFactory
 import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 
@@ -134,20 +133,5 @@ class FilmProxy(private val context: Context) {
         } finally {
             runCatching { sock.close() }
         }
-    }
-
-    /** Turns on every protocol the system supports, TLS 1.2 included where it is off by default. */
-    private class AllProtocols(private val base: SSLSocketFactory) : SSLSocketFactory() {
-        private fun on(s: Socket): Socket {
-            if (s is SSLSocket) s.enabledProtocols = s.supportedProtocols.filter { it.startsWith("TLS") }.toTypedArray()
-            return s
-        }
-        override fun getDefaultCipherSuites(): Array<String> = base.defaultCipherSuites
-        override fun getSupportedCipherSuites(): Array<String> = base.supportedCipherSuites
-        override fun createSocket(s: Socket, host: String, port: Int, autoClose: Boolean) = on(base.createSocket(s, host, port, autoClose))
-        override fun createSocket(host: String, port: Int) = on(base.createSocket(host, port))
-        override fun createSocket(host: String, port: Int, localHost: InetAddress, localPort: Int) = on(base.createSocket(host, port, localHost, localPort))
-        override fun createSocket(host: InetAddress, port: Int) = on(base.createSocket(host, port))
-        override fun createSocket(address: InetAddress, port: Int, localAddress: InetAddress, localPort: Int) = on(base.createSocket(address, port, localAddress, localPort))
     }
 }

@@ -10,6 +10,25 @@ import kotlin.random.Random
 
 /** Bitmap helpers, from the full app's wallpaper/Images.kt. All of it runs off the main thread. */
 object Images {
+    /** Decodes [file] no larger than needed for [w]×[h], then centre-crops it to exactly that size (the full app's decodeCover). */
+    fun decodeCover(file: java.io.File, w: Int, h: Int): Bitmap? {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(file.path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= w && bounds.outHeight / (sample * 2) >= h) sample *= 2
+        val src = android.graphics.BitmapFactory.decodeFile(file.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        val scale = maxOf(w / src.width.toFloat(), h / src.height.toFloat())
+        val cw = (w / scale).roundToInt().coerceAtMost(src.width)
+        val ch = (h / scale).roundToInt().coerceAtMost(src.height)
+        val l = (src.width - cw) / 2
+        val t = (src.height - ch) / 2
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(src, android.graphics.Rect(l, t, l + cw, t + ch), android.graphics.Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+        src.recycle()
+        return out
+    }
+
     /** The home shading, the same as the full app's, baked in so the TV draws one full-screen layer. */
     private val SHADE = floatArrayOf(0.12f, 0.04f, 0.22f, 0.5f)
     private val SHADE_AT = floatArrayOf(0f, 0.3f, 0.66f, 1f)
@@ -25,6 +44,29 @@ object Images {
         c.drawRect(0f, 0f, w, h, Paint().apply {
             shader = LinearGradient(0f, 0f, w * 0.5f, 0f, black(SHADE_LEFT), 0, Shader.TileMode.CLAMP)
         })
+    }
+
+    /**
+     * A picture frosted: shrunk to 320×180 and blurred three times over, as the full app's
+     * Images.frost. Small on purpose: it is only ever seen blurred, stretched in a single pass.
+     */
+    fun frost(b: Bitmap): Bitmap {
+        val w = 320
+        val h = 180
+        val small = Bitmap.createScaledBitmap(b, w, h, true)
+        val px = IntArray(w * h)
+        small.getPixels(px, 0, w, 0, 0, w, h)
+        repeat(3) { boxBlur(px, w, h, 7) }
+        val out = small.copy(Bitmap.Config.ARGB_8888, true).also { if (it !== small) small.recycle() }
+        out.setPixels(px, 0, w, 0, 0, w, h)
+        return out
+    }
+
+    /** [src] under [alpha] black, as a new bitmap: the grid's background. */
+    fun darkened(src: Bitmap, alpha: Float): Bitmap {
+        val out = src.copy(Bitmap.Config.ARGB_8888, true)
+        Canvas(out).drawColor(black(alpha))
+        return out
     }
 
     /** Fine noise, so long gradients do not band on 8-bit panels. */
