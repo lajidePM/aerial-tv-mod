@@ -556,7 +556,12 @@ class MainActivity : ComponentActivity() {
     private fun restartIdleTimer() {
         vm.lastInputAt = SystemClock.uptimeMillis()
         idleHandler.removeCallbacks(showScreensaver)
-        if (AerialSettings.screensaverMinutes != AerialSettings.NEVER) idleHandler.postDelayed(showScreensaver, idleBeforeScreensaver())
+        if (AerialSettings.screensaverMinutes != AerialSettings.NEVER) {
+            idleHandler.postDelayed(showScreensaver, idleBeforeScreensaver())
+            if (holdsOffTheDream() && window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON == 0) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
         // Not with "System": the firmware's screensaver is wanted then, and holding the screen on
         // held it off (Xiaomi's starts on its own timer, screen_saver_timeout).
         else if (Wallpapers.screensaver != ScreensaverMode.System &&
@@ -584,10 +589,29 @@ class MainActivity : ComponentActivity() {
         // Where Aerial's dream is the TV's screensaver, the TV starts it on its own after
         // screen_off_timeout (TCL MT5879: 2 minutes); Home starts its own first, so that the
         // aerial wallpaper's film can carry on (startScreensaver).
-        val dream = if (SystemScreensaver.isAerials(this)) runCatching { Settings.System.getLong(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT) }.getOrNull() else null
-        val firmware = runCatching { Settings.System.getLong(contentResolver, "screen_saver_timeout") }.getOrNull()?.takeIf { it > 0 } ?: dream
+        val firmware = firmwareScreensaverDelay() ?: dreamDelay()?.takeUnless { holdsOffTheDream() }
         return if (firmware != null && firmware > 0) minOf(chosen, maxOf(30_000L, firmware - 15_000L))
         else chosen
+    }
+
+    private fun firmwareScreensaverDelay(): Long? =
+        runCatching { Settings.System.getLong(contentResolver, "screen_saver_timeout") }.getOrNull()?.takeIf { it > 0 }
+
+    private fun dreamDelay(): Long? =
+        if (SystemScreensaver.isAerials(this)) runCatching { Settings.System.getLong(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT) }.getOrNull()?.takeIf { it > 0 } else null
+
+    /**
+     * Where the TV's own delay for Aerial's dream is shorter than the one chosen in Personalize,
+     * Home holds the screen on until its own screensaver starts, rather than starting 15 s ahead
+     * of the TV: Coocaa C10 keeps screen_off_timeout at 60 s and its settings do not change it, so
+     * every choice came out as 45 s (#732). Only Aerial's dream is held off this way; a firmware
+     * screensaver of its own (screen_saver_timeout) is still beaten to it. The flag is the Home
+     * window's, so it lets go as the dream covers Home and the TV's power policy goes on from there.
+     */
+    private fun holdsOffTheDream(): Boolean {
+        if (firmwareScreensaverDelay() != null) return false
+        val dream = dreamDelay() ?: return false
+        return AerialSettings.screensaverMinutes * 60_000L > dream - 15_000L
     }
 
     private fun hideScreensaver() {
