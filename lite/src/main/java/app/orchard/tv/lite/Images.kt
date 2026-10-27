@@ -3,8 +3,10 @@ package app.orchard.tv.lite
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Shader
+import android.media.ExifInterface
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -15,9 +17,14 @@ object Images {
         val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
         android.graphics.BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val orientation = exifOrientation(file)
+        val turned = quarterTurn(orientation)
+        val bw = if (turned) bounds.outHeight else bounds.outWidth
+        val bh = if (turned) bounds.outWidth else bounds.outHeight
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= w && bounds.outHeight / (sample * 2) >= h) sample *= 2
-        val src = android.graphics.BitmapFactory.decodeFile(file.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        while (bw / (sample * 2) >= w && bh / (sample * 2) >= h) sample *= 2
+        val decoded = android.graphics.BitmapFactory.decodeFile(file.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        val src = upright(decoded, orientation)
         val scale = maxOf(w / src.width.toFloat(), h / src.height.toFloat())
         val cw = (w / scale).roundToInt().coerceAtMost(src.width)
         val ch = (h / scale).roundToInt().coerceAtMost(src.height)
@@ -27,6 +34,36 @@ object Images {
         Canvas(out).drawBitmap(src, android.graphics.Rect(l, t, l + cw, t + ch), android.graphics.Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
         src.recycle()
         return out
+    }
+
+    /** How the camera stored [file]'s picture (EXIF Orientation); the full app's, issue #647. */
+    fun exifOrientation(file: java.io.File): Int = try {
+        ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    } catch (e: Exception) {
+        ExifInterface.ORIENTATION_NORMAL
+    }
+
+    /** Whether [orientation] turns the picture a quarter, so its width and height swap. */
+    fun quarterTurn(orientation: Int): Boolean = when (orientation) {
+        ExifInterface.ORIENTATION_TRANSPOSE, ExifInterface.ORIENTATION_ROTATE_90,
+        ExifInterface.ORIENTATION_TRANSVERSE, ExifInterface.ORIENTATION_ROTATE_270 -> true
+        else -> false
+    }
+
+    /** [src] turned and mirrored upright for [orientation]; [src] itself when it already is, else recycled. */
+    fun upright(src: Bitmap, orientation: Int): Bitmap {
+        val m = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> m.setScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> m.setRotate(180f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> m.setScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { m.setRotate(90f); m.postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_ROTATE_90 -> m.setRotate(90f)
+            ExifInterface.ORIENTATION_TRANSVERSE -> { m.setRotate(-90f); m.postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_ROTATE_270 -> m.setRotate(-90f)
+            else -> return src
+        }
+        return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true).also { if (it !== src) src.recycle() }
     }
 
     /** The home shading, the same as the full app's, baked in so the TV draws one full-screen layer. */

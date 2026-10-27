@@ -259,9 +259,13 @@ object Wallpapers {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(tmp.path, bounds)
             if (bounds.outWidth <= 0) return null
+            // Stored upright: the JPEG written below keeps no EXIF, so the turn is applied now (#647).
+            val orientation = Images.exifOrientation(tmp)
+            val wide = if (Images.quarterTurn(orientation)) bounds.outHeight else bounds.outWidth
             var sample = 1
-            while (bounds.outWidth / (sample * 2) >= 2560) sample *= 2
-            val bmp = BitmapFactory.decodeFile(tmp.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+            while (wide / (sample * 2) >= 2560) sample *= 2
+            val decoded = BitmapFactory.decodeFile(tmp.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+            val bmp = Images.upright(decoded, orientation)
             val name = System.currentTimeMillis().toString(36)
             FileOutputStream(File(photoDir, "$name.jpg")).use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
             bmp.recycle()
