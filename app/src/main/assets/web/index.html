@@ -404,7 +404,7 @@ const TEXTS = {
   "轮播每日精选和你的照片。",
   "大号时钟，配合当前壁纸。",
   "动态",
-  "航拍和你的视频。默认在主屏幕停 10 秒后播放，按键停在当前画面。",
+  "航拍和你的视频。航拍在主屏幕上一直播放；你的视频默认停 10 秒后播放，按键停在当前画面。",
   "每日精选",
   "每天自动更新的风景摄影",
   "我的照片",
@@ -545,7 +545,7 @@ const TEXTS = {
   "Cycles through the daily photos and yours.",
   "A big clock over the current wallpaper.",
   "Moving",
-  "Aerial films and your own videos. They start after 10 seconds still on Home and stop on the frame showing at a key.",
+  "Aerial films and your own videos. The aerial films always play on Home; your videos start after 10 seconds still and stop on the frame showing at a key.",
   "Daily Photos",
   "Landscape photography, updated every day",
   "My Photos",
@@ -686,7 +686,7 @@ const TEXTS = {
   "Сменяются фото дня и ваши фото.",
   "Большие часы поверх текущих обоев.",
   "Движущиеся",
-  "Аэросъёмка и ваши видео. Запускаются через 10 секунд покоя на главном экране и останавливаются на текущем кадре по кнопке.",
+  "Аэросъёмка и ваши видео. Аэросъёмка всегда играет на главном экране; ваши видео запускаются через 10 секунд покоя и останавливаются на текущем кадре по кнопке.",
   "Фото дня",
   "Пейзажная фотография, обновляется каждый день",
   "Мои фото",
@@ -827,7 +827,7 @@ const TEXTS = {
   "Змінюються фото дня та ваші фото.",
   "Великий годинник поверх поточних шпалер.",
   "Рухомі",
-  "Аерозйомка і ваші відео. Запускаються через 10 секунд спокою на головному екрані і зупиняються на поточному кадрі за кнопкою.",
+  "Аерозйомка і ваші відео. Аерозйомка завжди грає на головному екрані; ваші відео запускаються через 10 секунд спокою і зупиняються на поточному кадрі за кнопкою.",
   "Фото дня",
   "Пейзажна фотографія, оновлюється щодня",
   "Мої фото",
@@ -968,7 +968,7 @@ const TEXTS = {
   "Күннің фотолары мен өз фотоларыңыз кезектеседі.",
   "Ағымдағы түсқағаз үстіндегі үлкен сағат.",
   "Қозғалмалы",
-  "Аэрожиын және өз бейнелеріңіз. Басты экранда 10 секунд тыныштықтан кейін басталып, түймені басқанда ағымдағы кадрда тоқтайды.",
+  "Аэрожиын және өз бейнелеріңіз. Аэрожиын басты экранда әрдайым ойнайды; бейнелеріңіз 10 секунд тыныштықтан кейін басталып, түймені басқанда ағымдағы кадрда тоқтайды.",
   "Күннің фотолары",
   "Пейзаждық фотография, күн сайын жаңартылады",
   "Менің фотоларым",
@@ -1309,8 +1309,8 @@ function renderWallpapers() {
     list.forEach(w => g.appendChild(card(w)));
     root.appendChild(g);
     if (sub) root.appendChild(el('p', 'foot', sub));
-    // Whether keys stop a moving wallpaper; only for one that moves, as on the TV.
-    if (kind === 'live' && (state.selected === 'aerial:live' || state.selected === 'videos:mine')) {
+    // Whether keys stop the owner's videos, as on the TV; the aerial films always move.
+    if (kind === 'live' && state.selected === 'videos:mine') {
       const l = el('div', 'list'); l.style.marginTop = '10px';
       const row = el('label', 'item');
       const txt = el('span', 'txt', t('sw_always')); txt.appendChild(el('span', 'sub', t('sw_always_sub')));

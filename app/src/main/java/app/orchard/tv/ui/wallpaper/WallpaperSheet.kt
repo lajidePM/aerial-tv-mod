@@ -150,8 +150,8 @@ fun WallpaperSheet(
                     Spacer(Modifier.height(16.dp))
                     SectionTitle(R.string.wp_wallpaper)
                     WallpaperRows()
-                    // Only for a wallpaper that moves: whether keys stop it.
-                    if (Wallpapers.moves()) Group { note ->
+                    // Only for the owner's videos: whether keys stop them. The aerial films always move.
+                    if (Wallpapers.selectedId == Wallpapers.VIDEOS) Group { note ->
                         Choices(
                             R.string.st_play, stringResource(R.string.st_play_hint), note,
                             listOf(false to R.string.st_play_still, true to R.string.st_play_always),

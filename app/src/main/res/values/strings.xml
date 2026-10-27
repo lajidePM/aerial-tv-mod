@@ -86,7 +86,7 @@
     <string name="wx_snow">Snow</string>
     <string name="wx_thunder">Thunderstorm</string>
     <string name="wp_daily_latest">Daily Photo</string>
-    <string name="wp_live">Moving aerial films. They start after 10 seconds still on the top row of Home and stop on the frame showing at any key, which stays as the picture; the next film picks up from there.</string>
+    <string name="wp_live">Moving aerial films. They play while Home is on the top row and stop on the frame showing when you go down to the apps, which stays as the picture; the next film picks up from there.</string>
     <string name="wp_photos_rotate">My Photos, Daily</string>
     <string name="wp_daily_note">Bing\'s photo of the day, changing to the new one every day.</string>
     <string name="wp_photos_rotate_note">A different one of your photos each day.</string>

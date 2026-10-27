@@ -538,7 +538,7 @@ fun HomeScreen(
                 )
             }
             // A moving wallpaper's film, under everything; it moves only on the top row with
-            // nothing over it, and there only once Home is still unless set to keep moving.
+            // nothing over it; the owner's videos there only once Home is still unless set to keep moving.
             val filmMoves = vm.resumed && overlay == Overlay.None && !vm.screensaverVisible && !pastShelf &&
                 focusedRow == 0 && moving == null
             val sourceInput = Wallpapers.sourceInput
@@ -546,7 +546,6 @@ fun HomeScreen(
                 Wallpapers.selectedId == Wallpapers.LIVE -> LiveWallpaper(
                     moving = filmMoves,
                     keep = vm.resumed && (!vm.screensaverVisible || filmSaver),
-                    lastInputAt = vm.lastInputAt,
                     cover = filmCover,
                     hold = filmSaver && vm.resumed,
                     // Control Center and Personalize leave Home sharp (dimmed, or above the sheet):
@@ -577,7 +576,7 @@ fun HomeScreen(
                 // A film kept moving, or an input's picture, gets the shade a picture has, so the
                 // top row reads over it without the plate. In the grid both give way to the
                 // frosted picture, as any wallpaper does (an input's picture cannot be blurred).
-                shadeMoving = AerialSettings.wallpaperAlwaysMoves || sourceInput != null,
+                shadeMoving = Wallpapers.keepsMoving || sourceInput != null,
                 filmStopped = { filmStopped },
                 toSaver = { toSaver.value },
                 filmGlass = (Wallpapers.filmFrost ?: Wallpapers.frosted).takeIf { Wallpapers.moves() && Wallpapers.backdrop != null },

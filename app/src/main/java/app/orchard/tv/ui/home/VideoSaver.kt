@@ -67,6 +67,8 @@ private fun LocalFilms(films: List<ScreensaverVideo>?, steps: SharedFlow<Int>, o
     var attempt by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf(false) }
     var aspect by remember { mutableFloatStateOf(16f / 9f) }
+    // Films that have shown a frame this time: a pause in one of those is not a broken file.
+    val shown = remember { HashSet<String>() }
 
     fun skip(step: Int) {
         if (player.mediaItemCount == 0) return
@@ -85,13 +87,16 @@ private fun LocalFilms(films: List<ScreensaverVideo>?, steps: SharedFlow<Int>, o
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 playing = true
+                player.currentMediaItem?.mediaId?.let(shown::add)
                 DiagLog.i("local screensaver first frame: ${player.currentMediaItem?.mediaId}")
             }
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) aspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) playing = false
+                // A film that ended hands over without a gap, and a single film starting over
+                // (REPEAT) may render no new first frame (it does on Xiaomi MiTV-MFTR0).
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) playing = false
                 attempt++
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -120,7 +125,12 @@ private fun LocalFilms(films: List<ScreensaverVideo>?, steps: SharedFlow<Int>, o
     }
     LaunchedEffect(steps) { steps.collect { skip(it) } }
     LaunchedEffect(attempt, playing, films != null) {
-        if (films != null && !playing) { delay(8_000); failed() }
+        if (films == null || playing) return@LaunchedEffect
+        delay(8_000)
+        // Only a film that never showed is dropped. One that played once and was then taken for a
+        // stall ended the owner's videos for the photos after one pass (Sony 85X95EK, issue #659).
+        if (player.currentMediaItem?.mediaId in shown) DiagLog.i("local screensaver: no new frame for 8 s from a film that played; kept")
+        else failed()
     }
     Box(Modifier.fillMaxSize()) {
         AndroidView(

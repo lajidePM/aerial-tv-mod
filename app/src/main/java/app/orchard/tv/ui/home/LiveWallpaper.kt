@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
-/** How long Home sits still before the aerial wallpaper starts moving. */
+/** How long Home sits still before the owner's videos start moving, unless set to keep moving. */
 internal const val START_AFTER_MS = 10_000L
 
 /** A stopped film keeps its player this long, so it moves on again without loading. */
@@ -97,8 +97,8 @@ class LiveFilm {
 }
 
 /**
- * The aerial wallpaper (issue #216): once Home has sat still on the top row for [START_AFTER_MS],
- * Apple's film plays behind the tiles, and any key stops it on the frame it was showing. That frame
+ * The aerial wallpaper (issue #216): Apple's film plays behind the tiles while Home is on the top
+ * row, keys and all; going down to the apps stops it on the frame it was showing. That frame
  * becomes the wallpaper's picture (Wallpapers.useLiveFrame), so the glass plate, the grid's frosted
  * background and the next start all match what was on screen. The film starts again from that
  * frame (Wallpapers.liveSpot), even after its player has gone, so still and moving are one shot.
@@ -113,7 +113,6 @@ fun LiveWallpaper(
     moving: Boolean,
     /** False once the screensaver is up or Home is behind an app: the player's decoder goes at once. */
     keep: Boolean,
-    lastInputAt: Long,
     cover: Animatable<Float, *>,
     /** The screensaver carries the film on: it keeps moving whatever the keys do. */
     hold: Boolean,
@@ -126,16 +125,9 @@ fun LiveWallpaper(
     var surface by remember { mutableStateOf<SurfaceView?>(null) }
     // Frames are reaching the screen: the first one has been drawn and the film is not stopped.
     var showing by remember { mutableStateOf(false) }
-    var idle by remember { mutableStateOf(false) }
     val reader = remember { FrameReader(context) }
-    LaunchedEffect(lastInputAt, moving) {
-        idle = false
-        if (!moving) return@LaunchedEffect
-        delay(START_AFTER_MS)
-        idle = true
-    }
-    // Set to keep moving, it plays as soon as Home shows it and keys do not stop it (issue #360).
-    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) || hold
+    // Plays as soon as Home shows it, and keys do not stop it (Wallpapers.keepsMoving).
+    val play = moving || hold
     val keepNow by rememberUpdatedState(keep)
     val standInNow by rememberUpdatedState(standIn)
 

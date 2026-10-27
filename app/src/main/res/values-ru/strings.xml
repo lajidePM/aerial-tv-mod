@@ -78,7 +78,7 @@
     <string name="wx_snow">Снег</string>
     <string name="wx_thunder">Гроза</string>
     <string name="wp_daily_latest">Всегда сегодняшнее</string>
-    <string name="wp_live">Аэросъёмка · запускается через 10 секунд на главном экране</string>
+    <string name="wp_live">Аэросъёмка · играет на верхнем ряду главного экрана</string>
     <string name="wp_photos_rotate">Одно в день</string>
     <string name="wp_daily_note">Фото дня от Bing, каждый день новое.</string>
     <string name="wp_photos_rotate_note">Каждый день другое из ваших фото.</string>

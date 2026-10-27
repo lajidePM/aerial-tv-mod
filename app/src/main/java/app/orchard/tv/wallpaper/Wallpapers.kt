@@ -15,6 +15,7 @@ import androidx.core.content.edit
 import app.orchard.tv.ui.components.UhdCanvas
 import app.orchard.tv.BuildConfig
 import app.orchard.tv.guard.GuardSetup
+import app.orchard.tv.settings.AerialSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -120,6 +121,12 @@ object Wallpapers {
 
     /** A wallpaper that moves behind Home (aerial films, the owner's videos), with a frame as its picture. */
     fun moves(id: String = selectedId) = id == LIVE || id == VIDEOS
+
+    /**
+     * Plays as soon as Home shows it and keys do not stop it: the aerial wallpaper always; the
+     * owner's videos when set to (issue #360).
+     */
+    val keepsMoving: Boolean get() = selectedId == LIVE || AerialSettings.wallpaperAlwaysMoves
 
     fun isSource(id: String = selectedId) = id.startsWith(SOURCE_PREFIX)
 

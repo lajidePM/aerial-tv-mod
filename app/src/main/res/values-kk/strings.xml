@@ -78,7 +78,7 @@
     <string name="wx_snow">Қар</string>
     <string name="wx_thunder">Нөсер</string>
     <string name="wp_daily_latest">Әрқашан бүгінгісі</string>
-    <string name="wp_live">Аэрожиын · басты экранда 10 секундтан кейін ойнайды</string>
+    <string name="wp_live">Аэрожиын · басты экранның жоғарғы қатарында ойнайды</string>
     <string name="wp_photos_rotate">Күніне біреуі</string>
     <string name="wp_daily_note">Bing күн суреті, күн сайын жаңасына ауысады.</string>
     <string name="wp_photos_rotate_note">Күн сайын фотоларыңыздың басқасы.</string>
