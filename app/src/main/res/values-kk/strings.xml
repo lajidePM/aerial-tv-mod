@@ -105,7 +105,7 @@
     <string name="ss_back_off">Ештеңе істемейді</string>
     <string name="ss_back_choice_hint">Басты экранның жоғарғы қатарында «Артқа» не істейді. Кездейсоқ басылса, өшіріңіз; экран қорғаушы бәрібір өзі басталады.</string>
     <string name="ss_quality">Аэрожиын сапасы</string>
-    <string name="ss_quality_hint">«Авто» осы теледидар көрсете алатын ең жақсысын ойнатады: 4K Dolby Vision, 4K немесе 1080p. 4K Dolby Vision үшін шамамен 25 Мбит/с керек; бейнелер жиі тоқтаса, 1080p таңдаңыз.</string>
+    <string name="ss_quality_hint">«Авто» осы теледидар көрсете алатын ең жақсысын ойнатады: 4K Dolby Vision, 4K немесе 1080p. Түсқағаз аэрожиын болса, экран қорғаушы бейнені түсқағаздың форматында жалғастырады, экран жыпылықтамайды; 4K Dolby Vision таңдалса, Dolby Vision-ға ауысады, сонда экран бір сәтке қараюы мүмкін. 4K Dolby Vision үшін шамамен 25 Мбит/с керек; бейнелер жиі тоқтаса, 1080p таңдаңыз.</string>
     <string name="ss_quality_auto">Авто</string>
     <string name="ss_quality_hd">1080p</string>
     <string name="ss_quality_uhd">4K</string>

@@ -113,7 +113,7 @@
     <string name="ss_back_off">Does Nothing</string>
     <string name="ss_back_choice_hint">What Back does on the top row of Home. Turn it off if it gets pressed by accident; the screensaver still starts on its own.</string>
     <string name="ss_quality">Aerial Quality</string>
-    <string name="ss_quality_hint">Auto plays the best this TV can show: 4K Dolby Vision, 4K or 1080p. 4K Dolby Vision needs about 25 Mbps; choose 1080p if films often skip.</string>
+    <string name="ss_quality_hint">Auto plays the best this TV can show: 4K Dolby Vision, 4K or 1080p. Over the aerial wallpaper the screensaver goes on in the wallpaper\'s format, without a blink; with 4K Dolby Vision chosen it switches to Dolby Vision, and the TV may go black for a moment. 4K Dolby Vision needs about 25 Mbps; choose 1080p if films often skip.</string>
     <string name="ss_quality_auto">Auto</string>
     <string name="ss_quality_hd">1080p</string>
     <string name="ss_quality_uhd">4K</string>

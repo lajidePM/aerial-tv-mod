@@ -105,7 +105,7 @@
     <string name="ss_back_off">Ничего не делает</string>
     <string name="ss_back_choice_hint">Что делает «Назад» в верхнем ряду главного экрана. Отключите, если её нажимают случайно; заставка всё равно запустится сама.</string>
     <string name="ss_quality">Качество аэросъёмки</string>
-    <string name="ss_quality_hint">«Авто» воспроизводит лучшее, что может показать этот телевизор: 4K Dolby Vision, 4K или 1080p. Для 4K Dolby Vision нужно около 25 Мбит/с; выберите 1080p, если ролики часто подвисают.</string>
+    <string name="ss_quality_hint">«Авто» воспроизводит лучшее, что может показать этот телевизор: 4K Dolby Vision, 4K или 1080p. С обоями аэросъёмки заставка продолжает ролик в формате обоев, без мигания; если выбрано 4K Dolby Vision, она переключается на Dolby Vision, и экран может на мгновение погаснуть. Для 4K Dolby Vision нужно около 25 Мбит/с; выберите 1080p, если ролики часто подвисают.</string>
     <string name="ss_quality_auto">Авто</string>
     <string name="ss_quality_hd">1080p</string>
     <string name="ss_quality_uhd">4K</string>

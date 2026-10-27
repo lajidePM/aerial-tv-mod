@@ -211,9 +211,9 @@ object AerialStart {
 
 /**
  * The aerial wallpaper's film carried on as the screensaver, one shot from Home: the same player,
- * in the wallpaper's own format, through to the films after it. Not switched to Dolby Vision where
- * the screensaver could play it: these TVs have one 4K decoder, and the switch showed black for
- * 1–3.5 s (Xiaomi MiTV-MFTR0), which the owner found worse than the format.
+ * in the wallpaper's own format, through to the films after it. Not with Dolby Vision chosen by hand
+ * (AerialFormats.screensaverCarriesWallpaper): these TVs have one 4K decoder, and the switch showed
+ * black for 1–3.5 s (Xiaomi MiTV-MFTR0), which only an owner who asked for Dolby Vision should get.
  */
 @Composable
 private fun FilmCarry(film: LiveFilm, now: LocalDateTime, steps: SharedFlow<Int>) {
@@ -313,7 +313,7 @@ private var aerialQualityCap: AerialQuality? = null
 
 /**
  * [startAt]: the aerial wallpaper's film and moment to begin with, played in the wallpaper's format
- * (AerialFormats.forWallpaper) so it goes on as the wallpaper looked.
+ * so it goes on as the wallpaper looked, unless Dolby Vision was chosen (AerialFormats.forScreensaver).
  */
 @Composable
 private fun AerialSaver(
@@ -324,7 +324,7 @@ private fun AerialSaver(
 ) {
     val context = LocalContext.current
     var quality by remember {
-        val wanted = if (startAt != null) AerialFormats.forWallpaper(context) else AerialFormats.resolve(context, AerialSettings.aerialQuality)
+        val wanted = AerialFormats.forScreensaver(context, overWallpaper = startAt != null)
         mutableStateOf(aerialQualityCap?.takeIf { it.ordinal < wanted.ordinal } ?: wanted)
     }
     val films = remember {
