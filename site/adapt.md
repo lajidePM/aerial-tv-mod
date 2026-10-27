@@ -64,7 +64,11 @@ adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigR
 
 1. 列出信号源：`CONFIG --ez list_sources true`。输出的 `data=` 后面是 JSON：`id`、`label`、`hw`、`firmwareLabel`（固件自己的名字）、`xiaomiInput`（小米播放器编号），以及 `shown`（主屏幕上是否显示）。
 2. 逐个打开：`CONFIG --es open_source '<id>'`，请用户看电视切到了机身上的哪个口（或者没有画面），记下来。然后 `adb shell input keyevent KEYCODE_HOME` 回到 Aerial。
-3. 写入修正：`CONFIG --es device_profile '<JSON>'`，比如 `'{"hidden":[8],"labels":{"6":"HDMI 1"},"xiaomiSources":{"6":23,"5":24}}'`。这段 JSON 会**整段替换**这台电视的修正，所以要在当前值（诊断报告「Device profile」一节）的基础上改。写错了不会保存，输出里会说明。
+3. 写入修正。JSON 里有引号和空格，要把整条命令放进一对双引号，JSON 用单引号括起来、里面的双引号写成 `\"`（macOS / Linux 的终端，Windows 用 Git Bash），否则电视那边的 shell 会吃掉引号：
+   ```
+   adb shell "am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigReceiver --es device_profile '{\"hidden\":[8],\"labels\":{\"6\":\"HDMI 1\"},\"xiaomiSources\":{\"6\":23,\"5\":24}}'"
+   ```
+   输出里的 `device_profile=...` 是保存下来的内容，要和你写的一致。这段 JSON 会**整段替换**这台电视的修正，所以要在当前值（诊断报告「Device profile」一节）的基础上改。写错了不会保存，输出会说 `not valid JSON`。
 4. 重复第 2 步确认每个口都对。小米换编号时，一次只改一个口，从 23 开始往上试。
 5. 都对了以后，`adb shell dumpsys activity app.orchard.tv/.MainActivity report` 末尾的 **Device profile** 一节就是要交给作者的修正（来源显示为 `ThisTv`）。
 6. 想撤销：`CONFIG --es device_profile default`，回到 Aerial 内置的修正。
@@ -74,8 +78,9 @@ adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigR
 ### 按主页键回不到 Aerial（`home_on_aerial` / `home_from_app` 失败）
 
 1. 自检里 `guard` 也失败：守护没有运行。运行 `curl -fsSL https://aerial.qust.me/install.sh | TV=<IP> bash -s repair`，或者 `adb shell am force-stop app.orchard.tv`，等 3 秒，再 `adb shell am start -W -n app.orchard.tv/.MainActivity`，然后重新自检。
-2. `guard` 通过、`home_from_app` 失败：请用户用实体遥控器按一次主页键，8 秒后运行 `adb shell "dumpsys window | grep mCurrentFocus"`。`input keyevent` 不经过守护的按键过滤，少数电视上结果和遥控器不同，以遥控器为准。
-3. 遥控器也回不来：记下 `report.sh` 输出的「Home」和「Bound services」两节，以及按键后 `adb logcat -d -t 300 | grep -E "AerialGuard|ActivityTaskManager|ActivityManager"` 的输出，交给作者。
+2. `home_from_app` 通过但要 5 秒左右：正常。`input keyevent` 模拟的主页键由 Android 自己处理，之后 5 秒内不许后台 App 打开界面；遥控器的主页键由守护直接接住，没有这个等待。
+3. `guard` 通过、`home_from_app` 失败：请用户用实体遥控器按一次主页键，8 秒后运行 `adb shell "dumpsys window | grep mCurrentFocus"`。`input keyevent` 不经过守护的按键过滤，少数电视上结果和遥控器不同，以遥控器为准。
+4. 遥控器也回不来：记下 `report.sh` 输出的「Home」和「Bound services」两节，以及按键后 `adb logcat -d -t 300 | grep -E "AerialGuard|ActivityTaskManager|ActivityManager"` 的输出，交给作者。
 
 ### 待机后醒不来，或者醒来停在原桌面（`standby` 失败）
 

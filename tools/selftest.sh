@@ -115,7 +115,9 @@ else result home_from_app FAIL "from $OTHER, in front after 12 s: $pkg"
 fi
 sleep 3
 # input keyevent does not go through Home Guard's key filter; on some TVs (Sony, Android 9) the
-# remote's Home key behaves otherwise. A FAIL here is worth a try with the remote.
+# remote's Home key behaves otherwise. A FAIL here is worth a try with the remote. Android also holds
+# back app starts for 5 s after a Home key it handles itself, so about 5 s here is that, not the
+# guard (TCL MT5879: the guard asks at once, Aerial starts 5 s later; the remote's key is not held).
 
 # 4. Standby and wake.
 if [ "${STANDBY:-0}" = 1 ]; then
