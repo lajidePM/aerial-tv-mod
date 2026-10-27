@@ -22,6 +22,8 @@ import android.os.Process
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.hardware.input.InputManager
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityEvent
@@ -429,6 +431,10 @@ class HomeGuardService : AccessibilityService() {
         }
         refreshStockHomes()
         screenOff = getSystemService<PowerManager>()?.isInteractive == false
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
+            runCatching { getSystemService<InputManager>()?.registerInputDeviceListener(gamepadListener, handler) }
+            lookForGamepads()
+        }
         updateKeyFilter()
         watchCecInput()
         volumeSeen = volumeNow()
@@ -561,6 +567,7 @@ class HomeGuardService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching { unregisterReceiver(userUnlocked) }
         }
+        runCatching { getSystemService<InputManager>()?.unregisterInputDeviceListener(gamepadListener) }
         runCatching { contentResolver.unregisterContentObserver(adbObserver) }
         runCatching { contentResolver.unregisterContentObserver(screensaverObserver) }
         if (cecWatching) {
@@ -606,7 +613,14 @@ class HomeGuardService : AccessibilityService() {
         // places a press again (云视听极光 on MiTV-MFTR0, Android 14; issue #475).
         // Not on Xiaomi, which answers Home in Aerial another way: see backOnPause.
         val aerialInFront = aerialResumed && !backOnPause
-        val wanted = !keysPassThrough && !screenOff && (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)
+        // A game played with a gamepad: with the filter on, every event of the pad goes through
+        // system_server's main thread and is injected again. On Xiaomi MiTV-MFTR0 (Android 11)
+        // streaming with Moonlight and a pad, that thread hung in AccessibilityInputFilter's
+        // nativeInjectInputEvent holding InputManagerService's lock, and the watchdog restarted the
+        // TV every 5-20 minutes (issue #774, eight dropbox records). Home in that app then goes to
+        // the system, and Aerial comes back after Android's 5 s hold.
+        val padGame = gamepadAttached && !aerialResumed && lastWindow?.first.let { it != null && it != packageName && it !in stockHomes }
+        val wanted = !keysPassThrough && !screenOff && !padGame && (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)
         val homeWanted = wanted && !isDefaultHome()
         val cecWanted = !screenOff && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
@@ -616,6 +630,24 @@ class HomeGuardService : AccessibilityService() {
         info.flags = want
         serviceInfo = info
         Log.i(TAG, if (want and flag != 0) "filtering keys" else "stopped filtering keys")
+    }
+
+    /** Whether a gamepad is connected; see updateKeyFilter. Not the joystick bit: TCL's IR receiver has it. */
+    private var gamepadAttached = false
+
+    private fun lookForGamepads() {
+        gamepadAttached = runCatching {
+            InputDevice.getDeviceIds().any { id ->
+                InputDevice.getDevice(id)?.let { !it.isVirtual && it.supportsSource(InputDevice.SOURCE_GAMEPAD) } == true
+            }
+        }.getOrDefault(false)
+        updateKeyFilter()
+    }
+
+    private val gamepadListener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) = lookForGamepads()
+        override fun onInputDeviceRemoved(deviceId: Int) = lookForGamepads()
+        override fun onInputDeviceChanged(deviceId: Int) = lookForGamepads()
     }
 
     private fun keyFilterRival(): Boolean {
