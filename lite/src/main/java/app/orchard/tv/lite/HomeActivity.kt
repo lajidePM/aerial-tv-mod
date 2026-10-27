@@ -557,6 +557,15 @@ class HomeActivity : Activity(), HomeView.Host {
      */
     private fun openBootApp() {
         val pkg = LiteSettings.bootApp ?: return
+        // Once per power-on, kept on disk: a firmware that stops Lite in the background made each
+        // cold start back in it open the app again (the full app's issue #766, Coocaa).
+        val prefs = getSharedPreferences("boot_open", MODE_PRIVATE)
+        val bootStamp = System.currentTimeMillis() - SystemClock.elapsedRealtime()
+        val openedAt = prefs.getLong("elapsed", -1L)
+        if (openedAt in 0..SystemClock.elapsedRealtime() && Math.abs(prefs.getLong("boot", 0L) - bootStamp) < 2 * 60 * 1000L) {
+            Log.i(TAG, "already opened $pkg since power-on")
+            return
+        }
         val launch = runCatching {
             (if (android.os.Build.VERSION.SDK_INT >= 21) packageManager.getLeanbackLaunchIntentForPackage(pkg) else null)
                 ?: packageManager.getLaunchIntentForPackage(pkg)
@@ -568,6 +577,7 @@ class HomeActivity : Activity(), HomeView.Host {
                 val online = ControlCenter.network(this@HomeActivity).first != Glyph.Offline
                 if (!online && SystemClock.elapsedRealtime() - since < 20_000) { handler.postDelayed(this, 500); return }
                 Log.i(TAG, "opening $pkg, what the TV starts on")
+                prefs.edit().putLong("elapsed", SystemClock.elapsedRealtime()).putLong("boot", bootStamp).apply()
                 open(launch.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
             }
         }
