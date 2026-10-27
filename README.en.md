@@ -70,6 +70,17 @@ The menus on Chinese firmware are in Chinese; their names are in brackets.
 | **Other Android TVs** | Settings → Device Preferences → About → press Build 7 times, then turn on USB debugging in Developer options |
 
 The TV's IP address is under Settings → Network → the connected network. The first time you connect, the TV asks whether to allow debugging: choose Always allow.
+
+**Android 11 and later pair before connecting** (Sony BRAVIA on Android 14, Google TV and others; #747): their "Wireless debugging" is not the old plaintext port, so `adb connect <IP>:5555` alone does not work. On the TV open Settings → System → Developer options → **Wireless debugging** → **Pair device with pairing code**, then enter the IP:port from the pairing screen and the 6-digit code on the computer:
+
+```bash
+adb pair 192.168.1.20:37115   # the port on the TV's pairing screen (example; use the TV's)
+# when it asks for the pairing code, type the 6 digits shown on the TV
+adb connect 192.168.1.20:39201   # the other IP:port, on the main Wireless debugging screen (example)
+```
+
+Then install as usual. To use plain `<TV-IP>:5555` from now on, run `adb tcpip 5555` once connected; a computer that has paired does not pair again. `install.sh` and the agent in the [install guide](site/en/agent.md) walk through this step.
+
 A more detailed guide by brand, including TVs that cannot open ADB, is in [docs/devices/adb-by-brand.md](docs/devices/adb-by-brand.md) (Chinese).
 
 ### 2. Install
@@ -111,7 +122,7 @@ Then press Home: if Android asks which app to use, choose Aerial, then Always, a
 curl -fsSL https://aerial.qust.me/install.sh | KEEP_ADB=1 TV=192.168.1.20 bash
 ```
 
-**By hand**: download [aerial-standard.apk](https://aerial.qust.me/download/aerial-standard.apk), then:
+**By hand**: download [aerial-standard.apk](https://aerial.qust.me/download/aerial-standard.apk), then (on Android 11+ wireless debugging, pair as in step 1 first and use the IP:port from the main Wireless debugging screen on the first line; the rest is the same):
 
 ```bash
 adb connect 192.168.1.20:5555
