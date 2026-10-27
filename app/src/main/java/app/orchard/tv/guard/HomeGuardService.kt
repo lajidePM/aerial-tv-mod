@@ -1181,6 +1181,11 @@ class HomeGuardService : AccessibilityService() {
             // resolve-activity stays on FallbackHome and set-home-activity rejects Aerial with
             // "cannot be home". Verified on device; dumpsys and logs in the linked issue.
             "com.mylejia.launcher" to listOf("com.mylejia.launcher.activity.DesktopActivity"),
+            // Hisense VIDAA's 聚好看 on VIDAA_TV V7N_Ultra (MT9653, Android 11): Home showed it, the
+            // diagnostics list it as a Home candidate (priority 50), yet the guard did not keep it
+            // away, so Home stayed there and its usage stats were not watched (issue #700). Not
+            // seen on a TV here; named so it counts wherever the activity exists.
+            "com.jamdeo.tv.vod" to listOf("com.ju.main.launcher.LauncherActivity"),
         )
 
         /**
