@@ -110,15 +110,16 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
         if (visible) held.value = carry
         when (val carried = held.value) {
             is SaverCarry.Film -> { FilmCarry(carried.film, now, skips.steps); return@AnimatedVisibility }
-            is SaverCarry.Still -> { PhotoSaver(now, skips.steps, carried.wallpaper, carried); return@AnimatedVisibility }
+            is SaverCarry.Still -> if (!carried.thenAerials) { PhotoSaver(now, skips.steps, carried.wallpaper, carried); return@AnimatedVisibility }
             null -> Unit
         }
         var aerialFailed by remember { mutableStateOf(false) }
         var videosFailed by remember { mutableStateOf(false) }
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        val over = held.value as? SaverCarry.Still
+        Box(Modifier.fillMaxSize().then(if (over == null) Modifier.background(Color.Black) else Modifier)) {
             when (Wallpapers.screensaver) {
-                ScreensaverMode.Aerial -> if (aerialFailed) PhotoSaver(now, skips.steps) else AerialSaver(
-                    now, skips.steps, onUnavailable = { aerialFailed = true }, startAt = remember {
+                ScreensaverMode.Aerial -> if (aerialFailed) PhotoSaver(now, skips.steps, over?.wallpaper, over) else AerialSaver(
+                    now, skips.steps, onUnavailable = { aerialFailed = true }, over = over, startAt = remember {
                         // A paused wallpaper film still holds the decoder (one 4K decoder, MiTV-MFTR0).
                         LiveFilm.onHome?.letDecoderGo()
                         AerialStart.wallpaper()
@@ -159,9 +160,13 @@ sealed interface SaverCarry {
     class Film(val film: LiveFilm) : SaverCarry
 
     /** The wallpaper's picture, drawing in behind Home (HomeBackground) as the photos' first. */
-    class Still(val wallpaper: app.orchard.tv.wallpaper.Wallpaper) : SaverCarry {
+    class Still(val wallpaper: app.orchard.tv.wallpaper.Wallpaper, val thenAerials: Boolean = false) : SaverCarry {
         /** The photos have moved on over it: Home's picture can stop. */
         var covered by mutableStateOf(false)
+
+        /** Home's picture as it draws in, for an aerial film to fade in from (thenAerials). */
+        var image by mutableStateOf<ImageBitmap?>(null)
+        var push: () -> Float = { 0f }
     }
 }
 
@@ -230,9 +235,9 @@ private fun FilmCarry(film: LiveFilm, now: LocalDateTime, steps: SharedFlow<Int>
 
 /** Place name bottom-left, time top-right: how tvOS labels its screensaver. */
 @Composable
-private fun Labels(caption: String?, now: LocalDateTime, showTime: Boolean = true) {
+private fun Labels(caption: String?, now: LocalDateTime, showTime: Boolean = true, timeFadeMs: Int = 2000) {
     // Fades in where Home's own clock has moved to, as the photos cover it.
-    val time by animateFloatAsState(if (showTime) 1f else 0f, tween(2000), label = "time")
+    val time by animateFloatAsState(if (showTime) 1f else 0f, tween(timeFadeMs), label = "time")
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
             // Just enough shade under the text to read it over bright sky or snow.
@@ -320,6 +325,8 @@ private fun AerialSaver(
     now: LocalDateTime,
     steps: SharedFlow<Int>,
     onUnavailable: () -> Unit,
+    /** Home's picture, drawing in with Home's clock moving to the corner: the film fades in over it. */
+    over: SaverCarry.Still? = null,
     startAt: Pair<String, Long>? = null,
 ) {
     val context = LocalContext.current
@@ -436,7 +443,7 @@ private fun AerialSaver(
     // A film the CDN serves slowly is passed over rather than waited for.
     LaunchedEffect(attempt, playing) {
         if (playing) return@LaunchedEffect
-        delay(STALL_MS)
+        delay(STALL_MS + if (over != null && attempt == 0) CARRY_MS else 0L)
         DiagLog.i("no picture from ${player.currentMediaItem?.mediaId} after $STALL_MS ms; next film")
         failures++
         // Nothing has played at all this time: Apple's CDN is out of reach. Hand over to the photo
@@ -452,7 +459,23 @@ private fun AerialSaver(
         if (playing) AerialStream.prepareOpener(context, films, film, quality, aerialsOverHttp)
     }
 
-    AndroidView(
+    // Over Home's picture the film's surface waits until Home's clock is in the corner: the surface
+    // clears the window's pixels under it, Home's clock with them, and from then on the
+    // screensaver's own time stands where that clock came to rest.
+    var surfaced by remember { mutableStateOf(over == null) }
+    LaunchedEffect(over) {
+        if (over == null) return@LaunchedEffect
+        delay(CARRY_MS)
+        surfaced = true
+    }
+    // Once the film covers it, Home's picture can stop.
+    LaunchedEffect(over, playing) {
+        if (over != null && playing) {
+            delay(1600)
+            over.covered = true
+        }
+    }
+    if (surfaced) AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             FilmSlot(ctx).also {
@@ -466,8 +489,16 @@ private fun AerialSaver(
         },
         onRelease = { player.clearVideoSurfaceView(it.surface) },
     )
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = veil }.background(Color.Black))
-    Labels(if (playing) caption ?: film.captionAt(((if (index == 0) firstAtMs else 0L) / 1000).toInt()) else null, now)
+    val picture = over?.image
+    if (over == null) Box(Modifier.fillMaxSize().graphicsLayer { alpha = veil }.background(Color.Black))
+    else if (surfaced) Canvas(Modifier.fillMaxSize()) {
+        // The veil is Home's picture, where it had drawn in to, until the film moves.
+        if (picture != null && veil > 0.01f) drawDrawingIn(picture, over.push(), veil) else if (picture == null) drawRect(Color.Black, alpha = veil)
+    }
+    Labels(
+        if (playing) caption ?: film.captionAt(((if (index == 0) firstAtMs else 0L) / 1000).toInt()) else null, now,
+        showTime = surfaced, timeFadeMs = if (over == null) 2000 else 0,
+    )
 }
 
 /** How long before a film whose decoder would not open is tried once more at the same quality. */
@@ -475,6 +506,9 @@ private const val RETRY_MS = 1_500L
 
 /** How long a film may take to show its first frame before the next one is tried. */
 private const val STALL_MS = 8_000L
+
+/** How long Home takes to carry its picture and clock into the screensaver (HomeScreen's toSaver). */
+private const val CARRY_MS = 2_000L
 
 private val DECODER_ERRORS = PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
 
