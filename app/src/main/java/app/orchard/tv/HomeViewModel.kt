@@ -1,7 +1,6 @@
 package app.orchard.tv
 
 import android.app.Application
-import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
@@ -28,7 +27,6 @@ import app.orchard.tv.apps.folderEntry
 import app.orchard.tv.apps.sourceEntry
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.system.Brightness
-import app.orchard.tv.system.DeviceProfile
 import app.orchard.tv.system.DiagLog
 import app.orchard.tv.system.HomeStatus
 import app.orchard.tv.system.NetworkStatus
@@ -43,7 +41,6 @@ import app.orchard.tv.ui.theme.canvasDensity
 import app.orchard.tv.wallpaper.Wallpapers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
@@ -61,7 +58,7 @@ sealed interface Overlay {
     data class Pin(val mode: PinMode, val onDone: () -> Unit) : Overlay
 }
 
-enum class CcPage { Main, Inputs, InputSettings, InputFix, InputFixOne, Update, Setup }
+enum class CcPage { Main, Inputs, InputSettings, Update, Setup }
 
 /**
  * Tiles a cold start reads whole before showing Home (two rows and a half, as many as can show);
@@ -71,16 +68,6 @@ private const val LEADING_TILES = 13
 
 /** Time since boot at which the app list is looked at again; see HomeViewModel.catchUpAfterBoot. */
 private val BOOT_CATCH_UP_MS = listOf(60_000L, 180_000L)
-
-/**
- * Xiaomi tvplayer source ids the input check steps through for an HDMI or DP port: the general rule
- * gives HDMI ports 23 and up (HW5 + 18), boards found so far use 23-30 (DP and USB-C 29, 30), and
- * MiTV-MFZP0 starts at HW4 + 19 = 23 too (#62 #191 #311).
- */
-private val XIAOMI_INPUT_IDS = 19..32
-
-/** How long after the input check opened an input Home still comes back to the check. */
-private const val CHECK_RETURN_MS = 10 * 60_000L
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val context get() = getApplication<Application>()
@@ -456,104 +443,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---- Input check (CcPage.InputFix): this TV's own DeviceProfile ----
-
-    /** Framework inputs, hidden ones too, as the check lists them. */
-    var inputsToCheck by mutableStateOf<List<TvSource>>(emptyList()); private set
-
-    /** Hardware id of the input open in the check. */
-    var checkingInput by mutableStateOf<Int?>(null)
-
-    /** Whether this TV carries its own corrections rather than the built-in ones. */
-    var ownProfile by mutableStateOf(false); private set
-
-    private var checkOpenedAt = 0L
-
-    fun loadInputsToCheck() {
-        viewModelScope.launch {
-            val ctx = context
-            val (list, own) = withContext(Dispatchers.Default) {
-                SystemProbe.inputsToCheck(ctx) to (DeviceProfile.origin(ctx) == DeviceProfile.Origin.ThisTv)
-            }
-            inputsToCheck = list
-            ownProfile = own
-        }
-    }
-
-    /** Opens [source] as the check has it now; Home brings the owner back to the check. */
-    fun openInCheck(source: TvSource, onOpen: (Intent) -> Unit) = openFromCheck(source.intent, onOpen)
-
-    /**
-     * Control Center closes itself when it opens something; the check stays, so that Home (or
-     * Back from the TV's player) lands on it again. Set back in the same frame, nothing redraws.
-     */
-    private fun openFromCheck(intent: Intent, onOpen: (Intent) -> Unit) {
-        val page = overlay
-        checkOpenedAt = SystemClock.elapsedRealtime()
-        onOpen(intent)
-        overlay = page
-    }
-
-    /** Moves [source] to the next Xiaomi source id, keeps it and opens the input with it. */
-    fun tryNextXiaomiInput(source: TvSource, onOpen: (Intent) -> Unit) {
-        val hw = source.hardware ?: return
-        val now = source.xiaomiInput ?: return
-        val next = if (now !in XIAOMI_INPUT_IDS || now == XIAOMI_INPUT_IDS.last) XIAOMI_INPUT_IDS.first else now + 1
-        editProfile { it.copy(xiaomiSourceIds = it.xiaomiSourceIds + (hw to next)) }
-        // The same route with the new id, without waiting for the list to be read again.
-        openFromCheck(Intent(source.intent).putExtra("input", next), onOpen)
-    }
-
-    /** Steps [source]'s name through the usual ones for its kind, back to the firmware's own. */
-    fun nextInputLabel(source: TvSource) {
-        val hw = source.hardware ?: return
-        val firmware = source.firmwareLabel ?: return
-        val names = listOf(firmware) + when (source.kind) {
-            SourceKind.Hdmi -> (1..4).map { "HDMI $it" }
-            SourceKind.DisplayPort -> listOf("DP", "USB-C")
-            SourceKind.Tuner -> listOf("DTMB", "ATV", "TV")
-            SourceKind.Av -> listOf("AV")
-            else -> emptyList()
-        }.filter { it != firmware }
-        val next = names[(names.indexOf(source.label).coerceAtLeast(0) + 1) % names.size]
-        editProfile { if (next == firmware) it.copy(labels = it.labels - hw) else it.copy(labels = it.labels + (hw to next)) }
-    }
-
-    fun setInputHidden(source: TvSource, hidden: Boolean) {
-        val hw = source.hardware ?: return
-        editProfile { it.copy(hiddenHardware = if (hidden) it.hiddenHardware + hw else it.hiddenHardware - hw) }
-    }
-
-    /** Drops this TV's own corrections, back to the built-in ones. */
-    fun resetInputCheck() {
-        val ctx = context
-        profileEdits.launch { DeviceProfile.setOwn(ctx, null as String?) }
-        reloadAfterProfileChange()
-    }
-
-    /** Profile edits off the main thread, one after another, so quick presses each build on the last. */
-    private val profileEdits = Channel<suspend () -> Unit>(Channel.UNLIMITED).also { queue ->
-        viewModelScope.launch(Dispatchers.Default) { for (edit in queue) runCatching { edit() } }
-    }
-
-    private fun Channel<suspend () -> Unit>.launch(edit: suspend () -> Unit) { trySend(edit) }
-
-    /** Applies [change] to the profile in use and keeps it as this TV's own. */
-    private fun editProfile(change: (DeviceProfile) -> DeviceProfile) {
-        val ctx = context
-        profileEdits.launch { DeviceProfile.setOwn(ctx, change(DeviceProfile.current(ctx))) }
-        reloadAfterProfileChange()
-    }
-
-    private fun reloadAfterProfileChange() {
-        val ctx = context
-        profileEdits.launch {
-            val list = SystemProbe.inputsToCheck(ctx)
-            val own = DeviceProfile.origin(ctx) == DeviceProfile.Origin.ThisTv
-            withContext(Dispatchers.Main) { inputsToCheck = list; ownProfile = own; refreshSystem() }
-        }
-    }
-
     fun refreshPanel() {
         viewModelScope.launch {
             val ctx = context
@@ -627,11 +516,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun onHomePressed(resetFocus: Boolean = true) {
         screensaverVisible = false
         AerialSettings.relock()
-        // Coming back from an input the check opened: the owner is still checking.
-        val checking = SystemClock.elapsedRealtime() - checkOpenedAt < CHECK_RETURN_MS &&
-            (overlay as? Overlay.ControlCenter)?.page.let { it == CcPage.InputFix || it == CcPage.InputFixOne }
-        checkOpenedAt = 0L
-        if (checking) return
         overlay = Overlay.None
         movingKey = null
         if (resetFocus) homeResetPending = true

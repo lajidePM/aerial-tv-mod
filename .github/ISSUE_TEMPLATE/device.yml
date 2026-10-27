@@ -12,9 +12,6 @@ body:
         「读 https://aerial.qust.me/adapt.md ，给我的电视（IP 是 <电视IP>）做 Aerial 适配」。它会自检、能改的当场改好，再整理成一份报告给你提交。
         Tell a desktop agent: "Read https://aerial.qust.me/adapt.md and adapt Aerial to my TV at <TV IP>". It tests, fixes what it can on the TV, and writes the report for you to post.
 
-        **信号源不对 / Wrong inputs:** 电视上「控制中心 → 信号源 → 信号源设置 → 校正信号源」可以自己改好，再从手机页「反馈问题 → 去 GitHub 反馈」提交，修正会自动填进下面。
-        On the TV, Control Center → Inputs → Input Settings → Check Inputs; then post from the phone page's Report a Problem, which fills the correction in below.
-
         **自己取诊断信息（任选一种）/ Getting the diagnostics yourself (either way):**
         1. 电脑（macOS / Linux，电视已开 ADB）/ Computer with ADB:
            `curl -fsSL https://aerial.qust.me/tools/report.sh | TV=<电视IP> bash`
@@ -61,7 +58,7 @@ body:
     id: profile
     attributes:
       label: 信号源修正（可选）/ Input corrections (optional)
-      description: 在电视上「校正信号源」或 Agent 改好的 device profile JSON，从手机页提交时会自动填上 / The device profile JSON from Check Inputs or an agent; filled in when posted from the phone page
+      description: Agent 在电视上试好的 device profile JSON（没有就留空），从手机页提交时会自动填上 / The device profile JSON an agent tried on the TV (leave empty if none); filled in when posted from the phone page
       render: json
   - type: textarea
     id: diagnostics

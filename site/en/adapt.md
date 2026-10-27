@@ -69,8 +69,6 @@ These are fixed on the spot, with no new release. Aerial keeps each TV's correct
 5. The **Device profile** section at the end of `adb shell dumpsys activity app.orchard.tv/.MainActivity report` (origin `ThisTv`) is what goes to the maintainer.
 6. To undo: `CONFIG --es device_profile default`.
 
-Without a computer, the user can do the same on the TV: Control Center → Inputs → Input Settings → Check Inputs.
-
 ### Home does not come back (`home_on_aerial` / `home_from_app` fail)
 
 1. `guard` failed too: Home Guard is not running. Run `curl -fsSL https://aerial.qust.me/install.sh | TV=<IP> bash -s repair`, or `adb shell am force-stop app.orchard.tv`, wait 3 s, `adb shell am start -W -n app.orchard.tv/.MainActivity`, and test again.

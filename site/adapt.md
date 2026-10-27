@@ -73,8 +73,6 @@ adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigR
 5. 都对了以后，`adb shell dumpsys activity app.orchard.tv/.MainActivity report` 末尾的 **Device profile** 一节就是要交给作者的修正（来源显示为 `ThisTv`）。
 6. 想撤销：`CONFIG --es device_profile default`，回到 Aerial 内置的修正。
 
-用户也可以不用电脑：控制中心 → 信号源 → 信号源设置 → 最下面「校正信号源」，在电视上逐个打开、换编号、改名、隐藏。
-
 ### 按主页键回不到 Aerial（`home_on_aerial` / `home_from_app` 失败）
 
 1. 自检里 `guard` 也失败：守护没有运行。运行 `curl -fsSL https://aerial.qust.me/install.sh | TV=<IP> bash -s repair`，或者 `adb shell am force-stop app.orchard.tv`，等 3 秒，再 `adb shell am start -W -n app.orchard.tv/.MainActivity`，然后重新自检。

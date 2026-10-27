@@ -194,11 +194,10 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 
 框架看不出来、只能按机型写的修正，以数据形式放在 `assets/devices.json`：按 `ro.product.model` 匹配，第一条命中的生效，`buildMajorBelow` 限定 `Build.DISPLAY` 第一个数字低于它的固件。字段：`hidden`（不显示的硬件编号）、`labels`（改名）、`xiaomiSources` / `xiaomiFallbackSources`（小米播放器的信号源编号，后者只在固件没有 `hdmiN_order` 时用）、`ignoresPictureBacklight`（有 `picture_backlight` 但不跟着变，亮度交给电视自己的滑块；`Brightness` 和 `MitvPanel` 都看它）。信号源按 TvInputInfo id 末尾的 `HWn` 编号。每条的 `note` 写明是哪台电视、哪个 issue 验证的。Lite 构建时复制 `DeviceProfile.kt` 和 `devices.json`。
 
-**这台电视自己的修正**（`system` prefs 里的 `device_profile`）整段替换内置的那一条，所以用户或 Agent 在电视上试出来的 JSON 原样就是要加进 `devices.json` 的内容。三个来源：
+**这台电视自己的修正**（`system` prefs 里的 `device_profile`）整段替换内置的那一条，所以 Agent 在电视上试出来的 JSON 原样就是要加进 `devices.json` 的内容。电视上没有修改它的界面：1.59 有过控制中心里的「校正信号源」，用户在上面不知道该选哪个编号，户主决定去掉（2026-10-27），适配只走 Agent 和提交诊断，不改变日常使用。
 
-- 控制中心 → 信号源 → 信号源设置 → 校正信号源（`CcPage.InputFix` / `InputFixOne`）：列出全部有硬件编号的输入（包括已隐藏的），逐个「打开试试」、小米上「换一个编号试试」（19–32 循环，换了马上用新编号打开）、改名（按类型轮换常用名，回到固件自己的名字就去掉覆盖）、隐藏，「恢复默认」清掉。改动在后台线程按顺序写（`HomeViewModel.profileEdits`），写完重读信号源。从校正页打开信号源后 10 分钟内按主页键回来，页面保持打开（`CHECK_RETURN_MS`）；控制中心的 `onOpen` 会关掉浮层，校正页打开后马上恢复（`openFromCheck`）。
 - ADB：`ConfigReceiver --es device_profile '<json>'`（`default` 回到内置），`--ez list_sources true` 以 JSON 列出信号源（含隐藏的、硬件编号、固件名、小米编号），`--es open_source <id>` 按磁贴的方式打开一个信号源。通过 `adb shell` 传带空格的 JSON 时，整条命令要放进一对引号里（`adb shell "am broadcast … --es device_profile '{\"6\":…}'"`），否则远端 shell 会吃掉引号。
-- 诊断报告末尾的 **Device profile** 一节输出当前生效的 JSON 和来源（`BuiltIn` / `ThisTv` / `None`）；手机页「去 GitHub 反馈」把 `ThisTv` 的那段填进 issue 表单的 `profile` 字段（GitHub 表单支持按字段 id 用 URL 参数预填），诊断全文复制到剪贴板。
+- 诊断报告末尾的 **Device profile** 一节输出当前生效的 JSON 和来源（`BuiltIn` / `ThisTv` / `None`）；手机页「去 GitHub 反馈」预填型号、版本，来源是 `ThisTv` 时把那段 JSON 填进 issue 表单的 `profile` 字段（GitHub 表单支持按字段 id 用 URL 参数预填），诊断全文复制到剪贴板。
 
 收到这类 issue：把 JSON 加进 `devices.json`（`models` 填上同型号的两种写法，比如 `MiTV-XXXX0` 和 `MiTV_XXXX0`，`note` 写 issue 号），`DeviceProfileTest` 跑一遍。
 

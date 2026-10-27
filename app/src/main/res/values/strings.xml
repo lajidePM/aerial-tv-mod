@@ -169,16 +169,6 @@
     <string name="cc_inputs_boot_none">Nothing, stay on Aerial</string>
     <string name="cc_inputs_boot_hint">Switch to this input when the TV is turned on or wakes from standby. Home still comes back to Aerial. To start on an app instead, a live TV app say, press and hold it on Home and choose Open When TV Turns On.</string>
     <string name="cc_inputs_pin_hint">Pinned inputs appear as tiles at the front of Home; select one to switch straight to it. Long-press a tile to move or remove it.</string>
-    <string name="cc_input_fix">Check Inputs</string>
-    <string name="cc_input_fix_hint">If an input opens the wrong port, or a port this TV does not have is listed, correct it here. Changes apply at once and stay on this TV.</string>
-    <string name="cc_input_fix_hidden">Hidden</string>
-    <string name="cc_input_fix_open">Open It</string>
-    <string name="cc_input_fix_open_hint">See which port the TV switches to, then press Home to come back here.</string>
-    <string name="cc_input_fix_number">Try Another Number (%1$d)</string>
-    <string name="cc_input_fix_name">Name</string>
-    <string name="cc_input_fix_hide">This TV Has No Such Port</string>
-    <string name="cc_input_fix_reset">Back to Default</string>
-    <string name="cc_input_fix_send">Once they are right, send them in from the phone page (Report a Problem at the bottom), so that every TV of this model gets them.</string>
     <string name="menu_unpin_source">Remove from Home</string>
     <string name="menu_source_device">Connected Device</string>
     <string name="menu_source_plain">Default</string>

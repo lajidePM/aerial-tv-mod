@@ -289,11 +289,8 @@
       <p>Paste this into an agent that can run commands on your computer. It tests the TV, fixes on the spot what it can, and writes a report for you to read before it is posted. The TV address is the one from step 2 above.</p>
       <div class="code"><button class="copy" data-copy="adaptprompt">Copy</button><pre id="adaptprompt"></pre></div>
 
-      <h3 class="step"><span>2</span>Wrong inputs: fix them on the TV</h3>
-      <p>Control Center → Inputs → Input Settings → <b>Check Inputs</b> at the bottom (from 1.59). Open each one, see which port the TV switches to, and if it is wrong try another number, rename it, or mark it as a port this TV does not have. Changes apply at once.</p>
-
-      <h3 class="step"><span>3</span>Send it in from your phone</h3>
-      <p>Control Center → Personalize, scan the QR code, and at the bottom of the phone page choose <b>Report a Problem → Show Diagnostics → Report on GitHub</b>: the model, the version and your input corrections fill the form, and the diagnostics are copied for you to paste.</p>
+      <h3 class="step"><span>2</span>Send it in from your phone</h3>
+      <p>Control Center → Personalize, scan the QR code, and at the bottom of the phone page choose <b>Report a Problem → Show Diagnostics → Report on GitHub</b>: the model and the version fill the form, and the diagnostics are copied for you to paste.</p>
       <p class="note">On a computer: <code>curl -fsSL https://aerial.qust.me/tools/report.sh | TV=&lt;tv-ip&gt; bash</code> (reads only) and <code>curl -fsSL https://aerial.qust.me/tools/selftest.sh | TV=&lt;tv-ip&gt; bash</code> (presses Home and checks Aerial comes back), then paste both into the <a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">device support form</a>. The diagnostics hold no accounts, addresses, Wi-Fi names or app lists.</p>
     </div>
   </div>

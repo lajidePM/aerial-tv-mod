@@ -464,8 +464,8 @@ object SystemProbe {
     )
 
     /**
-     * Every framework input with a hardware id, hidden ones too, for Control Center's input check
-     * (CcPage.InputFix): what DeviceProfile can correct.
+     * Every framework input with a hardware id, hidden ones too: what DeviceProfile can correct
+     * (ConfigReceiver list_sources and open_source, for agents adapting a TV).
      */
     fun inputsToCheck(context: Context): List<TvSource> =
         frameworkSources(context, withHidden = true).filter { it.hardware != null }

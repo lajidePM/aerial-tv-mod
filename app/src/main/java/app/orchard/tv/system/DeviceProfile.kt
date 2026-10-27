@@ -8,9 +8,9 @@ import org.json.JSONObject
 /**
  * Per-model corrections the framework cannot tell us, as data: `assets/devices.json` holds the
  * ones found on reporters' TVs (each entry says where), and a TV can carry its own over ADB
- * (`ConfigReceiver --es device_profile '<json>'`) or from Control Center's input check
- * (`CcPage.InputFix`). The TV's own one replaces the built-in entry whole, so what an owner or
- * their agent tried on the TV is exactly what goes into `devices.json` once it is sent in.
+ * (`ConfigReceiver --es device_profile '<json>'`, what site/adapt.md has an agent do). The TV's
+ * own one replaces the built-in entry whole, so what was tried on the TV is exactly what goes
+ * into `devices.json` once it is sent in.
  *
  * Inputs are keyed by the hardware id at the end of their TvInputInfo id (`.../HW5` is 5).
  */
@@ -30,12 +30,6 @@ class DeviceProfile(
 ) {
     val isEmpty get() = hiddenHardware.isEmpty() && labels.isEmpty() && xiaomiSourceIds.isEmpty() &&
         xiaomiFallbackSourceIds.isEmpty() && !ignoresPictureBacklight
-
-    fun copy(
-        hiddenHardware: Set<Int> = this.hiddenHardware,
-        labels: Map<Int, String> = this.labels,
-        xiaomiSourceIds: Map<Int, Int> = this.xiaomiSourceIds,
-    ) = DeviceProfile(hiddenHardware, labels, xiaomiSourceIds, xiaomiFallbackSourceIds, ignoresPictureBacklight)
 
     /** The same fields `devices.json` uses, without the matching ones (models, buildMajorBelow). */
     fun toJson(): JSONObject = JSONObject().apply {
@@ -91,10 +85,6 @@ class DeviceProfile(
             }.commit()
             cached = null
             return true
-        }
-
-        fun setOwn(context: Context, profile: DeviceProfile) {
-            setOwn(context, profile.toJson().toString())
         }
 
         /** The first entry of [json] (devices.json) for [model] whose firmware condition holds. */

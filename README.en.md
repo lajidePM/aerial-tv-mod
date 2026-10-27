@@ -226,9 +226,7 @@ Ask me before a standby test or restarting the TV; do not uninstall or disable a
 Show me the finished report, and post it to GitHub only once I agree.
 ```
 
-**2. Wrong inputs: fix them on the TV** (from 1.59): Control Center → Inputs → Input Settings → Check Inputs at the bottom. Open each, see which port the TV switches to, and if it is wrong try another number, rename it, or mark it as a port the TV does not have. Changes apply at once.
-
-**3. Send it from your phone**: Control Center → Personalize, scan the QR code, and at the bottom of the phone page choose Report a Problem → Show Diagnostics → Report on GitHub. The model, the version and your input corrections fill the [device support form](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml), and the diagnostics are copied for you to paste.
+**2. Send it from your phone**: Control Center → Personalize, scan the QR code, and at the bottom of the phone page choose Report a Problem → Show Diagnostics → Report on GitHub. The model and the version fill the [device support form](https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml), and the diagnostics are copied for you to paste.
 
 On a computer you can also run `curl -fsSL https://aerial.qust.me/tools/report.sh | TV=<tv-ip> bash` (reads only) and `curl -fsSL https://aerial.qust.me/tools/selftest.sh | TV=<tv-ip> bash` (presses Home, opens the settings, checks that Aerial comes back) and paste both into the form. The diagnostics hold no accounts, addresses, Wi-Fi names or app lists. If your TV just works, tell others with the [works-on-my-TV form](https://github.com/pengchujin/aerial-tv/issues/new?template=works.yml).
 

@@ -291,11 +291,8 @@
       <p>复制给能在电脑上运行命令的 Agent。它会先自检，能改的当场改好，最后整理成一份报告，你看过再提交。电视 IP 用上面第 2 步填的。</p>
       <div class="code"><button class="copy" data-copy="adaptprompt">复制</button><pre id="adaptprompt"></pre></div>
 
-      <h3 class="step"><span>2</span>信号源不对：在电视上自己改</h3>
-      <p>控制中心 → 信号源 → 信号源设置 → 最下面的 <b>校正信号源</b>（1.59 起）。逐个「打开试试」，看电视切到哪个口，不对就「换一个编号试试」、改名字，或者标成「这台电视没有这个口」。改动马上生效。</p>
-
-      <h3 class="step"><span>3</span>用手机提交给作者</h3>
-      <p>控制中心 → 个性化，用手机扫二维码，在手机页最下面 <b>反馈问题 → 显示诊断信息 → 去 GitHub 反馈</b>：型号、版本和你改好的信号源会自动填进表单，诊断信息自动复制，粘贴进去就行。没有 GitHub 账号时，把诊断信息发给有账号的朋友代发。</p>
+      <h3 class="step"><span>2</span>用手机提交给作者</h3>
+      <p>控制中心 → 个性化，用手机扫二维码，在手机页最下面 <b>反馈问题 → 显示诊断信息 → 去 GitHub 反馈</b>：型号和版本会自动填进表单，诊断信息自动复制，粘贴进去就行。没有 GitHub 账号时，把诊断信息发给有账号的朋友代发。</p>
       <p class="note">电脑上也可以自己跑：<code>curl -fsSL https://aerial.qust.me/tools/report.sh | TV=&lt;电视IP&gt; bash</code>（只读）和 <code>curl -fsSL https://aerial.qust.me/tools/selftest.sh | TV=&lt;电视IP&gt; bash</code>（按主页键等，看 Aerial 能不能回来），把两份输出贴进<a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml">机型适配模板</a>。诊断信息不含账号、IP、Wi-Fi 名称和 App 列表。</p>
     </div>
   </div>
