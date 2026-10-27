@@ -38,7 +38,7 @@ class HomeActivity : Activity(), HomeView.Host {
     private var backdrop: Drawable? = null
     /** The wallpaper as Home shows it, for the clock screensaver's light. */
     private var wallpaperPicture: Bitmap? = null
-    /** The grid's background: the frosted wallpaper under 55% black, stretched (the full app's GRID_SHADE). */
+    /** The grid's background: the frosted wallpaper as the plate's milky glass, not darkened, stretched (the full app's, issue #727). */
     private var gridBackdrop: Drawable? = null
     private var inGrid = false
     private var all: List<AppEntry> = emptyList()
@@ -173,7 +173,7 @@ class HomeActivity : Activity(), HomeView.Host {
         work.execute {
             val b = runCatching { Wallpapers.load() }
                 .onFailure { Log.w(TAG, "wallpaper ${Wallpapers.selectedId}", it) }.getOrNull() ?: return@execute
-            val grid = Images.darkened(b.frost, 0.55f)
+            val grid = Images.tinted(b.frost, PLATE_TINT)
             handler.post {
                 if (isFinishing) return@post
                 backdrop = BitmapDrawable(resources, b.home)
@@ -445,7 +445,7 @@ class HomeActivity : Activity(), HomeView.Host {
     override fun startSaver() = showSaver()
 
     /**
-     * Down in the grid the background is the frosted wallpaper under black, as in the full app.
+     * Down in the grid the background is the plate's glass over the whole screen, as in the full app.
      * The swap fades over the window background (two full-screen draws only while it fades), then
      * the window background itself becomes the new picture. Without hardware acceleration it jumps.
      */

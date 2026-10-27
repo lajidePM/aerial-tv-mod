@@ -63,6 +63,13 @@ object Images {
     }
 
     /** [src] under [alpha] black, as a new bitmap: the grid's background. */
+    /** [src] through [tint], baked. */
+    fun tinted(src: Bitmap, tint: android.graphics.ColorFilter): Bitmap {
+        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(src, 0f, 0f, android.graphics.Paint().apply { colorFilter = tint })
+        return out
+    }
+
     fun darkened(src: Bitmap, alpha: Float): Bitmap {
         val out = src.copy(Bitmap.Config.ARGB_8888, true)
         Canvas(out).drawColor(black(alpha))
