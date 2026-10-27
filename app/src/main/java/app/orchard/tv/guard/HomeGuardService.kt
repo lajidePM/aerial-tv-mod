@@ -92,7 +92,7 @@ class HomeGuardService : AccessibilityService() {
         // Bound early in a boot, the guard found no stock launcher at all on the same Mi TV 4, and
         // so took PatchWall for an app the viewer chose (issue #318, the reporter's 1.40 log).
         if (stockHomes.isEmpty()) refreshStockHomes()
-        takeOverIfStockHomeInFront("looking again after boot", woke = false)
+        takeOverIfStockHomeInFront("looking again after boot", woke = false, coveredSilently = true)
     }
 
     /**
@@ -153,6 +153,22 @@ class HomeGuardService : AccessibilityService() {
     private fun frontByUsage(): Pair<String, String>? {
         if (!usageStatsAllowed(this)) return null
         return foreground(UNKNOWN_FRONT_LOOKBACK_MS)?.first?.takeIf { it.first != packageName }
+    }
+
+    /**
+     * The stock home that usage stats say moved to the front last, when the last window seen is
+     * Aerial's yet its Home is not resumed; null otherwise. Xiaomi MiTV-MTEQ0 (Android 10) puts
+     * PatchWall over Aerial's Home some 15 s into a boot with no window change, so both boot
+     * rechecks found Aerial in front and left PatchWall there (issue #704: Home created and
+     * paused, never shown). Only a stock home counts, so Aerial's own screensaver or settings stay;
+     * only at the boot rechecks, when Aerial is not in the middle of opening.
+     */
+    private fun coveredAerial(window: Pair<String, String>): Pair<String, String>? {
+        if (window.first != packageName || aerialResumed || !usageStatsAllowed(this)) return null
+        val (front, _) = foreground(UNKNOWN_FRONT_LOOKBACK_MS) ?: return null
+        if (front.second !in stockHomes[front.first].orEmpty()) return null
+        Log.i(TAG, "Aerial's Home is not resumed and usage stats say ${front.first} is in front")
+        return front
     }
 
     private fun scheduleBootRechecks() {
@@ -435,7 +451,7 @@ class HomeGuardService : AccessibilityService() {
      * (Android 9) accepts set-home-activity, yet when standby force-stops Aerial, PatchWall's old
      * task is simply uncovered and stays in front after wake (issue #6).
      */
-    private fun takeOverIfStockHomeInFront(reason: String, woke: Boolean) {
+    private fun takeOverIfStockHomeInFront(reason: String, woke: Boolean, coveredSilently: Boolean = false) {
         if (!GuardSetup.isUserUnlocked(this)) return
         // No window seen since bound: ask usage stats what moved to the front last. Revived after
         // the firmware killed Aerial in the background, an unknown front was taken for the stock
@@ -444,7 +460,8 @@ class HomeGuardService : AccessibilityService() {
         // the boot rechecks, on firmwares that raise no window change for the app the viewer
         // opened (Skyworth 9S52_Q4A, Android 6, issue #489). Aerial itself says nothing about what
         // it uncovered when it died, so it stays unknown.
-        val last = lastWindow ?: frontByUsage()?.also { Log.i(TAG, "$reason; usage stats say ${it.first} is in front") }
+        val last = lastWindow?.let { (if (coveredSilently) coveredAerial(it) else null) ?: it }
+            ?: frontByUsage()?.also { Log.i(TAG, "$reason; usage stats say ${it.first} is in front") }
         // Unknown means we were only just bound, which happens after a standby kill. Any screen of
         // the stock launcher counts: when Aerial is killed, whatever was on top of the launcher's
         // task is uncovered, not always its home activity (PatchWall's StrategicLayerActivity).
