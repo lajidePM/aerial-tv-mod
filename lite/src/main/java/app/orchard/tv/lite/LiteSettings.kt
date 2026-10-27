@@ -128,7 +128,9 @@ object LiteSettings {
         pinHash = pin?.let(::hash)
         pinSet = pinHash != null
         pinArrows = pin != null && arrows
-        unlockedUntil = if (pin != null) SystemClock.elapsedRealtime() + UNLOCK_MS else 0L
+        // Locked from the start: a parent who sets the PIN and hands the remote over expects it
+        // to hold at once, not after the next Home press (issue #718).
+        unlockedUntil = 0L
         put { putString("pin_hash", pinHash); putBoolean("pin_arrows", pinArrows) }
     }
 

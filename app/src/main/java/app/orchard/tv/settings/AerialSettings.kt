@@ -124,7 +124,8 @@ object AerialSettings {
 
     /**
      * Parental PIN (issue #10): asked before TV settings open and before hidden apps come back.
-     * Kept as a SHA-256 hash. One right entry holds for a while, until Home is pressed.
+     * Kept as a SHA-256 hash. One right entry holds for a while, until Home is pressed, Aerial
+     * leaves the screen or the screensaver starts.
      */
     var pinSet by mutableStateOf(false); private set
 
@@ -224,7 +225,9 @@ object AerialSettings {
         pinHash = pin?.let(::hash)
         pinSet = pinHash != null
         pinArrows = pin != null && arrows
-        unlockedUntil = if (pin != null) SystemClock.elapsedRealtime() + UNLOCK_MS else 0L
+        // Locked from the start: a parent who sets the PIN and hands the remote over expects it
+        // to hold at once, not after the next Home press (issue #718).
+        unlockedUntil = 0L
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("pin_hash", pinHash); putBoolean("pin_arrows", pinArrows) }
     }
 

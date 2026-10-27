@@ -501,6 +501,7 @@ class HomeActivity : Activity(), HomeView.Host {
 
     private fun showSaver() {
         if (saver != null) return
+        LiteSettings.relock()
         closeAll()
         val s = SaverView(this, Wallpapers.screensaver, proxy, wallpaperPicture)
         saver = s
