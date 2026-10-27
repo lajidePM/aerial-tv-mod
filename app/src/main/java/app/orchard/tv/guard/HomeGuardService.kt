@@ -59,6 +59,7 @@ class HomeGuardService : AccessibilityService() {
     /** HOME activities that are not ours: package to class names. Refreshed on every connect. */
     private var stockHomes: Map<String, Set<String>> = emptyMap()
 
+
     /** Set when the user opens the stock launcher on purpose from Aerial's grid. */
     private var allowStockUntil = 0L
 
@@ -274,8 +275,10 @@ class HomeGuardService : AccessibilityService() {
             val front = lastWindow?.first
             if (front != null && front !in stockHomes) {
                 windowsAtHome = windowsSeen
+                homePressedAt = SystemClock.uptimeMillis()
                 handler.removeCallbacks(frontAfterHome)
-                handler.postDelayed(frontAfterHome, FRONT_AFTER_HOME_MS)
+                handler.removeCallbacks(frontAfterHomeAgain)
+                handler.postDelayed(frontAfterHome, if (deafAfterHome) DEAF_LOOK_MS else FRONT_AFTER_HOME_MS)
                 return
             }
             // The stock launcher's window change usually comes first and already brought Aerial
@@ -289,7 +292,7 @@ class HomeGuardService : AccessibilityService() {
 
     private var windowsSeen = 0L
     private var windowsAtHome = 0L
-    private var deafAfterHomeRestarted = false
+    private var homePressedAt = Long.MIN_VALUE / 2
 
     /**
      * Home pressed in another app, and no window change since: the guard may have gone deaf. On
@@ -298,8 +301,11 @@ class HomeGuardService : AccessibilityService() {
      * in front, and so did Home in every app after (issue #651). Usage stats still see PatchWall
      * come to the front; then Aerial comes back, and accessibility is switched off and on once per
      * process, which is what brought the events back there (Aerial started by hand did too).
+     * Where that did not bring them back, each Home after it waited the full 1.5 s with PatchWall
+     * on screen (1.61, the reporter's log: 1.98 s every time). Once deaf, usage stats are read
+     * every DEAF_LOOK_MS from the press on instead, until a window change is seen again.
      */
-    private val frontAfterHome = Runnable {
+    private val frontAfterHome: Runnable = Runnable {
         // XGIMI (Android 9, m7642) answers Home with its own Home chooser when set-home-activity did
         // not take; it was never drawn and the remote went dead over it (issue #44). Only right
         // after Home: the same chooser also serves apps' "open with".
@@ -309,18 +315,26 @@ class HomeGuardService : AccessibilityService() {
             return@Runnable
         }
         if (windowsSeen != windowsAtHome) return@Runnable
-        val front = frontByUsage() ?: return@Runnable
-        if (front.first !in stockHomes) return@Runnable
+        val front = frontByUsage()
+        if (front == null || front.first !in stockHomes) {
+            // Usage stats may not have the stock launcher yet: look again until the usual wait is up.
+            if (deafAfterHome && SystemClock.uptimeMillis() - homePressedAt < FRONT_AFTER_HOME_MS) {
+                handler.postDelayed(frontAfterHomeAgain, DEAF_LOOK_MS)
+            }
+            return@Runnable
+        }
         Log.i(TAG, "Home pressed, no window change since, and usage stats say ${front.first} is in front; bringing Aerial back")
         lastWindow = front
         allowStockUntil = 0L
         goHome()
+        deafAfterHome = true
         if (!deafAfterHomeRestarted) {
             deafAfterHomeRestarted = true
             Log.i(TAG, "no window change for that; switching accessibility off and on")
             GuardSetup.restartAccessibility(this)
         }
     }
+    private val frontAfterHomeAgain: Runnable = Runnable { frontAfterHome.run() }
 
     /** The firmware putting its own screensaver back while Aerial's is chosen (GuardSetup). */
     private val screensaverObserver by lazy {
@@ -829,6 +843,7 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         sawEvent = true
+        deafAfterHome = false
         windowsSeen++
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
@@ -1062,6 +1077,8 @@ class HomeGuardService : AccessibilityService() {
         private const val DEAF_AFTER_MS = 20_000L
         /** How long a stock launcher's window change may take to arrive after Home (see frontAfterHome). */
         private const val FRONT_AFTER_HOME_MS = 1_500L
+        /** How often usage stats are read after Home once the guard has been found deaf. */
+        private const val DEAF_LOOK_MS = 150L
         private const val XGIMI_FRAMEWORK = "com.xgimi.xgimiframeworkui"
         private const val FOREGROUND_POLL_MS = 1_000L
         private const val FOREGROUND_LOOKBACK_MS = 10_000L
@@ -1091,6 +1108,14 @@ class HomeGuardService : AccessibilityService() {
 
         @Volatile
         private var deafRetried = false
+
+        /** Accessibility switched off and on for a deaf guard once already in this process; see frontAfterHome. */
+        @Volatile
+        private var deafAfterHomeRestarted = false
+
+        /** Home has found the guard deaf, and no window change has come since; see frontAfterHome. */
+        @Volatile
+        private var deafAfterHome = false
 
         /** VIDAA's assistant and its launcher (聚好看), on the two VIDAA builds reported (issues #7, #40). */
         private val VIDAA_PACKAGES = listOf("com.hisense.vidaaassistant", "com.jamdeo.tv.vod")

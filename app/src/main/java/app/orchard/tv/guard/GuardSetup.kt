@@ -340,10 +340,28 @@ object GuardSetup {
         }
     }
 
-    /** Switches accessibility off and, a moment later, on again, so Android binds every service anew. */
+    /**
+     * Switches accessibility off and, a moment later, on again, so Android binds every service anew.
+     * Past Android 6 accessibility_enabled no longer unbinds anything: on Xiaomi Box 5 Max
+     * (MiTV-AZFU0, Android 14) the guard stayed deaf after it (issue #651). There Aerial is taken
+     * out of the list and put back, as rebindIfStalled does.
+     */
     fun restartAccessibility(context: Context) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return
         val resolver = context.contentResolver
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.M) {
+            val me = ComponentName(context, HomeGuardService::class.java).flattenToString()
+            fun others() = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                .split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it)?.flattenToString() != me }
+            runCatching {
+                Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, others().joinToString(":"))
+                Handler(Looper.getMainLooper()).postDelayed({
+                    runCatching { Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (others() + me).joinToString(":")) }
+                        .onFailure { Log.w(TAG, "could not put Home Guard back", it) }
+                }, 1500)
+            }.onFailure { Log.w(TAG, "could not take Home Guard out", it) }
+            return
+        }
         runCatching {
             Settings.Secure.putInt(resolver, Settings.Secure.ACCESSIBILITY_ENABLED, 0)
             // See rebindIfStalled: two writes in a row are coalesced.
