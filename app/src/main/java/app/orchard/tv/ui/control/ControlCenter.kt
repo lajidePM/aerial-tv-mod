@@ -344,6 +344,7 @@ private fun UpdatePage(vm: HomeViewModel, takeFocus: Boolean) {
             val status = when (val state = Updates.install) {
                 Updates.Install.Opened -> stringResource(R.string.cc_update_opened)
                 Updates.Install.NeedsPermission -> stringResource(R.string.cc_update_permission)
+                Updates.Install.NeedsStoragePermission -> stringResource(R.string.cc_update_storage_permission)
                 is Updates.Install.Failed -> stringResource(
                     when (state.reason) {
                         Updates.Failure.Download -> R.string.cc_update_failed_download
