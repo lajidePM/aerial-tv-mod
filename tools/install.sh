@@ -93,7 +93,10 @@ if [ "$STATE" != device ]; then
       export ANDROID_SERIAL="$MAIN_SERIAL"; echo "Staying on $MAIN_SERIAL for this run; the next run pairs again." >&2
     fi
   else
-    echo "The TV did not accept the connection. Accept \"Allow USB debugging?\" on the TV, then run again." >&2
+    # Pairing was tried and did not get through; without a terminal the hint above says it all.
+    if [ -n "${ADB_PAIR:-}" ] || [ -t 0 ]; then
+      echo "Still not connected. Read the IP:port and code on the TV's wireless-debugging screen again, then run again." >&2
+    fi
     exit 1
   fi
 fi
