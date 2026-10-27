@@ -30,6 +30,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import app.orchard.tv.MainActivity
 import app.orchard.tv.settings.AerialSettings
+import app.orchard.tv.system.BootOpen
 import app.orchard.tv.system.SystemProbe
 
 /**
@@ -246,6 +247,7 @@ class HomeGuardService : AccessibilityService() {
             screenOff = intent.action == Intent.ACTION_SCREEN_OFF
             updateKeyFilter()
             if (screenOff) {
+                BootOpen.noteScreenOff(this@HomeGuardService)
                 if (GuardSetup.offInStandby(this@HomeGuardService)) GuardSetup.stepOutForStandby(this@HomeGuardService)
                 return
             }
