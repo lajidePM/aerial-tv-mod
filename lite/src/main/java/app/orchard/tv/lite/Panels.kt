@@ -28,6 +28,11 @@ import app.orchard.tv.lite.Ui.textPx
 class GlassBox(context: Context, private val radius: Float, private val bottomCorners: Boolean = true) : FrameLayout(context) {
     private var baked: Bitmap? = null
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    /**
+     * The stand-in's own paint: drawn with [paint], its 90% stayed in the paint's alpha and every
+     * baked glass after it let Home show through (Personalize over the tiles, MiTV-MFTR0).
+     */
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ui.GLASS }
     private val box = RectF()
 
     init { setWillNotDraw(false) }
@@ -56,10 +61,9 @@ class GlassBox(context: Context, private val radius: Float, private val bottomCo
         val b = baked
         if (b != null) canvas.drawBitmap(b, 0f, 0f, paint)
         else {
-            paint.color = Ui.GLASS
             val r = Ui.px(radius)
             box.set(0f, 0f, width.toFloat(), height.toFloat() + if (bottomCorners) 0f else r)
-            canvas.drawRoundRect(box, r, r, paint)
+            canvas.drawRoundRect(box, r, r, fill)
         }
     }
 }
@@ -96,19 +100,29 @@ private fun LinearLayout.add(v: View, w: Int = LinearLayout.LayoutParams.MATCH_P
     return v
 }
 
+/** Control Center's pages, as the full app's CcPage: Lite has no inputs list and no updates. */
+enum class CcPage { Main, Boot }
+
 /**
  * Control Center, as the full app's ControlCenter main page: the time and date with the network,
- * three round buttons (inputs, network, settings), volume and brightness, Personalize, and whether
- * Aerial is the TV's Home. Home stays sharp behind it under a dark veil.
+ * three round buttons (inputs, network, settings), volume and brightness, Personalize, what the TV
+ * starts on, and whether Aerial is the TV's Home. Home stays sharp behind it under a dark veil.
+ * The network and settings sit behind the parental PIN ([locked]).
  */
 class ControlCenter(
     context: Context,
     close: () -> Unit,
+    page: CcPage,
     private val open: (Intent) -> Unit,
+    private val locked: (() -> Unit) -> Unit,
     private val personalize: () -> Unit,
+    private val goTo: (CcPage) -> Unit,
+    private val bootLabel: String?,
+    private val clearBoot: () -> Unit,
     private val noInputs: () -> Unit,
 ) : Sheet(context, close) {
     private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.pxi(16f), Ui.pxi(16f), Ui.pxi(16f), Ui.pxi(16f)) }
 
     init {
         // The veil over Home: the full app's 45% black.
@@ -117,9 +131,15 @@ class ControlCenter(
         addView(panel, LayoutParams(Ui.pxi(300f), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
             topMargin = Ui.pxi(24f); rightMargin = Ui.pxi(32f)
         })
-        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.pxi(16f), Ui.pxi(16f), Ui.pxi(16f), Ui.pxi(16f)) }
         panel.addView(col)
+        when (page) {
+            CcPage.Main -> main()
+            CcPage.Boot -> boot()
+        }
+        focusFirst()
+    }
 
+    private fun main() {
         // The time (Type.SmallClock at LargeTitle × 1.05) and date (Callout); the network on the right.
         val head = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
         val times = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -141,10 +161,10 @@ class ControlCenter(
         }
         val netButton = RoundButton(context, netGlyph, context.getString(R.string.cc_network)).apply {
             level = netLevel
-            action = { open(SystemIntents.network(context, netGlyph == Glyph.Ethernet)) }
+            action = { locked { open(SystemIntents.network(context, netGlyph == Glyph.Ethernet)) } }
         }
         val settings = RoundButton(context, Glyph.Gear, context.getString(R.string.cc_settings)).apply {
-            action = { open(SystemIntents.settings(context)) }
+            action = { locked { open(SystemIntents.settings(context)) } }
         }
         for ((i, b) in listOf(inputs, netButton, settings).withIndex()) {
             if (i > 0) buttons.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
@@ -163,22 +183,22 @@ class ControlCenter(
         col.add(volume, top = 12f)
         row(volume)
 
-        // Brightness where Lite may write the standard setting (granted at install before Android 6.0).
-        val canWrite = Build.VERSION.SDK_INT < 23 || Settings.System.canWrite(context)
-        if (canWrite && readBrightness(context) != null) {
+        // Brightness where Lite can set the panel's (Brightness), else the TV's own picture settings.
+        if (Brightness.level(context) != null) {
             val brightness = SliderRow(
                 context,
                 glyph = { Glyph.Sun },
-                // In twentieths, shown as percent: the system's 0-255 is too fine for a remote.
-                read = { ((readBrightness(context) ?: 0) * 20 + 127) / 255 to 20 },
-                write = { runCatching { Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, (it * 255 + 10) / 20) } },
-                shown = { v, _ -> (v * 5).toString() },
+                // In percent, five at a time, as the full app.
+                read = { Math.round((Brightness.level(context) ?: 0f) * 100) to 100 },
+                write = { to -> Brightness.adjust(context, if (to > Math.round((Brightness.level(context) ?: 0f) * 100)) 1 else -1) },
+                shown = { v, _ -> v.toString() },
+                step = 5,
             )
             col.add(brightness, top = 6f)
             row(brightness)
         } else {
             val brightness = MenuRow(context, Glyph.Sun, context.getString(R.string.cc_brightness), context.getString(R.string.cc_brightness_in_settings) + " ›")
-                .apply { action = { open(Intent(Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+                .apply { action = { if (Brightness.openPictureSettings(context)) close() } }
             col.add(brightness, top = 6f)
             row(brightness)
         }
@@ -186,6 +206,12 @@ class ControlCenter(
         val pers = MenuRow(context, Glyph.Photo, context.getString(R.string.cc_personalize)).apply { action = personalize }
         col.add(pers, top = 6f)
         row(pers)
+        // What the TV opens when switched on: easy to forget, and puzzling when it happens.
+        bootLabel?.let { name ->
+            val boot = MenuRow(context, Glyph.Power, context.getString(R.string.cc_boot), "$name ›").apply { action = { goTo(CcPage.Boot) } }
+            col.addView(boot)
+            row(boot)
+        }
 
         // Whether Lite is the TV's Home, and the version.
         val status = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(Ui.pxi(14f), 0, Ui.pxi(14f), 0) }
@@ -195,8 +221,22 @@ class ControlCenter(
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = Ui.pxi(8f) })
         status.addView(context.label("Aerial Lite " + version(context), 11f, 500, Ui.TERTIARY))
         col.add(status, top = 8f)
+    }
 
-        focusFirst()
+    /** What the TV starts on: an app is chosen from its tile's menu; here it shows, and "nothing" clears it. */
+    private fun boot() {
+        val back = MenuRow(context, Glyph.ChevronLeft, context.getString(R.string.cc_boot)).apply { action = { goTo(CcPage.Main) } }
+        col.addView(back)
+        row(back)
+        col.add(context.label(context.getString(R.string.cc_inputs_boot), 13f, 600).apply { setPadding(Ui.pxi(14f), 0, 0, 0) }, top = 10f)
+        val none = MenuRow(context, if (bootLabel == null) Glyph.Check else Glyph.Power, context.getString(R.string.cc_inputs_boot_none)).apply { action = clearBoot }
+        col.add(none, top = 6f)
+        row(none)
+        bootLabel?.let { name ->
+            val app = MenuRow(context, Glyph.Check, name)
+            col.addView(app)
+            row(app)
+        }
     }
 
     companion object {
@@ -219,14 +259,21 @@ class ControlCenter(
             }
         }
 
-        fun readBrightness(context: Context): Int? = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrNull()
-
         fun isHome(context: Context): Boolean = runCatching {
             context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName == context.packageName
         }.getOrDefault(false)
 
         fun version(context: Context): String = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
     }
+}
+
+/** A caption under a group or a list: tertiary, up to three lines. */
+fun note(context: Context, text: String): TextView = TextView(context).apply {
+    this.text = text
+    setTextColor(Ui.TERTIARY); textPx(11f); typeface = Ui.font(500)
+    maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+    includeFontPadding = false
+    setLineSpacing(Ui.px(2f), 1f)
 }
 
 /** A glyph as a plain view. */
@@ -258,13 +305,14 @@ class TileMenu(context: Context, close: () -> Unit, title: String, anchor: RectF
         })
         for (r in rows) { col.addView(r); row(r) }
         panel.addView(col)
-        val below = anchor.bottom + Ui.px(296f) <= Ui.screenH
         val x = anchor.left.coerceIn(Ui.px(24f), (Ui.screenW - w - Ui.px(24f)).coerceAtLeast(Ui.px(24f)))
         addView(panel, LayoutParams(w.toInt(), LayoutParams.WRAP_CONTENT).apply { leftMargin = x.toInt() })
         panel.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 panel.viewTreeObserver.removeOnPreDrawListener(this)
                 val gap = Ui.px(18f)
+                // Under the tile when the whole menu fits there, as the full app's AppMenu.
+                val below = anchor.bottom + gap + panel.height <= Ui.screenH - Ui.px(24f)
                 val y = if (below) anchor.bottom + gap else anchor.top - gap - panel.height
                 // Placed by layout, so its glass is baked from where it stays.
                 (panel.layoutParams as LayoutParams).topMargin = y.coerceAtLeast(Ui.px(24f)).toInt()
@@ -285,145 +333,315 @@ class TileMenu(context: Context, close: () -> Unit, title: String, anchor: RectF
 }
 
 /**
- * Personalize, as the full app's WallpaperSheet (without its phone card: Lite has no phone page):
- * a glass sheet from the bottom, the wallpaper cards, then tvOS-style groups of setting rows with
- * a note under each that follows the focused row.
+ * Personalize, as the full app's WallpaperSheet, row for row: a glass sheet from the bottom, the
+ * wallpaper cards, then tvOS-style groups of setting rows (how Home is laid out, the clock, how the
+ * remote feels, the screensaver, the weather, the parental PIN) with a note under each that
+ * follows the focused row; on the right, the QR code of the phone page. Rows that only some
+ * choices have come and go, so the rows are made again after every choice, focus kept in place.
  */
 class Personalize(
     context: Context,
     close: () -> Unit,
-    private val settings: LiteSettings,
+    private val hiddenCount: Int,
     private val onWallpaper: (String) -> Unit,
-    private val onClock: (Boolean) -> Unit,
+    private val onLayout: () -> Unit,
     private val onHidden: () -> Unit,
     private val onSaverNow: () -> Unit,
-    hiddenCount: Int,
+    private val onPin: (Boolean) -> Unit,
 ) : Sheet(context, close) {
-    private val thumbs = ArrayList<Pair<String, Thumb>>()
-    private val strip = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-    private val chips = ArrayList<Chip>()
-    private val hints = HashMap<Control, Pair<Int, TextView>>()
+    private val col = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(Ui.pxi(12f), Ui.pxi(12f), Ui.pxi(12f), Ui.pxi(24f))
+    }
+    private var strip = LinearLayout(context)
+    private var stripShift = 0f
+    private val hints = HashMap<Control, Pair<String?, TextView>>()
+    private val cardNotes = HashMap<Thumb, String?>()
+    private var cardNote: TextView? = null
+    private val qrView = android.widget.ImageView(context)
+    private val phoneBody = TextView(context)
+    private val phoneUrl = TextView(context)
 
     init {
         val sheetH = Ui.px(360f)
         val panel = GlassBox(context, 30f, bottomCorners = false)
         addView(panel, LayoutParams(LayoutParams.MATCH_PARENT, sheetH.toInt(), Gravity.BOTTOM))
-        val viewportView = FrameLayout(context)
-        panel.addView(viewportView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
-            leftMargin = Ui.pxi(40f); rightMargin = Ui.pxi(32f); topMargin = Ui.pxi(24f)
+        val inner = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        panel.addView(inner, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
+            // 12 units of room around the scrolling column for a focused control's growth, taken
+            // back by the column's padding so everything sits where the full app has it.
+            leftMargin = Ui.pxi(40f - 12f); rightMargin = Ui.pxi(32f); topMargin = Ui.pxi(24f - 12f)
         })
-        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        // The viewport clips the scrolling column.
+        val viewportView = Viewport(context)
+        inner.addView(viewportView, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         viewportView.addView(col, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         scroller = col
-        viewport = (sheetH - Ui.px(24f)).toInt()
-
-        col.add(context.label(context.getString(R.string.wp_title), 26f, 600, display = true, spacingEm = -0.015f))
-
-        // Wallpaper: the built-in pictures, the chosen one ticked.
-        col.add(section(R.string.wp_wallpaper), top = 18f)
-        val stripClip = FrameLayout(context).apply { clipChildren = false }
-        stripClip.addView(strip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
-        col.add(stripClip, top = 10f)
-        for (key in Wallpapers.keys) {
-            val t = Thumb(context, Wallpapers.name(context, key)) { Gradients.currentKey(settings.wallpaper) == key }
-            t.action = {
-                settings.wallpaper = key
-                for ((_, other) in thumbs) other.invalidate()
-                onWallpaper(key)
-            }
-            strip.addView(t, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = Ui.pxi(16f) })
-            thumbs += key to t
-        }
-        row(*thumbs.map { it.second }.toTypedArray())
-        renderThumbs()
-
-        // Home: the clock's size, hidden apps.
-        col.add(section(R.string.st_home_layout), top = 14f)
-        val home = group()
-        col.add(home, top = 10f)
-        val homeNote = note()
-        col.add(homeNote)
-        val clockChips = listOf(false to R.string.st_clock_small, true to R.string.st_clock_large).map { (large, label) ->
-            Chip(context, context.getString(label), { settings.largeClock == large }).apply {
-                action = { settings.largeClock = large; onClock(large); refreshChips() }
-            }
-        }
-        home.addView(settingRow(R.string.st_clock_size, clockChips, first = true))
-        val hidden = Chip(context, if (hiddenCount > 0) context.getString(R.string.st_hidden_count, hiddenCount) else context.getString(R.string.st_hidden_none), { false }, Glyph.ChevronRight)
-            .apply { action = onHidden }
-        home.addView(settingRow(R.string.st_hidden_apps, listOf(hidden)))
-        row(*clockChips.toTypedArray())
-        row(hidden)
-        hints[clockChips[0]] = R.string.st_clock_size_hint to homeNote
-        hints[clockChips[1]] = R.string.st_clock_size_hint to homeNote
-        hints[hidden] = R.string.st_hidden_apps_hint to homeNote
-
-        // Screen saver: its kind, when it starts, and now.
-        col.add(section(R.string.wp_screensaver), top = 4f)
-        val saver = group()
-        col.add(saver, top = 10f)
-        col.add(note())
-        val kinds = listOf(LiteSettings.Saver.Aerial to R.string.ss_aerial, LiteSettings.Saver.Clock to R.string.ss_clock).map { (kind, label) ->
-            Chip(context, context.getString(label), { settings.saver == kind }).apply { action = { settings.saver = kind; refreshChips() } }
-        }
-        val delays = (LiteSettings.SAVER_MINUTES.map { it to context.getString(R.string.ss_minutes, it) } + (0 to context.getString(R.string.ss_never))).map { (m, label) ->
-            Chip(context, label, { settings.saverMinutes == m }).apply { action = { settings.saverMinutes = m; refreshChips() } }
-        }
-        val now = Chip(context, context.getString(R.string.ss_start), { false }, Glyph.Play).apply { action = onSaverNow }
-        saver.addView(settingRow(R.string.ss_kind, kinds + now, first = true))
-        saver.addView(settingRow(R.string.ss_delay, delays))
-        row(*(kinds + now).toTypedArray())
-        row(*delays.toTypedArray())
-        chips += clockChips + kinds + delays
+        viewport = (sheetH - Ui.px(12f)).toInt()
+        inner.addView(phoneCard(), LinearLayout.LayoutParams(Ui.pxi(220f), LinearLayout.LayoutParams.MATCH_PARENT).apply {
+            leftMargin = Ui.pxi(28f - 12f); topMargin = Ui.pxi(12f + 6f)
+        })
 
         onFocusMoved = { c ->
-            hints[c]?.let { (hint, view) -> view.text = context.getString(hint) }
-            if (c is Thumb) keepThumbInView(c)
+            hints[c]?.let { (hint, view) -> view.text = hint ?: view.tag as? String ?: "" }
+            if (c is Thumb) {
+                cardNote?.text = cardNotes[c] ?: ""
+                if (c.width > 0) keepThumbInView(c) else c.post { keepThumbInView(c) }
+            }
         }
+        build()
         // Focus starts on the chosen wallpaper.
-        focusFirst(0, thumbs.indexOfFirst { it.first == Gradients.currentKey(settings.wallpaper) }.coerceAtLeast(0))
+        focusFirst(0, cards().indexOfFirst { it.id == Wallpapers.selectedId }.coerceAtLeast(0))
+        loadPhone()
 
         // It slides up, as the full app's sheet (the iOS sheet curve, near enough).
         panel.translationY = sheetH
-        panel.post { if (panel.isHardwareAccelerated) panel.animate().translationY(0f).setDuration(320).setInterpolator(android.view.animation.DecelerateInterpolator(2f)).start() else panel.translationY = 0f }
-    }
-
-    private fun refreshChips() { for (c in chips) c.refresh() }
-
-    private fun section(title: Int) = context.label(context.getString(title), 15f, 600).apply { setPadding(Ui.pxi(4f), 0, 0, 0) }
-
-    /** A card of setting rows: white at 5%, corners 16. */
-    private fun group() = object : LinearLayout(context) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x0DFFFFFF }
-        private val box = RectF()
-        init { orientation = VERTICAL; setWillNotDraw(false) }
-        override fun onDraw(canvas: Canvas) {
-            box.set(0f, 0f, width.toFloat(), height.toFloat())
-            canvas.drawRoundRect(box, Ui.px(16f), Ui.px(16f), paint)
+        panel.post {
+            if (LiteSettings.full(panel.isHardwareAccelerated)) panel.animate().translationY(0f).setDuration(320).setInterpolator(android.view.animation.DecelerateInterpolator(2f)).start()
+            else panel.translationY = 0f
         }
     }
 
-    /** The note under a group: two lines of room, tertiary. */
-    private fun note() = TextView(context).apply {
-        setTextColor(Ui.TERTIARY); textPx(11f); typeface = Ui.font(500)
-        maxLines = 2; ellipsize = TextUtils.TruncateAt.END
-        setPadding(Ui.pxi(16f), Ui.pxi(7f), Ui.pxi(16f), 0)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.pxi(38f))
+    /** After a choice here or on the phone page: the rows again, focus where it was. */
+    fun refreshChips() {
+        val (r, c) = position
+        build()
+        focusFirst(r, c)
     }
 
-    /** One row of a group: the setting's name on the left, its chips on the right, a hairline above all but the first. */
-    private fun settingRow(label: Int, controls: List<Control>, first: Boolean = false): View {
-        val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        if (!first) box.addView(View(context).apply { setBackgroundColor(Ui.HAIRLINE) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { leftMargin = Ui.pxi(18f) })
+    /** New daily photos or photos from the phone: their cards too. */
+    fun wallpapersChanged() {
+        synchronized(faces) { faces.remove(Wallpapers.LATEST_DAILY); faces.remove(Wallpapers.ROTATE_PHOTOS) }
+        refreshChips()
+    }
+
+    // ---- the rows ----
+
+    private fun build() {
+        col.removeAllViews()
+        clearRows()
+        hints.clear()
+        cardNotes.clear()
+
+        col.add(context.label(context.getString(R.string.wp_title), 26f, 600, display = true, spacingEm = -0.015f))
+        col.add(section(R.string.wp_wallpaper), top = 16f)
+        wallpaperRow()
+
+        col.add(section(R.string.st_home_layout), top = 6f)
+        group {
+            choices(R.string.st_layout, string(R.string.st_home_layout_hint), listOf(true to R.string.st_home_one_row, false to R.string.st_home_standard),
+                LiteSettings.oneRowHome) { LiteSettings.chooseOneRowHome(it); onLayout() }
+            // Two rows show the second row whole; only one row has a peek to hide.
+            if (LiteSettings.oneRowHome) choices(R.string.st_peek, string(R.string.st_peek_hint), listOf(true to R.string.st_peek_show, false to R.string.st_peek_hide),
+                LiteSettings.peekNextRow) { LiteSettings.choosePeekNextRow(it); onLayout() }
+            choices(R.string.st_plate, string(R.string.st_plate_hint), listOf(true to R.string.st_plate_glass, false to R.string.st_plate_none),
+                LiteSettings.homePlate) { LiteSettings.chooseHomePlate(it); onLayout() }
+            choices(R.string.st_names, string(R.string.st_names_hint), listOf(false to R.string.st_names_focused, true to R.string.st_names_all),
+                LiteSettings.showAllNames) { LiteSettings.chooseShowAllNames(it); onLayout() }
+            val hidden = Chip(context, if (hiddenCount == 0) string(R.string.st_hidden_none) else context.getString(R.string.st_hidden_count, hiddenCount), { false }, Glyph.ChevronRight)
+                .apply { action = onHidden }
+            settingRow(R.string.st_hidden_apps, string(R.string.st_hidden_apps_hint), listOf(hidden))
+        }
+        col.add(space(context, 10f))
+        group {
+            choices(R.string.st_clock, string(R.string.st_clock_hint), listOf(false to R.string.st_clock_left, true to R.string.st_clock_right),
+                LiteSettings.clockRight) { LiteSettings.chooseClockRight(it); onLayout() }
+            choices(R.string.st_clock_size, string(R.string.st_clock_size_hint), listOf(false to R.string.st_clock_small, true to R.string.st_clock_large),
+                LiteSettings.largeClock) { LiteSettings.chooseLargeClock(it); onLayout() }
+            choices(R.string.wp_weather, null, listOf(true to R.string.st_on, false to R.string.st_off),
+                LiteSettings.showWeather) { LiteSettings.chooseShowWeather(it); onLayout() }
+        }
+        col.add(space(context, 10f))
+        group {
+            choices(R.string.st_focus_style, string(if (LiteSettings.focusStyle == FocusStyle.HighContrast) R.string.st_focus_high_hint else R.string.st_focus_standard_hint),
+                listOf(FocusStyle.HighContrast to R.string.st_focus_high, FocusStyle.Standard to R.string.st_focus_standard),
+                LiteSettings.focusStyle) { LiteSettings.chooseFocusStyle(it); onLayout() }
+            choices(R.string.st_sounds, string(if (LiteSettings.uiSounds == UiSounds.Tv) R.string.st_sounds_tv_hint else R.string.st_sounds_hint),
+                listOf(UiSounds.Tv to R.string.st_sounds_tv, UiSounds.Aerial to R.string.st_sounds_aerial, UiSounds.Off to R.string.st_off),
+                LiteSettings.uiSounds) { LiteSettings.chooseUiSounds(it); Sounds.prepare() }
+            choices(R.string.st_effects,
+                string(if (LiteSettings.effects == Effects.Auto && !(context as android.app.Activity).window.decorView.isHardwareAccelerated) R.string.st_effects_auto_lite_hint else R.string.st_effects_hint),
+                listOf(Effects.Auto to R.string.st_effects_auto, Effects.Full to R.string.st_effects_full, Effects.Lite to R.string.st_effects_lite),
+                LiteSettings.effects) { LiteSettings.chooseEffects(it); onLayout() }
+        }
+
+        col.add(section(R.string.wp_screensaver), top = 22f)
+        val mode = Wallpapers.screensaver
+        group {
+            val kinds = listOf(
+                ScreensaverMode.Aerial to R.string.ss_aerial,
+                ScreensaverMode.Photos to R.string.ss_photos,
+                ScreensaverMode.Clock to R.string.ss_clock,
+                ScreensaverMode.Videos to R.string.ss_videos,
+            ).map { (m, label) -> Chip(context, string(label), { Wallpapers.screensaver == m }).apply { action = { Wallpapers.chooseScreensaver(m); refreshChips() } } }
+            val start = Chip(context, string(R.string.ss_start), { false }, Glyph.Play).apply { action = onSaverNow }
+            settingRow(R.string.ss_kind, when {
+                mode == ScreensaverMode.Videos -> string(R.string.ss_videos_hint)
+                Wallpapers.screensaverFollows -> string(R.string.ss_follow_hint)
+                LiteSettings.backStartsScreensaver -> string(R.string.ss_back_hint)
+                else -> null
+            }, kinds + start)
+            // The clock screensaver is its clock, and the others show none.
+            if (mode == ScreensaverMode.Aerial || mode == ScreensaverMode.Photos) choices(R.string.ss_show_time, string(R.string.ss_show_time_hint),
+                listOf(true to R.string.st_on, false to R.string.st_off), LiteSettings.screensaverClock) { LiteSettings.chooseScreensaverClock(it) }
+            choices(R.string.ss_delay, null, LiteSettings.screensaverChoices.map { it to if (it == LiteSettings.NEVER) string(R.string.ss_never) else context.getString(R.string.ss_minutes, it) },
+                LiteSettings.screensaverMinutes) { LiteSettings.chooseScreensaverMinutes(it) }
+            choices(R.string.ss_back, string(R.string.ss_back_choice_hint), listOf(true to R.string.ss_back_on, false to R.string.ss_back_off),
+                LiteSettings.backStartsScreensaver) { LiteSettings.chooseBackStartsScreensaver(it) }
+        }
+
+        col.add(section(R.string.wp_weather), top = 22f)
+        group(string(if (Weather.chosen) R.string.wp_weather_chosen else R.string.wp_weather_guessed)) {
+            settingRow(R.string.wp_weather_city, null, emptyList(), value = weatherValue())
+        }
+        col.add(space(context, 10f))
+        // The last row: one row says what it is; a title over it would only repeat it.
+        group(string(R.string.st_pin_hint)) {
+            choices(R.string.st_pin, null, listOf(false to R.string.st_pin_off, true to R.string.st_pin_on), LiteSettings.pinSet) { on ->
+                if (LiteSettings.pinSet != on) onPin(on)
+            }
+        }
+    }
+
+    private fun string(id: Int) = context.getString(id)
+
+    private fun section(title: Int) = context.label(context.getString(title), 15f, 600).apply { setPadding(Ui.pxi(4f), 0, 0, Ui.pxi(10f)) }
+
+    /** The rows of one group being made: the card they go in, and its note. */
+    private var card: LinearLayout? = null
+    private var cardNoteView: TextView? = null
+    private var firstInCard = true
+
+    /**
+     * A card of setting rows, as in tvOS Settings (white at 5%, corners 16), with one note under it
+     * that follows the focused row, or says [note] when that row has none.
+     */
+    private fun group(note: String? = null, rows: () -> Unit) {
+        val box = object : LinearLayout(context) {
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x0DFFFFFF }
+            private val rect = RectF()
+            init { orientation = VERTICAL; setWillNotDraw(false) }
+            override fun onDraw(canvas: Canvas) {
+                rect.set(0f, 0f, width.toFloat(), height.toFloat())
+                canvas.drawRoundRect(rect, Ui.px(16f), Ui.px(16f), paint)
+            }
+        }
+        val noteView = note(context, note ?: "").apply {
+            maxLines = 2
+            tag = note
+            setPadding(Ui.pxi(16f), Ui.pxi(7f), Ui.pxi(16f), 0)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.pxi(38f))
+        }
+        card = box; cardNoteView = noteView; firstInCard = true
+        rows()
+        col.addView(box, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        col.addView(noteView)
+        card = null
+    }
+
+    /**
+     * One row: the setting's name on the left, its chips (or a [value]) on the right, a hairline
+     * above all but the first. Its chips make one row of the remote's focus.
+     */
+    private fun settingRow(label: Int, hint: String?, controls: List<Control>, value: View? = null) {
+        val box = card ?: return
+        if (!firstInCard) box.addView(View(context).apply { setBackgroundColor(Ui.HAIRLINE) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { leftMargin = Ui.pxi(18f) })
+        firstInCard = false
         val line = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(Ui.pxi(18f), 0, Ui.pxi(10f), 0); clipChildren = false
+            setPadding(Ui.pxi(18f), 0, Ui.pxi(10f), 0)
         }
         line.addView(context.label(context.getString(label), 14f, 500), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        for (c in controls) line.addView(c, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = Ui.pxi(10f) })
+        for (c in controls) {
+            line.addView(c, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = Ui.pxi(10f) })
+            hints[c] = hint to cardNoteView!!
+        }
+        value?.let { line.addView(it, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = Ui.pxi(8f) }) }
         box.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.pxi(58f)))
-        box.clipChildren = false
-        return box
+        if (controls.isNotEmpty()) row(*controls.toTypedArray())
+    }
+
+    /** A row of chips for one of a few values; [labels] are string ids or the text itself. */
+    private fun <T> choices(label: Int, hint: String?, labels: List<Pair<T, Any>>, current: T, choose: (T) -> Unit) {
+        val chips = labels.map { (v, text) ->
+            Chip(context, if (text is Int) string(text) else text.toString(), { current == v }).apply {
+                action = { if (current != v) { choose(v); refreshChips() } }
+            }
+        }
+        settingRow(label, hint, chips)
+    }
+
+    /** Where the weather is for and what it is now; the city is set on the phone page. */
+    private fun weatherValue(): TextView {
+        val w = Weather.now
+        val text = if (w != null) {
+            val kind = string(when (w.kind) {
+                Weather.Kind.Clear -> R.string.wx_clear
+                Weather.Kind.PartlyCloudy -> R.string.wx_partly_cloudy
+                Weather.Kind.Cloudy -> R.string.wx_cloudy
+                Weather.Kind.Fog -> R.string.wx_fog
+                Weather.Kind.Rain -> R.string.wx_rain
+                Weather.Kind.Snow -> R.string.wx_snow
+                Weather.Kind.Thunder -> R.string.wx_thunder
+            })
+            listOfNotNull(Weather.place, "${w.celsius}° $kind").joinToString(" · ")
+        } else string(R.string.wp_weather_none)
+        return context.label(text, 14f, 500, Ui.SECONDARY)
+    }
+
+    // ---- wallpaper cards ----
+
+    /**
+     * Every wallpaper in one row, in the full app's order: Bing's photo of the day, the owner's
+     * photos (with "every day another" from two up), a few of the built-in pictures. Past daily
+     * photos and the other built-ins only when one of them is the current choice.
+     */
+    private fun cards(): List<Wallpaper> {
+        val items = Wallpapers.items
+        val selected = Wallpapers.selectedId
+        return buildList {
+            if (items.any { it.kind == WallpaperKind.Daily }) add(Wallpaper(Wallpapers.LATEST_DAILY, WallpaperKind.Daily, string(R.string.wp_daily_latest)))
+            addAll(items.filter { it.kind == WallpaperKind.Daily && it.id == selected })
+            val photos = items.filter { it.kind == WallpaperKind.Photo }
+            if (photos.size > 1) add(Wallpaper(Wallpapers.ROTATE_PHOTOS, WallpaperKind.Photo, string(R.string.wp_photos_rotate)))
+            addAll(photos)
+            addAll(items.filter { it.kind == WallpaperKind.Builtin && (it.id in FEATURED || it.id == selected) })
+        }
+    }
+
+    private fun wallpaperRow() {
+        // Wider than the sheet: as many cards as there are, moved along by translation.
+        val clip = Viewport(context, horizontal = true)
+        strip = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; translationX = stripShift }
+        clip.addView(strip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        col.add(clip)
+        val thumbs = ArrayList<Thumb>()
+        for (wp in cards()) {
+            val t = Thumb(context, wp.title) { Wallpapers.selectedId == wp.id }
+            t.action = {
+                Wallpapers.select(wp.id)
+                for (other in thumbs) other.invalidate()
+                onWallpaper(wp.id)
+            }
+            synchronized(faces) { faces[wp.id] }?.let { t.picture = it }
+            strip.addView(t, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = Ui.pxi(18f) })
+            thumbs += t
+            cardNotes[t] = when {
+                wp.id == Wallpapers.LATEST_DAILY -> string(R.string.wp_daily_note)
+                wp.id == Wallpapers.ROTATE_PHOTOS -> string(R.string.wp_photos_rotate_note)
+                wp.kind == WallpaperKind.Photo -> string(R.string.wp_photo_note)
+                wp.kind == WallpaperKind.Daily -> wp.caption
+                else -> null
+            }
+        }
+        row(*thumbs.toTypedArray())
+        cardNote = note(context, "").apply {
+            maxLines = 2
+            setPadding(Ui.pxi(4f), Ui.pxi(8f), 0, 0)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.pxi(42f))
+        }
+        col.addView(cardNote)
+        renderThumbs(thumbs.zip(cards()).filter { it.first.picture == null })
     }
 
     private fun keepThumbInView(t: Thumb) {
@@ -434,22 +652,81 @@ class Personalize(
             left + t.width > room -> (room - t.right).toFloat()
             else -> strip.translationX
         }.coerceAtMost(0f)
-        if (isHardwareAccelerated) strip.animate().translationX(to).setDuration(200).start() else strip.translationX = to
+        stripShift = to
+        if (LiteSettings.full(isHardwareAccelerated)) strip.animate().translationX(to).setDuration(200).start() else strip.translationX = to
     }
 
-    /** The cards' pictures, drawn small in the background, corners cut. */
-    private fun renderThumbs() {
+    /** The cards' pictures, made small in the background with their corners cut, and kept. */
+    private fun renderThumbs(todo: List<Pair<Thumb, Wallpaper>>) {
+        if (todo.isEmpty()) return
         val w = Ui.pxi(168f); val h = Ui.pxi(94f)
         Thread {
-            for ((key, t) in thumbs) {
-                val pic = if (key == Wallpapers.DAILY) Wallpapers.dailyFile(context)?.let { runCatching { Images.decodeCover(it, w, h) }.getOrNull() }
-                    else Gradients.byKey(key)?.let { runCatching { Gradients.render(it, w, h) }.getOrNull() }
-                if (pic == null) continue
+            for ((t, wp) in todo) {
+                val pic = runCatching { Wallpapers.thumbnail(wp.id) }.getOrNull() ?: continue
                 val face = Shapes.face(pic, w, h, Ui.px(12f), 0f)
-                pic.recycle()
+                synchronized(faces) { faces[wp.id] = face }
                 t.post { t.picture = face }
             }
         }.start()
+    }
+
+    // ---- the phone card ----
+
+    /** The phone page's QR code, as the full app's PhoneCard: a white card, a title, how to use it, the address. */
+    private fun phoneCard(): View {
+        val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        val white = object : FrameLayout(context) {
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ui.WHITE }
+            private val rect = RectF()
+            init { setWillNotDraw(false); setPadding(Ui.pxi(14f), Ui.pxi(14f), Ui.pxi(14f), Ui.pxi(14f)) }
+            override fun onDraw(canvas: Canvas) {
+                rect.set(0f, 0f, width.toFloat(), height.toFloat())
+                canvas.drawRoundRect(rect, Ui.px(18f), Ui.px(18f), paint)
+            }
+        }
+        qrView.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+        white.addView(qrView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        box.addView(white, LinearLayout.LayoutParams(Ui.pxi(176f), Ui.pxi(176f)))
+        // Two lines where the title is long (English in Roboto, before Android 8 has Inter).
+        val title = context.label(string(R.string.wp_phone_title), 15f, 600).apply {
+            setSingleLine(false); maxLines = 2; gravity = Gravity.CENTER_HORIZONTAL
+        }
+        box.addView(title, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = Ui.pxi(14f) })
+        phoneBody.apply {
+            setTextColor(Ui.WHITE); textPx(11f); typeface = Ui.font(500); gravity = Gravity.CENTER_HORIZONTAL
+            includeFontPadding = false; setLineSpacing(Ui.px(2f), 1f)
+            text = string(R.string.wp_phone_body)
+        }
+        box.addView(phoneBody, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = Ui.pxi(4f) })
+        phoneUrl.apply { setTextColor(Ui.SECONDARY); textPx(11f); typeface = Ui.font(500); gravity = Gravity.CENTER_HORIZONTAL; setSingleLine() }
+        box.addView(phoneUrl, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = Ui.pxi(6f) })
+        return box
+    }
+
+    /** The address is read again each time: the TV's may have changed. */
+    private fun loadPhone() {
+        Thread {
+            val url = PhoneServer.address(context)
+            val qr = url?.let { runCatching { PhoneServer.qr(it) }.getOrNull() }
+            post {
+                if (url == null) {
+                    phoneBody.text = string(R.string.wp_phone_offline)
+                    qrView.setImageBitmap(Glyphs.image(Glyph.Offline, Ui.pxi(40f), 0x59000000))
+                    qrView.scaleType = android.widget.ImageView.ScaleType.CENTER
+                } else {
+                    // Sharp modules: no filtering when the code is scaled to the card.
+                    qrView.setImageDrawable(android.graphics.drawable.BitmapDrawable(resources, qr).apply { setFilterBitmap(false) })
+                    phoneUrl.text = url.removePrefix("http://")
+                }
+            }
+        }.start()
+    }
+
+    companion object {
+        /** The full app's Wallpapers.FEATURED_BUILTINS. */
+        private val FEATURED = setOf("grad:hills_dawn", "grad:hills_night", "grad:dunes_gold", "grad:sea_sunset", "grad:waves_blue", "grad:aurora")
+        /** Cards' pictures by wallpaper, kept while Lite runs. */
+        private val faces = HashMap<String, Bitmap>()
     }
 }
 

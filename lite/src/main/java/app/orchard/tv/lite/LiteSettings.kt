@@ -2,50 +2,137 @@ package app.orchard.tv.lite
 
 import android.content.Context
 import android.content.SharedPreferences
-import org.json.JSONArray
+import android.os.SystemClock
+import android.provider.Settings
+import java.security.MessageDigest
 
-/** Lite's own preferences ("settings"), and Home's order and hidden apps ("layout"). */
-class LiteSettings(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    private val layout: SharedPreferences = context.getSharedPreferences("layout", Context.MODE_PRIVATE)
-
-    var wallpaper: String
-        get() = prefs.getString("wallpaper", null) ?: DEFAULT_WALLPAPER
-        set(v) = prefs.edit().putString("wallpaper", v).apply()
-
-    var saver: Saver
-        get() = Saver.entries.firstOrNull { it.key == prefs.getString("saver", null) }?.takeIf { it != Saver.Off } ?: Saver.Aerial
-        set(v) = prefs.edit().putString("saver", v.key).apply()
-
-    /** Minutes without a key press before the screensaver starts; 0 for never (the full app's "从不"). */
-    var saverMinutes: Int
-        get() = if (prefs.getString("saver", null) == Saver.Off.key) 0 else prefs.getInt("saver_minutes", 5)
-        set(v) = prefs.edit().putInt("saver_minutes", v).apply()
-
-    /** The large clock (date, big time, weather) instead of the small line; the full app's default is small. */
-    var largeClock: Boolean
-        get() = prefs.getBoolean("large_clock", false)
-        set(v) = prefs.edit().putBoolean("large_clock", v).apply()
-
-    /** Home's tiles in the owner's order; apps not in it go at the end. */
-    var order: List<String>
-        get() = runCatching {
-            val a = JSONArray(layout.getString("order", "[]"))
-            List(a.length()) { a.getString(it) }
-        }.getOrDefault(emptyList())
-        set(v) = layout.edit().putString("order", JSONArray(v).toString()).apply()
-
-    var hidden: Set<String>
-        get() = layout.getStringSet("hidden", null)?.toSet() ?: emptySet()
-        set(v) = layout.edit().putStringSet("hidden", HashSet(v)).apply()
-
-    enum class Saver(val key: String) { Aerial("aerial"), Clock("clock"), Off("off") }
+/** As the full app's FocusStyle: High Contrast adds the white frame (the default on D-pad remotes). */
+enum class FocusStyle(val key: String) {
+    Standard("standard"), HighContrast("high_contrast");
 
     companion object {
-        /** The full app's default: Bing's photo of the day. */
-        const val DEFAULT_WALLPAPER = Wallpapers.DAILY
-        /** Until a daily photo is here (no network yet), and for a key no longer known. */
-        const val FALLBACK_WALLPAPER = "hills_dusk"
-        val SAVER_MINUTES = listOf(5, 10, 15, 30)
+        fun of(key: String?) = entries.firstOrNull { it.key == key } ?: HighContrast
     }
+}
+
+/** As the full app's UiSounds: the TV's own key sounds, Aerial's, or none. */
+enum class UiSounds(val key: String) {
+    Tv("tv"), Aerial("aerial"), Off("off");
+
+    companion object {
+        fun of(key: String?) = entries.firstOrNull { it.key == key }
+    }
+}
+
+/** As the full app's Effects; in Lite, Full adds the focused tile's shadow and Lite drops every animation. */
+enum class Effects(val key: String) {
+    Auto("auto"), Full("full"), Lite("lite");
+
+    companion object {
+        fun of(key: String?) = entries.firstOrNull { it.key == key } ?: Auto
+    }
+}
+
+/**
+ * Lite's preferences, under the full app's names and defaults (settings/AerialSettings.kt), so the
+ * two read alike and the phone page's settings mean the same. Main thread only.
+ */
+object LiteSettings {
+    private const val PREFS = "settings"
+    private lateinit var prefs: SharedPreferences
+
+    var focusStyle = FocusStyle.HighContrast; private set
+    var oneRowHome = true; private set
+    var peekNextRow = true; private set
+    var homePlate = true; private set
+    var showAllNames = false; private set
+    var clockRight = false; private set
+    var largeClock = false; private set
+    var showWeather = true; private set
+    var screensaverClock = true; private set
+    var backStartsScreensaver = true; private set
+    var uiSounds = UiSounds.Tv; private set
+    var effects = Effects.Auto; private set
+    var screensaverMinutes = 5; private set
+    var bootApp: String? = null; private set
+
+    const val NEVER = 0
+    /** The full app's choices. */
+    val screensaverChoices = listOf(2, 5, 10, 20, NEVER)
+
+    var pinSet = false; private set
+    var pinArrows = false; private set
+    private var pinHash: String? = null
+    private var unlockedUntil = 0L
+    private const val UNLOCK_MS = 10 * 60 * 1000L
+
+    fun init(context: Context) {
+        if (::prefs.isInitialized) return
+        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        focusStyle = FocusStyle.of(prefs.getString("focus_style", null))
+        oneRowHome = prefs.getBoolean("one_row_home", true)
+        peekNextRow = prefs.getBoolean("peek_next_row", true)
+        homePlate = prefs.getBoolean("home_plate", true)
+        showAllNames = prefs.getBoolean("show_all_names", false)
+        clockRight = prefs.getBoolean("clock_right", false)
+        largeClock = prefs.getBoolean("large_clock", false)
+        showWeather = prefs.getBoolean("show_weather", true)
+        screensaverClock = prefs.getBoolean("screensaver_clock", true)
+        backStartsScreensaver = prefs.getBoolean("back_starts_screensaver", true)
+        // As the full app: the TV's own sounds where its key sound switch is on, else Aerial's.
+        uiSounds = UiSounds.of(prefs.getString("ui_sounds_kind", null)) ?: if (
+            runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SOUND_EFFECTS_ENABLED, 1) }.getOrDefault(1) == 1
+        ) UiSounds.Tv else UiSounds.Aerial
+        effects = Effects.of(prefs.getString("effects", null))
+        screensaverMinutes = prefs.getInt("screensaver_minutes", 5)
+        bootApp = prefs.getString("boot_app", null)
+        pinHash = prefs.getString("pin_hash", null)
+        pinSet = pinHash != null
+        pinArrows = prefs.getBoolean("pin_arrows", false)
+    }
+
+    private fun put(block: SharedPreferences.Editor.() -> Unit) = prefs.edit(action = block)
+
+    fun chooseFocusStyle(v: FocusStyle) { focusStyle = v; put { putString("focus_style", v.key) } }
+    fun chooseOneRowHome(v: Boolean) { oneRowHome = v; put { putBoolean("one_row_home", v) } }
+    fun choosePeekNextRow(v: Boolean) { peekNextRow = v; put { putBoolean("peek_next_row", v) } }
+    fun chooseHomePlate(v: Boolean) { homePlate = v; put { putBoolean("home_plate", v) } }
+    fun chooseShowAllNames(v: Boolean) { showAllNames = v; put { putBoolean("show_all_names", v) } }
+    fun chooseClockRight(v: Boolean) { clockRight = v; put { putBoolean("clock_right", v) } }
+    fun chooseLargeClock(v: Boolean) { largeClock = v; put { putBoolean("large_clock", v) } }
+    fun chooseShowWeather(v: Boolean) { showWeather = v; put { putBoolean("show_weather", v) } }
+    fun chooseScreensaverClock(v: Boolean) { screensaverClock = v; put { putBoolean("screensaver_clock", v) } }
+    fun chooseBackStartsScreensaver(v: Boolean) { backStartsScreensaver = v; put { putBoolean("back_starts_screensaver", v) } }
+    fun chooseUiSounds(v: UiSounds) { uiSounds = v; put { putString("ui_sounds_kind", v.key) } }
+    fun chooseEffects(v: Effects) { effects = v; put { putString("effects", v.key) } }
+    fun chooseScreensaverMinutes(v: Int) { screensaverMinutes = v; put { putInt("screensaver_minutes", v) } }
+    fun chooseBootApp(pkg: String?) { bootApp = pkg; put { putString("boot_app", pkg) } }
+
+    /** Animations and the focused tile's shadow: with hardware acceleration, unless Effects says Lite. */
+    fun full(hardware: Boolean): Boolean = hardware && effects != Effects.Lite
+
+    // ---- parental PIN (the full app's, issue #10) ----
+
+    val locked: Boolean get() = pinSet && SystemClock.elapsedRealtime() > unlockedUntil
+
+    fun unlock(pin: String): Boolean {
+        if (hash(pin) != pinHash) return false
+        unlockedUntil = SystemClock.elapsedRealtime() + UNLOCK_MS
+        return true
+    }
+
+    fun relock() { unlockedUntil = 0L }
+
+    /** Sets the PIN, digits or [arrows] (U, D, L, R), or turns it off with null. */
+    fun choosePin(pin: String?, arrows: Boolean = false) {
+        pinHash = pin?.let(::hash)
+        pinSet = pinHash != null
+        pinArrows = pin != null && arrows
+        unlockedUntil = if (pin != null) SystemClock.elapsedRealtime() + UNLOCK_MS else 0L
+        put { putString("pin_hash", pinHash); putBoolean("pin_arrows", pinArrows) }
+    }
+
+    /** The full app's hash, so a PIN reads the same in both. */
+    private fun hash(pin: String): String =
+        MessageDigest.getInstance("SHA-256").digest("aerial:$pin".toByteArray()).joinToString("") { "%02x".format(it) }
 }

@@ -28,7 +28,12 @@ class AppEntry(
     val tile: Bitmap,
     /** A quick stand-in, until [AppCatalog.load] has made the real tile. */
     val placeholder: Boolean = false,
+    /** Set for a folder's tile; [key] is then the folder's key. */
+    val folder: Folder? = null,
 ) {
+    /** The same app under another name (a name typed on the phone page, AppNames). */
+    fun named(name: String) = AppEntry(key, name, component, leanback, removable, tile, placeholder, folder)
+
     fun launchIntent(): Intent = Intent(Intent.ACTION_MAIN)
         .addCategory(if (leanback) CATEGORY_LEANBACK_LAUNCHER else Intent.CATEGORY_LAUNCHER)
         .setComponent(component)
@@ -46,6 +51,13 @@ class AppEntry(
  * own tiles for firmware apps; the icon library's picture before the app's banner or icon.
  * Tiles are made once per app version and kept as PNGs in cache/tiles.
  */
+/** Kept for the full app's LayoutStore, which Lite shares: Lite pins no inputs, so no key has it. */
+const val SOURCE_KEY_PREFIX = "input:"
+
+/** A folder's tile, its picture made from the apps in it. */
+fun folderEntry(folder: Folder, tile: Bitmap): AppEntry =
+    AppEntry(folder.key, folder.name, ComponentName("folder", folder.id), leanback = false, removable = false, tile = tile, folder = folder)
+
 object AppCatalog {
     private const val TAG = "AerialLite"
     /** Xiaomi's app store declares only this category, not CATEGORY_LAUNCHER (MiTV-MFTR0). */
@@ -97,6 +109,7 @@ object AppCatalog {
     fun load(context: Context, quick: Boolean = false, onBatch: ((List<AppEntry>) -> Unit)? = null): List<AppEntry> {
         val pm = context.packageManager
         IconLibrary.init(context)
+        CustomIcons.init(context)
         val found = LinkedHashMap<String, Pair<ActivityInfo, Boolean>>()
         fun add(category: String, leanback: Boolean) {
             for (r in pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)) {
@@ -173,7 +186,9 @@ object AppCatalog {
         homeLabel: String, dir: File, index: android.content.SharedPreferences, quick: Boolean = false,
     ): AppEntry {
         val pkg = info.packageName
-        val stamp = runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L) + IconLibrary.stamp(pkg) + if (stockHome) 1 else 0
+        // A picture chosen on the phone page changes the tile as much as an update does.
+        val stamp = runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L) + IconLibrary.stamp(pkg) +
+            CustomIcons.stamp(pkg) + if (stockHome) 1 else 0
         val system = (info.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
         val component = ComponentName(pkg, info.name)
         val fw = faceW
@@ -200,10 +215,13 @@ object AppCatalog {
             else if (system) SYSTEM_TILES[pkg] ?: byCategory[pkg]?.takeIf { banner == null } else null
         // Aerial's own tiles for firmware apps keep their look; any other app's ready-made picture
         // comes before what Aerial would draw from its banner or icon.
-        val library = if (own == null) IconLibrary.load(pkg) else null
+        val custom = CustomIcons.load(pkg)
+        val library = if (custom == null && (own == null || IconLibrary.pick(pkg) == IconLibrary.Pick.Library)) IconLibrary.load(pkg) else null
         val recipe = TileRecipes.of(pkg)
         val art = runCatching {
             when {
+                // The owner's own picture first, as in the full app.
+                custom != null -> TileFactory.fromBanner(BitmapDrawable(android.content.res.Resources.getSystem(), custom))
                 library != null -> TileFactory.fromBanner(BitmapDrawable(android.content.res.Resources.getSystem(), library))
                 own != null -> TileFactory.forSystem(own)
                 recipe?.glyph != null -> TileFactory.glyphTile(recipe.top ?: 0, recipe.bottom ?: 0, recipe.glyph)
@@ -243,6 +261,23 @@ object AppCatalog {
         val d = densest(pm, info, info.bannerResource) ?: runCatching { info.loadBanner(pm) }.getOrNull()
         return d?.takeIf { it.intrinsicWidth >= it.intrinsicHeight * 4 / 3 }
     }
+
+    /**
+     * The tile as the app's own art would draw it, without the owner's picture or the icon
+     * library's: for the phone page to show beside them. Off the main thread.
+     */
+    fun ownArt(context: Context, app: AppEntry): Bitmap? = runCatching {
+        val pm = context.packageManager
+        val info = pm.getActivityInfo(app.component, 0)
+        val recipe = TileRecipes.of(app.key)
+        val banner = banner(pm, info, app.leanback)
+        val art = when {
+            recipe?.glyph != null -> TileFactory.glyphTile(recipe.top ?: 0, recipe.bottom ?: 0, recipe.glyph)
+            banner != null && recipe?.useIcon != true -> TileFactory.fromBanner(banner)
+            else -> TileFactory.fromIcon(densest(pm, info, info.iconResource) ?: info.loadIcon(pm), recipe)
+        }
+        Shapes.face(art, faceW, faceH, Ui.px(12f * HomeView.FOCUS_SCALE), Ui.px(0.5f * HomeView.FOCUS_SCALE)).also { art.recycle() }
+    }.getOrNull()
 
     /** Drops the cached tiles of apps no longer installed. */
     fun prune(context: Context, keep: Set<String>) {

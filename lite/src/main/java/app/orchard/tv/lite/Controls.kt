@@ -111,12 +111,14 @@ class SliderRow(
     private val read: () -> Pair<Int, Int>,
     private val write: (Int) -> Unit,
     private val shown: (Int, Int) -> String,
+    /** How far one press moves it. */
+    private val step: Int = 1,
 ) : Control(context) {
     private val text = TextPaint(Ui.text(15f, 600))
 
     override fun side(dir: Int): Boolean {
         val (v, max) = read()
-        val to = (v + dir).coerceIn(0, max)
+        val to = (v + dir * step).coerceIn(0, max)
         if (to != v) write(to)
         invalidate()
         return true
@@ -192,6 +194,30 @@ class Chip(context: Context, private val label: String, private val on: () -> Bo
     fun refresh() { requestLayout(); invalidate() }
 }
 
+/** PinPad's key: [w] by 48, corners 12, a digit, a word or a glyph in the middle. */
+class KeyButton(context: Context, private val text: String?, private val glyph: Glyph? = null, private val w: Float = 64f) : Control(context) {
+    override val focusScale = 1.08f
+    private val paint = TextPaint(Ui.text(if (text != null && text.length == 1) 19f else 15f, 600))
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) = setMeasuredDimension(Ui.pxi(w), Ui.pxi(48f))
+
+    override fun onDraw(canvas: Canvas) {
+        val ww = width.toFloat(); val h = height.toFloat()
+        bg.color = if (focusedLook) Ui.FOCUS else Ui.FILL
+        rect.set(0f, 0f, ww, h)
+        canvas.drawRoundRect(rect, Ui.px(12f), Ui.px(12f), bg)
+        val fg = if (focusedLook) Ui.ON_FOCUS else Ui.WHITE
+        if (glyph != null) {
+            val g = Ui.pxi(18f)
+            canvas.drawBitmap(Glyphs.image(glyph, g, fg), (ww - g) / 2, (h - g) / 2, bitmapPaint)
+        } else if (text != null) {
+            paint.color = fg
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, ww / 2, baseline(paint, h / 2), paint)
+        }
+    }
+}
+
 /** WallpaperSheet's wallpaper card: a 168×94 picture with corners 12, its name under it, a check when chosen. */
 class Thumb(context: Context, private val name: String, private val chosen: () -> Boolean) : Control(context) {
     override val focusScale = 1.06f
@@ -245,12 +271,31 @@ class Thumb(context: Context, private val name: String, private val chosen: () -
 }
 
 /**
+ * The window a [Sheet]'s content scrolls in: its child is as tall as its content (a FrameLayout
+ * would hold a wrap-content child to its own height and squeeze the rows below together), and it
+ * is moved by translation.
+ */
+class Viewport(context: Context, private val horizontal: Boolean = false) : FrameLayout(context) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            if (horizontal) child.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.AT_MOST))
+            else child.measure(
+                MeasureSpec.makeMeasureSpec(measuredWidth - paddingLeft - paddingRight, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+            )
+        }
+    }
+}
+
+/**
  * A panel of [Control]s on the remote: rows of controls, up and down between rows to the nearest
  * one, left and right along a row (or into a slider), OK as the full app's Pressable (only a press
  * that began here), Back closes. A [viewport] scrolls its content by translation to keep the
  * focused control in view.
  */
-open class Sheet(context: Context, private val close: () -> Unit) : FrameLayout(context) {
+open class Sheet(context: Context, protected val close: () -> Unit) : FrameLayout(context) {
     private val rows = ArrayList<MutableList<Control>>()
     private var r = 0
     private var c = 0
@@ -268,13 +313,43 @@ open class Sheet(context: Context, private val close: () -> Unit) : FrameLayout(
 
     val focused: Control? get() = rows.getOrNull(r)?.getOrNull(c)
 
-    fun focusFirst(row: Int = 0, col: Int = 0) {
+    /** Where the focus is, as (row, column), to put it back after the rows are made again. */
+    val position: Pair<Int, Int> get() = r to c
+
+    /** Forgets every row, for a sheet that makes its rows again (Personalize when a row comes or goes). */
+    protected fun clearRows() {
         focused?.focusedLook = false
-        r = row.coerceIn(0, (rows.size - 1).coerceAtLeast(0)); c = col
+        rows.clear()
+        r = 0; c = 0
+    }
+
+    /**
+     * A focused control grows a little (as the full app's Pressable); its parents must not clip it,
+     * or the grown corners are cut square (Control Center's slider on Xiaomi MiTV-MFTR0). A
+     * scrolling [scroller]'s viewport still clips, with room around its content for the growth.
+     */
+    protected fun unclip(v: View = this) {
+        if (v is android.view.ViewGroup) {
+            // With hardware drawing a parent's clipChildren clips each child to the child's own
+            // bounds: the viewport is cut to its bounds by its parent's flag, not its own.
+            val viewport = scroller?.parent as? View
+            if (v !== viewport && v !== viewport?.parent) { v.clipChildren = false; v.clipToPadding = false }
+            for (i in 0 until v.childCount) unclip(v.getChildAt(i))
+        }
+    }
+
+    fun focusFirst(row: Int = 0, col: Int = 0) {
+        unclip()
+        focused?.focusedLook = false
+        r = row.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
+        c = col.coerceIn(0, ((rows.getOrNull(r)?.size ?: 1) - 1).coerceAtLeast(0))
         focused?.focusedLook = true
         focused?.let { onFocusMoved(it) }
-        keepInView()
+        // Rows made just now have no place yet: once they are laid out.
+        if (focused?.isLaidOutCompat() == true) keepInView() else post { keepInView() }
     }
+
+    private fun View.isLaidOutCompat() = width > 0 && height > 0
 
     open fun onKey(e: KeyEvent): Boolean {
         if (press.onKey(e, click = { focused?.click() })) return true
@@ -328,7 +403,8 @@ open class Sheet(context: Context, private val close: () -> Unit) : FrameLayout(
         var top = 0f
         var v: View? = f
         while (v != null && v !== content) { top += v.top; v = v.parent as? View }
-        val bottom = top + f.height
+        // Room below for the note under a group of rows, which follows the focus.
+        val bottom = top + f.height + Ui.px(38f)
         val margin = Ui.px(16f)
         val shift = content.translationY
         val to = when {

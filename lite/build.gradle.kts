@@ -73,6 +73,8 @@ val copyAerials by tasks.registering(Copy::class) {
     from(rootProject.file("app/src/main/assets/aerials.json"))
     from(rootProject.file("app/src/main/res/font/inter.ttf"))
     from(rootProject.file("app/src/main/assets/cities-cn.tsv"))
+    // The phone page, the full app's own.
+    from(rootProject.file("app/src/main/assets/web")) { into("web") }
     into(layout.projectDirectory.dir("lite-assets"))
 }
 val sharedSources = layout.buildDirectory.dir("generated/shared")
@@ -80,12 +82,20 @@ val copySources by tasks.registering(Copy::class) {
     from(rootProject.file("app/src/main/java/app/orchard/tv/ui/theme/GlyphPaths.kt"))
     from(rootProject.file("app/src/main/java/app/orchard/tv/apps/TileRecipes.kt"))
     from(rootProject.file("app/src/main/java/app/orchard/tv/weather/Cities.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/apps/LayoutStore.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/apps/AppNames.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/apps/CustomIcons.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/wallpaper/ScreensaverVideos.kt"))
+    from(rootProject.file("app/src/main/java/app/orchard/tv/system/MitvPanel.kt"))
     into(sharedSources.map { it.dir("app/orchard/tv/lite") })
+    // Into Lite's package; Compose's state and AndroidX's prefs.edit {} come from Lite's Shims.kt.
     filter { line ->
-        line.replace("package app.orchard.tv.ui.theme", "package app.orchard.tv.lite")
-            .replace("package app.orchard.tv.apps", "package app.orchard.tv.lite")
-            .replace("package app.orchard.tv.weather", "package app.orchard.tv.lite")
-            .replace("app.orchard.tv.ui.theme.Glyph", "app.orchard.tv.lite.Glyph")
+        when {
+            line.startsWith("import androidx.compose.runtime.") || line == "import androidx.core.content.edit" -> ""
+            line.startsWith("import app.orchard.tv.") -> ""
+            else -> line.replace(Regex("^package app\\.orchard\\.tv(\\.[a-z.]+)?$"), "package app.orchard.tv.lite")
+                .replace("app.orchard.tv.ui.theme.Glyph", "app.orchard.tv.lite.Glyph")
+        }
     }
 }
 android.sourceSets["main"].java.srcDir(sharedSources)
@@ -104,6 +114,10 @@ android.sourceSets["main"].res.srcDir(sharedRes)
 tasks.named("preBuild") { dependsOn(copyAerials, copySources, copyStrings) }
 
 dependencies {
+    // The phone page's server and its QR code. ZXing 3.3.0, the last before it used
+    // StandardCharsets, which Android only has from 4.4.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("com.google.zxing:core:3.3.0")
     testImplementation("junit:junit:4.13.2")
 }
 

@@ -27,6 +27,8 @@ object Weather {
 
     @Volatile var now: Now? = null; private set
     @Volatile var place: String? = null; private set
+    /** The place was named on the phone page rather than guessed from the network. */
+    @Volatile var chosen = false; private set
 
     private lateinit var prefs: SharedPreferences
     private lateinit var app: Context
@@ -38,6 +40,7 @@ object Weather {
         app = context.applicationContext
         prefs = app.getSharedPreferences("weather", Context.MODE_PRIVATE)
         place = prefs.getString("place", null)
+        chosen = prefs.getBoolean("chosen", false)
         if (System.currentTimeMillis() - prefs.getLong("fetched_at", 0) < STALE_MS) {
             val kind = runCatching { Kind.valueOf(prefs.getString("kind", null) ?: "") }.getOrNull()
             if (kind != null) now = Now(
@@ -48,10 +51,10 @@ object Weather {
     }
 
     /** Fetches on [run] (a background executor) when due; [done] on the main thread when it changed. */
-    fun refreshIfStale(run: (Runnable) -> Unit, done: () -> Unit) {
+    fun refreshIfStale(run: (Runnable) -> Unit, force: Boolean = false, done: () -> Unit) {
         if (!::prefs.isInitialized) return
         val since = System.currentTimeMillis() - lastAttempt
-        if (since < REFRESH_MS && !(failed && since >= RETRY_MS)) return
+        if (!force && since < REFRESH_MS && !(failed && since >= RETRY_MS)) return
         lastAttempt = System.currentTimeMillis()
         run(Runnable {
             val reading = runCatching { fetch() }.onFailure { Log.w(TAG, "weather unavailable", it) }.getOrNull()
@@ -72,7 +75,7 @@ object Weather {
     private fun fetch(): Now {
         var lat = prefs.getFloat("lat", Float.NaN)
         var lon = prefs.getFloat("lon", Float.NaN)
-        if (lat.isNaN() || System.currentTimeMillis() - prefs.getLong("located_at", 0) > RELOCATE_MS) {
+        if (!prefs.getBoolean("chosen", false) && (lat.isNaN() || System.currentTimeMillis() - prefs.getLong("located_at", 0) > RELOCATE_MS)) {
             val ip = JSONObject(get("https://ipinfo.io/json"))
             val loc = ip.getString("loc").split(',')
             lat = loc[0].toFloat()
@@ -90,6 +93,35 @@ object Weather {
         fun today(key: String) = daily?.optJSONArray(key)?.optDouble(0)?.takeIf { !it.isNaN() }?.roundToInt()
         return Now(current.getDouble("temperature_2m").roundToInt(), kindOf(current.getInt("weather_code")), current.optInt("is_day", 1) == 1,
             today("temperature_2m_max"), today("temperature_2m_min"))
+    }
+
+    /**
+     * Names the place (from the phone page), as the full app's Weather.choose: Chinese names from
+     * Aerial's own list first, others from Open-Meteo's geocoder. False when there is no such
+     * place. Off the main thread; fetch again after it.
+     */
+    fun choose(name: String): Boolean {
+        val hit = runCatching { Cities.find(app, name) }.getOrNull()?.let { Triple(it.lat, it.lon, it.name) }
+            ?: runCatching {
+                val q = java.net.URLEncoder.encode(name.trim(), "UTF-8")
+                val results = JSONObject(get("https://geocoding-api.open-meteo.com/v1/search?name=$q&count=10&language=zh&format=json")).optJSONArray("results")
+                val all = (0 until (results?.length() ?: 0)).map { results!!.getJSONObject(it) }
+                // Towns before villages of the same name.
+                val best = all.firstOrNull { it.optString("feature_code").startsWith("PPLA") || it.optString("feature_code") == "PPLC" } ?: all.firstOrNull()
+                best?.let { Triple(it.getDouble("latitude"), it.getDouble("longitude"), it.optString("name").ifBlank { name.trim() }) }
+            }.onFailure { Log.w(TAG, "could not look up $name", it) }.getOrNull()
+            ?: return false
+        prefs.edit().putFloat("lat", hit.first.toFloat()).putFloat("lon", hit.second.toFloat())
+            .putString("place", hit.third).putBoolean("chosen", true).commit()
+        chosen = true
+        place = hit.third
+        return true
+    }
+
+    /** Back to guessing the place from the network. */
+    fun useNetworkLocation() {
+        prefs.edit().putBoolean("chosen", false).remove("lat").remove("lon").remove("located_at").commit()
+        chosen = false
     }
 
     /** WMO weather interpretation codes, as Open-Meteo reports them. */

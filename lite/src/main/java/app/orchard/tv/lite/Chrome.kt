@@ -46,7 +46,10 @@ class ClockView(context: Context) : View(context) {
     var large = false
         set(v) { if (field != v) { field = v; requestLayout(); invalidate() } }
     var weather: WeatherLine? = null
-        set(v) { field = v; invalidate() }
+        set(v) { field = v; requestLayout(); invalidate() }
+    /** Lines flush right, for the clock on the right (Personalize). */
+    var alignEnd = false
+        set(v) { if (field != v) { field = v; requestLayout(); invalidate() } }
 
     private var time = ""
     private var date = ""
@@ -56,6 +59,7 @@ class ClockView(context: Context) : View(context) {
         time = timeText(context, now)
         val d = dateText(now)
         date = if (Locale.getDefault().language == "zh") Lunar.text(Calendar.getInstance())?.let { "$d  $it" } ?: d else d
+        if (alignEnd && !large) requestLayout()
         invalidate()
     }
 
@@ -65,7 +69,18 @@ class ClockView(context: Context) : View(context) {
     override fun hasOverlappingRendering() = false
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        setMeasuredDimension(Ui.pxi(560f), Ui.pxi(if (large) 200f else 34f))
+        // The small clock beside the pill takes only its own width.
+        val w = if (alignEnd && !large) smallWidth().toInt() + Ui.pxi(4f) else Ui.pxi(560f)
+        setMeasuredDimension(w, Ui.pxi(if (large) 200f else 34f))
+    }
+
+    private fun smallWeatherText(w: WeatherLine) = listOfNotNull(w.place?.takeIf { it.length <= 12 }, "${w.celsius}°").joinToString(" ")
+
+    private fun smallWidth(): Float {
+        var x = Ui.width(time, smallPaint, 0.05f)
+        val w = weather ?: return x
+        x += Ui.px(16f) + Ui.pxi(18f) + Ui.px(6f) + smallWeather.measureText(smallWeatherText(w))
+        return x
     }
 
     // Large clock (ShelfClock): Type.ClockDate, Type.Clock, Type.ClockDetail; shadow 0.28 black, 2 down, 18 px blur at 1080p.
@@ -89,27 +104,33 @@ class ClockView(context: Context) : View(context) {
         var y = 0f
         // The date: its capitals' top at the view's top.
         y += Ui.px(19f * Ui.CAP_HEIGHT)
+        // Where a line of width [w] starts: the left edge, or flush right.
+        fun start(w: Float) = if (alignEnd) width - w else 0f
         val split = lunarStart
         if (split == null) {
-            Ui.draw(c, date, 0f, y, datePaint, -0.005f)
+            Ui.draw(c, date, start(Ui.width(date, datePaint, -0.005f)), y, datePaint, -0.005f)
         } else {
             val head = date.substring(0, split)
-            Ui.draw(c, head, 0f, y, datePaint, -0.005f)
-            Ui.draw(c, date.substring(split), Ui.width(head, datePaint, -0.005f), y, dateDim, -0.005f)
+            val headW = Ui.width(head, datePaint, -0.005f)
+            val x0 = start(headW + Ui.width(date.substring(split), dateDim, -0.005f))
+            Ui.draw(c, head, x0, y, datePaint, -0.005f)
+            Ui.draw(c, date.substring(split), x0 + headW, y, dateDim, -0.005f)
         }
         // The time, 16 under the date's baseline to its capitals.
         y += Ui.px(16f + 104f * Ui.CAP_HEIGHT)
-        Ui.draw(c, time, -Ui.px(4f), y, bigPaint, -0.04f)
+        Ui.draw(c, time, if (alignEnd) start(Ui.width(time, bigPaint, -0.04f)) + Ui.px(4f) else -Ui.px(4f), y, bigPaint, -0.04f)
         val w = weather ?: return
         // The weather, 18 under the time.
         y += Ui.px(18f + 16f * Ui.CAP_HEIGHT)
         val g = Ui.pxi(18f)
-        c.drawBitmap(Glyphs.image(w.glyph, g, Ui.WHITE), 0f, y - Ui.px(16f * Ui.CAP_HEIGHT / 2) - g / 2f, glyphPaint)
-        val x = g + Ui.px(7f)
         val temp = "${w.celsius}°"
-        Ui.draw(c, temp, x, y, detailPaint)
         val rest = listOfNotNull(w.place?.takeIf { it.length <= 12 }, w.detail.ifEmpty { null }).joinToString(" · ")
-        if (rest.isNotEmpty()) Ui.draw(c, "  $rest", x + detailPaint.measureText(temp), y, detailDim)
+        val restText = if (rest.isNotEmpty()) "  $rest" else ""
+        val x0 = start(g + Ui.px(7f) + detailPaint.measureText(temp) + detailDim.measureText(restText))
+        c.drawBitmap(Glyphs.image(w.glyph, g, Ui.WHITE), x0, y - Ui.px(16f * Ui.CAP_HEIGHT / 2) - g / 2f, glyphPaint)
+        val x = x0 + g + Ui.px(7f)
+        Ui.draw(c, temp, x, y, detailPaint)
+        if (restText.isNotEmpty()) Ui.draw(c, restText, x + detailPaint.measureText(temp), y, detailDim)
     }
 
     private fun drawSmall(c: Canvas) {
@@ -121,7 +142,7 @@ class ClockView(context: Context) : View(context) {
         val g = Ui.pxi(18f)
         c.drawBitmap(Glyphs.image(w.glyph, g, 0xEBFFFFFF.toInt()), x, (h - g) / 2f, glyphPaint)
         x += g + Ui.px(6f)
-        Ui.draw(c, listOfNotNull(w.place?.takeIf { it.length <= 12 }, "${w.celsius}°").joinToString(" "), x, baseline(smallWeather), smallWeather)
+        Ui.draw(c, smallWeatherText(w), x, baseline(smallWeather), smallWeather)
     }
 }
 

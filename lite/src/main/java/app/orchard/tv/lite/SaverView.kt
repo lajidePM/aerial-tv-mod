@@ -31,9 +31,17 @@ import kotlin.random.Random
  * two minutes so nothing sits on the same pixels all night. Three failures in a row and it is the
  * clock.
  *
+ * Photos: the owner's photos (else the daily ones, else the built-ins), each for 18 seconds,
+ * slowly zooming from 1.04 to 1.12 and drifting up to 40 units across (Ken Burns, as the full
+ * app), the next fading in over 2 seconds; still pictures where there is no GPU.
+ *
+ * My videos: the films sent from the phone page, one after another, from the TV's own storage.
+ *
  * Clock: the large clock (date, time, weather) over the wallpaper at 75%, somewhere new each minute.
+ *
+ * The time shows over the films and photos when Personalize says so.
  */
-class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy, private val wallpaper: Bitmap?) : FrameLayout(context) {
+class SaverView(context: Context, mode: ScreensaverMode, private val proxy: FilmProxy, private val wallpaper: Bitmap?) : FrameLayout(context) {
     private val handler = Handler(Looper.getMainLooper())
     private val time = context.label("", 33.8f, 600, 0xEBFFFFFF.toInt(), spacingEm = 0.05f)
     private val caption = TextView(context)
@@ -42,8 +50,20 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
     private var films: List<Film> = emptyList()
     private var next = 0
     private var failures = 0
-    private var clockOnly = !aerial
+    private var clockOnly = mode == ScreensaverMode.Clock
     private var clock: ClockView? = null
+    /** Films from the phone page, played from a file rather than through the proxy. */
+    private val local = mode == ScreensaverMode.Videos
+    private val photos = mode == ScreensaverMode.Photos
+    private val showTime = LiteSettings.screensaverClock && (mode == ScreensaverMode.Aerial || photos)
+
+    private val pictures = Wallpapers.saverPictures()
+    private val frames = arrayOfNulls<ImageView>(2)
+    private var front = 0
+    private var kenBurns: android.animation.Animator? = null
+    private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
+    /** No picture after [STALL_MS]: a slow network or a film the decoder never starts. */
+    private val stalled = Runnable { fail() }
 
     private val tick = object : Runnable {
         override fun run() {
@@ -71,11 +91,18 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
             includeFontPadding = false
             setShadowLayer(Ui.px(4f), 0f, 0f, 0x66000000)
         }
-        if (aerial) {
-            films = Aerials.load(context).shuffled()
-            if (films.isEmpty()) clockOnly = true
+        when (mode) {
+            ScreensaverMode.Aerial -> films = Aerials.load(context).shuffled()
+            // The owner's own films carry no caption, as in the full app.
+            ScreensaverMode.Videos -> films = ScreensaverVideos.all(context).shuffled().map { Film(it.file.toURI().toString(), null) }
+            else -> Unit
         }
-        if (clockOnly) showClock() else showFilms()
+        if (!clockOnly && !photos && films.isEmpty()) clockOnly = true
+        when {
+            clockOnly -> showClock()
+            photos -> showPhotos()
+            else -> showFilms()
+        }
         tick.run()
     }
 
@@ -120,13 +147,7 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
         val v = VideoView(context)
         video = v
         addView(v, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
-        addView(shade, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(time, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
-            topMargin = Ui.pxi(40f); leftMargin = Ui.pxi(56f)
-        })
-        addView(caption, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = Ui.pxi(56f); bottomMargin = Ui.pxi(44f)
-        })
+        addWords()
         v.setOnPreparedListener { mp ->
             failures = 0
             handler.removeCallbacks(stalled)
@@ -142,6 +163,17 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
         play()
     }
 
+    /** The shade, the time (when chosen) and the caption over the pictures. */
+    private fun addWords() {
+        addView(shade, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        if (showTime) addView(time, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+            topMargin = Ui.pxi(40f); leftMargin = Ui.pxi(56f)
+        })
+        addView(caption, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
+            leftMargin = Ui.pxi(56f); bottomMargin = Ui.pxi(44f)
+        })
+    }
+
     private fun play() {
         val v = video ?: return
         val film = films[next % films.size]
@@ -149,7 +181,61 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
         setCaption(film.caption ?: "")
         handler.removeCallbacks(stalled)
         handler.postDelayed(stalled, STALL_MS)
-        v.setVideoURI(Uri.parse(proxy.local(film.url)))
+        v.setVideoURI(Uri.parse(if (local) film.url else proxy.local(film.url)))
+    }
+
+    // ---- photos ----
+
+
+    private fun showPhotos() {
+        if (pictures.isEmpty()) { showClock(); return }
+        for (i in 0..1) {
+            val f = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0f }
+            frames[i] = f
+            addView(f, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+        addWords()
+        nextPhoto()
+    }
+
+    /** The next picture, decoded off the main thread, faded in over the last. */
+    private fun nextPhoto() {
+        val wp = pictures[next % pictures.size]
+        next++
+        loader.execute {
+            val b = runCatching { Wallpapers.picture(wp, Ui.screenW, Ui.screenH) }.getOrNull()
+            handler.post {
+                if (b == null) { handler.postDelayed(::nextPhoto, 1000); return@post }
+                val back = frames[front]
+                front = 1 - front
+                val f = frames[front] ?: return@post
+                (f.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.takeIf { it !== wallpaper }?.recycle()
+                f.setImageBitmap(b)
+                setCaption(if (wp.kind == WallpaperKind.Daily) wp.title else "")
+                val smooth = LiteSettings.full(isHardwareAccelerated)
+                // Over the last picture, under the words.
+                removeView(f)
+                addView(f, 1, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+                if (smooth) {
+                    // Ken Burns: from 1.04 to 1.12 over 20 s, drifting one way or the other.
+                    val dir = if (Random.nextBoolean()) 1f else -1f
+                    kenBurns?.cancel()
+                    kenBurns = android.animation.ObjectAnimator.ofPropertyValuesHolder(
+                        f,
+                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1.04f, 1.12f),
+                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.04f, 1.12f),
+                        android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_X, -dir * Ui.px(20f), dir * Ui.px(20f)),
+                    ).apply { duration = 20_000; interpolator = android.view.animation.LinearInterpolator(); start() }
+                    f.alpha = 0f
+                    f.animate().alpha(1f).setDuration(2000).start()
+                    back?.animate()?.alpha(0f)?.setDuration(2000)?.start()
+                } else {
+                    f.alpha = 1f
+                    back?.alpha = 0f
+                }
+                handler.postDelayed(::nextPhoto, PHOTO_MS)
+            }
+        }
     }
 
     /** One name after the other, as the full app's: the old fades out, then the new fades in. */
@@ -180,12 +266,13 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
         if (failures >= 3) showClock() else play()
     }
 
-    /** No picture after [STALL_MS]: a slow network or a film the decoder never starts. */
-    private val stalled = Runnable { fail() }
 
     fun release() {
         handler.removeCallbacksAndMessages(null)
         video?.stopPlayback()
+        loader.shutdownNow()
+        kenBurns?.cancel()
+        for (f in frames) f?.animate()?.cancel()
     }
 
     /** Just enough shade under the words to read them over bright sky or snow. */
@@ -204,5 +291,6 @@ class SaverView(context: Context, aerial: Boolean, private val proxy: FilmProxy,
 
     private companion object {
         const val STALL_MS = 20_000L
+        const val PHOTO_MS = 18_000L
     }
 }

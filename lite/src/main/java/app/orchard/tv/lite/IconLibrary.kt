@@ -33,10 +33,41 @@ object IconLibrary {
 
     private fun fileFor(pkg: String): File? = index[pkg]?.let { File(dir, it.substringAfterLast('/')) }
 
-    private fun usable(pkg: String): File? = fileFor(pkg)?.takeIf { it.exists() }
+    /** The library's picture of [pkg] is on this TV (whether or not its tile uses it). */
+    fun has(pkg: String): Boolean = ::dir.isInitialized && fileFor(pkg)?.exists() == true
 
-    /** When the app's picture arrived; 0 without one. Part of the tile cache's key. */
-    fun stamp(pkg: String): Long = usable(pkg)?.lastModified() ?: 0L
+    /** The library's picture of [pkg] as stored, for the phone page; null without one. */
+    fun file(pkg: String): File? = if (::dir.isInitialized) fileFor(pkg)?.takeIf { it.exists() } else null
+
+    /** Whether [pkg]'s tile uses the library: unless the phone page picked the app's own art. */
+    fun uses(pkg: String): Boolean = pick(pkg) != Pick.Own
+
+    private fun usable(pkg: String): File? = if (uses(pkg)) file(pkg) else null
+
+    enum class Pick { Library, Own }
+
+    private val picks get() = context.getSharedPreferences("icon_library", Context.MODE_PRIVATE)
+
+    /** What the phone page picked for [pkg]; null for the library. */
+    fun pick(pkg: String): Pick? = when {
+        !::dir.isInitialized -> null
+        pkg in picks.getStringSet("use_library", emptySet())!! -> Pick.Library
+        pkg in picks.getStringSet("use_own", emptySet())!! -> Pick.Own
+        else -> null
+    }
+
+    /** From the phone page, as the full app's IconLibrary.choose. */
+    fun choose(pkg: String, pick: Pick?) {
+        val library = picks.getStringSet("use_library", emptySet())!! - pkg
+        val own = picks.getStringSet("use_own", emptySet())!! - pkg
+        picks.edit()
+            .putStringSet("use_library", if (pick == Pick.Library) library + pkg else library)
+            .putStringSet("use_own", if (pick == Pick.Own) own + pkg else own)
+            .apply()
+    }
+
+    /** When the app's picture arrived, or the pick changed; 0 without one. Part of the tile cache's key. */
+    fun stamp(pkg: String): Long = (usable(pkg)?.lastModified() ?: 0L) + when (pick(pkg)) { Pick.Own -> 1L; Pick.Library -> 2L; null -> 0L }
 
     fun load(pkg: String): Bitmap? = usable(pkg)?.let { BitmapFactory.decodeFile(it.path) }
 
