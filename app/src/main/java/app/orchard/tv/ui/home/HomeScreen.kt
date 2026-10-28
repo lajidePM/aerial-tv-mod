@@ -518,14 +518,15 @@ fun HomeScreen(
             dragged = true
             scope.launch(start = CoroutineStart.UNDISPATCHED) { scroll.snapTo(scroll.value - delta) }
         }
-        // A moving wallpaper's film, under everything; it moves only on the top row with
-        // nothing over it; the owner's videos there only once Home is still unless set to keep moving.
+        // A moving wallpaper's film, under everything; it moves only on the shelf with nothing
+        // over it (in two rows the second row too, which is on screen over the same film, issue
+        // #810); the owner's videos there only once Home is still unless set to keep moving.
         // Beside Home rather than in it: Home is not drawn (alpha 0) under a whole frost or once
         // its picture stands in under Control Center, and a SurfaceView in a layer that is not
         // drawn cuts no hole in the window, so the paused film showed as the window's black
         // (Xiaomi MiTV-MFTR0, the aerial wallpaper under Control Center).
         val filmMoves = vm.resumed && overlay == Overlay.None && !vm.screensaverVisible && !pastShelf &&
-            focusedRow == 0 && moving == null
+            !inGrid && moving == null
         val sourceInput = Wallpapers.sourceInput
         when {
             Wallpapers.selectedId == Wallpapers.LIVE -> LiveWallpaper(

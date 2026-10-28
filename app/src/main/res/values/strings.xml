@@ -32,6 +32,7 @@
     <string name="net_ethernet">Ethernet</string>
     <string name="net_wifi">Wi-Fi</string>
     <string name="net_offline">Not Connected</string>
+    <string name="net_vpn">VPN</string>
 
     <string name="input_connected">Connected</string>
     <string name="input_live_tv">Live TV</string>
@@ -86,7 +87,7 @@
     <string name="wx_snow">Snow</string>
     <string name="wx_thunder">Thunderstorm</string>
     <string name="wp_daily_latest">Daily Photo</string>
-    <string name="wp_live">Moving aerial films. They play while Home is on the top row and stop on the frame showing when you go down to the apps, which stays as the picture; the next film picks up from there.</string>
+    <string name="wp_live">Moving aerial films. They play while Home is on the top row (either row in two rows) and stop on the frame showing when you go further down to the apps, which stays as the picture; the next film picks up from there.</string>
     <string name="wp_photos_rotate">My Photos, Daily</string>
     <string name="wp_daily_note">Bing\'s photo of the day, changing to the new one every day.</string>
     <string name="wp_photos_rotate_note">A different one of your photos each day.</string>
@@ -244,7 +245,7 @@
     <string name="st_play">Playing</string>
     <string name="st_play_still">When still</string>
     <string name="st_play_always">Always</string>
-    <string name="st_play_hint">When still: after 10 seconds on the top row; a key stops it. Always: keys do not stop it, and it is shaded a little; it stops when you go down to the apps.</string>
+    <string name="st_play_hint">When still: after 10 seconds on the top row (either row in two rows); a key stops it. Always: keys do not stop it, and it is shaded a little; it stops when you go further down to the apps.</string>
     <string name="ss_show_time">Time</string>
     <string name="ss_show_time_hint">The time over the aerial and photo screensavers. The time and place name move a little now and then, so nothing stays on the same pixels.</string>
 </resources>

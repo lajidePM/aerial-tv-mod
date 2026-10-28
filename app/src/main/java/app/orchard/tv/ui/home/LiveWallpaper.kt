@@ -102,7 +102,8 @@ class LiveFilm {
 
 /**
  * The aerial wallpaper (issue #216): Apple's film plays behind the tiles while Home is on the top
- * row, keys and all; going down to the apps stops it on the frame it was showing. That frame
+ * row (in two rows, either row: both are on the shelf, #810), keys and all; going down into the
+ * grid stops it on the frame it was showing. That frame
  * becomes the wallpaper's picture (Wallpapers.useLiveFrame), so the glass plate, the grid's frosted
  * background and the next start all match what was on screen. The film starts again from that
  * frame (Wallpapers.liveSpot), even after its player has gone, so still and moving are one shot.
@@ -351,8 +352,8 @@ fun LiveWallpaper(
         } else if (keep) {
             // Let go while it showed: the picture comes back before the film does.
             if (player == null) cover.snapTo(0f)
-            // Back on Home off the top row, with the film let go past its picture: the picture
-            // catches up now. On the top row the film's own start does it.
+            // Back on Home off the shelf, with the film let go past its picture: the picture
+            // catches up now. On the shelf the film's own start does it.
             if (!play && !fresh) Wallpapers.leftLiveSpot()?.let { catchUp(it) }
         } else if (cover.value > 0f && !otherFormatNow) {
             // Let go into a screensaver of its own: the picture, of an earlier moment and maybe

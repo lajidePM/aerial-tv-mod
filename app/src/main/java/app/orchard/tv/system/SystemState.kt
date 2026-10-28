@@ -33,7 +33,8 @@ fun ConnectivityManager.currentNetwork(): Network? {
     return allNetworks.firstOrNull { getNetworkInfo(it)?.type == type }
 }
 
-data class NetworkStatus(val kind: NetKind = NetKind.Offline, val name: String? = null, val level: Float = 1f)
+/** [vpn]: a VPN is up, shown beside the network as iOS does (issue #809). */
+data class NetworkStatus(val kind: NetKind = NetKind.Offline, val name: String? = null, val level: Float = 1f, val vpn: Boolean = false)
 
 data class VolumeStatus(val level: Int = 0, val max: Int = 100, val muted: Boolean = false) {
     val fraction: Float get() = if (max == 0) 0f else level / max.toFloat()
@@ -67,6 +68,11 @@ object SystemProbe {
     fun network(context: Context): NetworkStatus {
         val cm = context.getSystemService<ConnectivityManager>() ?: return NetworkStatus()
         var caps = cm.getNetworkCapabilities(cm.currentNetwork() ?: return NetworkStatus()) ?: return NetworkStatus()
+        // Also one that leaves Aerial out (a proxy app's per-app list), which is not the default here.
+        @Suppress("DEPRECATION")
+        val vpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) || runCatching {
+            cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true && cm.getNetworkInfo(it)?.isConnected == true }
+        }.getOrDefault(false)
         // Under a VPN the default network is the VPN's, which carries no Wi-Fi or Ethernet
         // transport on Android 8, and was shown as Ethernet over Wi-Fi (Hisense H55E9A, issue #435).
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
@@ -88,7 +94,7 @@ object SystemProbe {
                 ?: physicalNetworks.firstOrNull() ?: caps
         }
         return when {
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkStatus(NetKind.Ethernet)
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkStatus(NetKind.Ethernet, vpn = vpn)
             caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
                 val wm = context.applicationContext.getSystemService<WifiManager>()
                 @Suppress("DEPRECATION")
@@ -100,9 +106,9 @@ object SystemProbe {
                     @Suppress("DEPRECATION")
                     WifiManager.calculateSignalLevel(info.rssi, 4) / 3f
                 }
-                NetworkStatus(NetKind.Wifi, ssid, level)
+                NetworkStatus(NetKind.Wifi, ssid, level, vpn)
             }
-            else -> NetworkStatus(NetKind.Ethernet)
+            else -> NetworkStatus(NetKind.Ethernet, vpn = vpn)
         }
     }
 

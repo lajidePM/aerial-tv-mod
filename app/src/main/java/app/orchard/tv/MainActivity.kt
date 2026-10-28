@@ -740,7 +740,8 @@ class MainActivity : ComponentActivity() {
         )
         getSystemService<ConnectivityManager>()?.let { cm ->
             if (Build.VERSION.SDK_INT >= 24) cm.registerDefaultNetworkCallback(networkCallback)
-            else cm.registerNetworkCallback(NetworkRequest.Builder().build(), networkCallback)
+            // A request leaves VPNs out unless told otherwise; the status pill shows one coming up (issue #809).
+            else cm.registerNetworkCallback(NetworkRequest.Builder().removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), networkCallback)
         }
         // Apps can change while Aerial is in the background without it hearing about it.
         vm.reload()
