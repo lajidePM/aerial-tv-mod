@@ -306,9 +306,12 @@ if [ "$(adb shell settings get secure screensaver_enabled | tr -d '\r')" = 1 ]; 
 fi
 # TCL's 自启动管理 (TclAppBootManager in system_server) refuses to start or bind third-party apps
 # after a reboot unless these TCL-only app ops allow it; without them the TV boots to TCL's launcher.
+# FFALCON T966D5 (Android 14) names them AUTO_START / ASSOC_START (issue #817); it also puts them
+# back to ignore on every boot, so there they last until the next reboot only.
 # Other firmwares do not know the op names and refuse them, which is fine.
-adb shell appops set "$PKG" APP_AUTO_START allow >/dev/null 2>&1 || true
-adb shell appops set "$PKG" APP_ASSOC_START allow >/dev/null 2>&1 || true
+for op in APP_AUTO_START APP_ASSOC_START AUTO_START ASSOC_START; do
+  adb shell appops set "$PKG" "$op" allow >/dev/null 2>&1 || true
+done
 if [ "${KEEP_ADB:-0}" = 1 ]; then
   adb shell am broadcast -a "$PKG.CONFIG" -n "$PKG/.guard.ConfigReceiver" --ez keep_adb true >/dev/null
   echo "Aerial will switch ADB debugging back on whenever the TV turns it off."

@@ -118,8 +118,10 @@ curl -fsSL https://aerial.qust.me/install.sh | KEEP_ADB=1 TV=<IP> bash
    adb shell cmd notification allow_listener app.orchard.tv/app.orchard.tv.guard.RevivalListener
    adb shell appops set app.orchard.tv APP_AUTO_START allow
    adb shell appops set app.orchard.tv APP_ASSOC_START allow
+   adb shell appops set app.orchard.tv AUTO_START allow
+   adb shell appops set app.orchard.tv ASSOC_START allow
    ```
-   最后两条 `appops` 只有 TCL 认，别的电视报错是正常的。
+   最后四条 `appops` 只有 TCL / 雷鸟认（不同固件认其中两条），别的电视报错是正常的。
 
    再启动一次 Aerial，等 5 秒后编译（要几十秒，让 Aerial 在电视上更流畅；有的电视要先启动过一次，编译才有效）：
    ```
@@ -260,6 +262,8 @@ adb shell appops set app.orchard.tv SYSTEM_ALERT_WINDOW default
 adb shell appops set app.orchard.tv REQUEST_INSTALL_PACKAGES default
 adb shell appops set app.orchard.tv APP_AUTO_START default
 adb shell appops set app.orchard.tv APP_ASSOC_START default
+adb shell appops set app.orchard.tv AUTO_START default
+adb shell appops set app.orchard.tv ASSOC_START default
 adb shell am force-stop app.orchard.tv
 adb shell cmd role remove-role-holder --user 0 android.app.role.HOME app.orchard.tv
 ```
