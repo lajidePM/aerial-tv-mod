@@ -263,16 +263,12 @@ fun HomeScreen(
     // A photo screensaver over a picture wallpaper carries the picture on the same way: its shading
     // lifts and it slowly draws in from just as Home shows it (HomeBackground), and the photos move
     // on from it.
-    // An aerial screensaver over a picture wallpaper starts the same way, its film fading in over
-    // the picture once it moves (#683).
     val stillSaver = remember(vm.screensaverVisible) {
         if (vm.screensaverVisible && focusedRow == 0 && overlay == Overlay.None && moving == null && Wallpapers.backdrop != null) {
-            Wallpapers.screensaverPicture() ?: Wallpapers.aerialSaverPicture()
+            Wallpapers.screensaverPicture()
         } else null
     }
-    val stillCarry = remember(stillSaver) {
-        stillSaver?.let { SaverCarry.Still(it, thenAerials = Wallpapers.screensaver == ScreensaverMode.Aerial) }
-    }
+    val stillCarry = remember(stillSaver) { stillSaver?.let { SaverCarry.Still(it) } }
     var saverImage by remember { mutableStateOf<ImageBitmap?>(null) }
     val saverReveal = remember { Animatable(0f) }
     val saverPush = remember { Animatable(0f) }
@@ -282,8 +278,6 @@ fun HomeScreen(
             saverImage = withContext(Dispatchers.Default) {
                 Wallpapers.picture(stillSaver, Wallpapers.screenW, Wallpapers.screenH)?.asImageBitmap()
             } ?: return@LaunchedEffect
-            stillCarry?.image = saverImage
-            stillCarry?.push = { saverPush.value }
             coroutineScope {
                 val pushing = if (reduced) null else launch { drawIn(saverPush) }
                 launch { saverReveal.animateTo(1f, tween(1800, easing = Motion.EaseInOut)) }

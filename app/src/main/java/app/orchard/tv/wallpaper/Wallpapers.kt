@@ -236,14 +236,6 @@ object Wallpapers {
     fun screensaverPicture(): Wallpaper? =
         if (screensaver != ScreensaverMode.Photos || moves() || isSource() || selectedId == AUTO) null else resolve()
 
-    /**
-     * The picture wallpaper an aerial screensaver starts over: Home carries it and the clock into
-     * the screensaver, and the film fades in over it once it moves (#683), rather than Home cutting
-     * to black while the film loads.
-     */
-    fun aerialSaverPicture(): Wallpaper? =
-        if (screensaver != ScreensaverMode.Aerial || moves() || isSource() || selectedId == AUTO) null else resolve()
-
     fun chooseScreensaver(mode: ScreensaverMode) {
         chosenScreensaver = mode
         prefs.edit { putString("screensaver", mode.key) }
