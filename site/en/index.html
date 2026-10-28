@@ -190,7 +190,7 @@
       <span class="chip"><b>Xiaomi / Redmi</b> · Android 6–14</span>
       <span class="chip"><b>TCL</b> · Android 8–11</span>
       <span class="chip"><b>Skyworth / Coocaa</b> · Android 11</span>
-      <span class="chip"><b>Sony BRAVIA</b> · Android 10–12</span>
+      <span class="chip"><b>Sony BRAVIA</b> · Android 10–14</span>
       <span class="chip"><b>Konka</b> · Android 9</span>
       <span class="chip"><b>Boxes and projectors</b> · XGIMI, OBE, Aurora</span>
       <span class="chip"><b>Older TVs</b> · Android 4.0–4.4 with Aerial Lite</span>
@@ -222,7 +222,7 @@
       <div class="panel" data-panel="oppo"><p>Settings (设置) → System (系统) → About (关于本机) → <b>Model</b> (设备型号), press <b>Up, Up, Right, Right</b>, then OK. Then Settings → System → <b>Developer options</b> (开发者选项) and turn on <b>USB debugging</b> (USB 调试, sometimes called ADB debugging).<br>The IP address is at the <b>bottom</b> of Settings → Network → the connected network.</p></div>
       <div class="panel" data-panel="other"><p>Settings → Device Preferences → About → press <b>Build</b> (not Android version) 7 times, then turn on <b>USB debugging</b> in Developer options.<br>The IP address is under Settings → Network → the connected network.</p></div>
       <p class="note">Some TVs cannot open ADB at all: old LeTV sets, Honor Vision and old Konka models (no version number to tap). XGIMI H3 needs a third-party tool to open ADB first.</p>
-      <p class="note"><b>Sony BRAVIA on Android 14 and other Android 11+ TVs</b>: wireless debugging pairs first; <code>adb connect &lt;TV-IP&gt;:5555</code> alone does not work. Open Wireless debugging → <b>Pair device with pairing code</b>, run <code>adb pair &lt;TV-IP&gt;:&lt;pairing-screen port&gt;</code> and type the 6-digit code, then <code>adb connect &lt;TV-IP&gt;:&lt;main-screen port&gt;</code> (the two ports differ), and install as usual. More in the <a href="https://github.com/pengchujin/aerial-tv/blob/main/docs/devices/adb-by-brand.md">by-brand guide</a> (Chinese); to use plain <code>&lt;TV-IP&gt;:5555</code> afterwards, run <code>adb tcpip 5555</code> once connected.</p>
+      <p class="note"><b>TVs that only offer Wireless debugging (no USB/network debugging toggle) on Android 11 and later</b>, such as Sony BRAVIA on Android 14: wireless debugging pairs first; <code>adb connect &lt;TV-IP&gt;:5555</code> alone does not work. Open Wireless debugging → <b>Pair device with pairing code</b>, run <code>adb pair &lt;TV-IP&gt;:&lt;pairing-screen port&gt;</code> and type the 6-digit code, then <code>adb connect &lt;TV-IP&gt;:&lt;main-screen port&gt;</code> (the two ports differ), and install as usual. More in the <a href="https://github.com/pengchujin/aerial-tv/blob/main/docs/devices/adb-by-brand.md">by-brand guide</a> (Chinese); to use plain <code>&lt;TV-IP&gt;:5555</code> afterwards, run <code>adb tcpip 5555</code> once connected. Some TCL firmwares (Q10M, Q10L, Crane 6 Ultra and similar) have no pairing-code entry at all; there, authorize once over a USB cable instead, as the same guide explains.</p>
 
       <h3 class="step"><span>2</span>Enter the TV's IP address</h3>
       <p class="hint">It's under Settings → Network → the connected network (at the bottom on OPPO S1). Your computer must be on the same network.</p>
@@ -257,11 +257,13 @@
       <div class="panel" data-panel="cli">
         <p>Run it in a macOS or Linux terminal; it downloads adb if you don't have it. On Windows, use an agent.</p>
         <div class="code"><button class="copy" data-copy="cmd">Copy</button><pre id="cmd"></pre></div>
+        <p class="note">TVs that only offer Wireless debugging pair first: with a pairing-code entry, set the <code>ADB_PAIR</code>, <code>ADB_CODE</code> and <code>ADB_CONNECT</code> variables before running (the README shows how) and the script pairs and switches back to 5555 for you; without a pairing-code entry (TCL Q10M, Q10L, Crane 6 Ultra and similar), connect the TV once with a USB cable as in the <a href="https://github.com/pengchujin/aerial-tv/blob/main/docs/devices/adb-by-brand.md">by-brand guide</a> (Chinese) and run <code>adb tcpip 5555</code>.</p>
       </div>
 
       <div class="panel" data-panel="manual">
         <p>Download <a href="../download/aerial-standard.apk"><b>aerial-standard.apk</b></a>, then run:</p>
         <div class="code"><button class="copy" data-copy="manualcmd">Copy</button><pre id="manualcmd"></pre></div>
+        <p class="note">TVs that only offer Wireless debugging (step 1) come in two kinds:<br><b>With a pairing-code entry</b> (Sony BRAVIA on Android 14 and similar): pair first as in step 1, then run <code>adb tcpip 5555</code> once connected, so the first line of the commands is 5555; without that, use the IP:port from the main Wireless debugging screen on the first line.<br><b>Without a pairing-code entry</b> (TCL Q10M, Q10L, Crane 6 Ultra and similar): follow the <a href="https://github.com/pengchujin/aerial-tv/blob/main/docs/devices/adb-by-brand.md">by-brand guide</a> (Chinese) and connect the TV to a computer with a USB cable, then run <code>adb tcpip 5555</code> once authorized; until you do, the first line's <code>:5555</code> will not connect.</p>
       </div>
 
       <div class="panel" data-panel="phone">
