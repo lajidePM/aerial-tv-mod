@@ -192,7 +192,22 @@ object SystemProbe {
     private val SETTINGS_PACKAGES = setOf("com.android.settings", "com.android.tv.settings", "com.xiaomi.mitv.settings", "com.tcl.settings", "com.helios.setting", "com.haier.tv.menusetting")
 
     fun settingsIntent(context: Context): Intent =
-        xgimiSettingsIntent(context, "Settings://com.xgimi.misckey.main/mainPage") ?: settingsActivityIntent(context)
+        xgimiSettingsIntent(context, "Settings://com.xgimi.misckey.main/mainPage")
+            ?: konkaSettingsIntent(context)
+            ?: settingsActivityIntent(context)
+
+    /**
+     * Konka's full settings menu (picture, sound and the rest) is a panel its settings app shows as
+     * a service, the one Konka's own launcher starts (LiveLauncher's ToolBarView). The activity
+     * below in settingsActivityIntent only routes to second-level pages and opens on Network
+     * without a known page (Konka V563, Android 9, found by the reporter of issue #771 on the TV).
+     */
+    private val KONKA_SETTINGS = ComponentName("com.konka.tvsettings", "com.konka.service.SettingService")
+
+    private fun konkaSettingsIntent(context: Context): Intent? {
+        val intent = Intent("com.konka.settings.action.SETTING_MAIN_VIEW").setComponent(KONKA_SETTINGS)
+        return intent.takeIf { context.packageManager.resolveService(it, 0)?.serviceInfo?.exported == true }
+    }
 
     private fun settingsActivityIntent(context: Context): Intent =
         firstResolvable(
@@ -338,6 +353,11 @@ object SystemProbe {
 
     fun startSettingsIntent(context: Context, intent: Intent) {
         if (HisenseSources.open(context, intent)) return
+        if (intent.component == KONKA_SETTINGS) {
+            if (runCatching { context.startService(intent) }.getOrNull() != null) return
+            context.startActivity(settingsLaunchIntent(context, settingsActivityIntent(context)))
+            return
+        }
         val activity = if (intent.component == XGIMI_SETTINGS) {
             val shown = runCatching { context.startService(intent) }.getOrNull() != null
             if (shown) return

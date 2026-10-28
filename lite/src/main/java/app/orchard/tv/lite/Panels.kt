@@ -168,7 +168,7 @@ class ControlCenter(
             action = { locked { open(SystemIntents.network(context, netGlyph == Glyph.Ethernet)) } }
         }
         val settings = RoundButton(context, Glyph.Gear, context.getString(R.string.cc_settings)).apply {
-            action = { locked { open(SystemIntents.settings(context)) } }
+            action = { locked { if (!SystemIntents.openSettingsPanel(context)) open(SystemIntents.settings(context)) } }
         }
         for ((i, b) in listOf(inputs, netButton, settings).withIndex()) {
             if (i > 0) buttons.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))

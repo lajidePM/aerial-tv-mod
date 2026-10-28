@@ -56,6 +56,17 @@ object SystemIntents {
         return runCatching { context.startActivity(coocaa) }.isSuccess
     }
 
+    /**
+     * Konka's full settings menu, a panel its settings app shows as a service (Konka V563, issue
+     * #771); false where the TV has no such service.
+     */
+    fun openSettingsPanel(context: Context): Boolean {
+        val konka = Intent("com.konka.settings.action.SETTING_MAIN_VIEW")
+            .setComponent(ComponentName("com.konka.tvsettings", "com.konka.service.SettingService"))
+        if (runCatching { context.packageManager.resolveService(konka, 0) }.getOrNull()?.serviceInfo?.exported != true) return false
+        return runCatching { context.startService(konka) }.getOrNull() != null
+    }
+
     /** Not Intent.resolveActivity: it returns an explicit component unchecked. */
     private fun first(context: Context, vararg intents: Intent): Intent {
         val pm = context.packageManager
