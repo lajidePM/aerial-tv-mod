@@ -112,6 +112,9 @@ private const val CC_WARM_AFTER_MS = 3_000L
 
 private val GridMargin = 56.dp
 
+/** The highest the row above may sit once Home has scrolled into the grid: clear of the status pill. */
+private val RowAboveTop = 72.dp
+
 /**
  * The gap between tiles for [columns] a row (AerialSettings.homeColumns): about a fifth of a tile,
  * as tvOS keeps it when it fits six, so four or six look like five scaled rather than packed.
@@ -164,8 +167,12 @@ private class GridMetrics(screenW: Dp, screenH: Dp, val columns: Int, oneRow: Bo
      */
     val clockY = 80.dp
 
-    /** Where a row rests once you go down into the grid: the row above stays in view. */
-    val restY = screenH * 0.37f
+    /**
+     * Where a row rests once you go down into the grid: the row above stays in view, its top under
+     * the status pill (28 dp down, 34 tall). Four a row are tall enough that 37% of the screen put
+     * that row over the pill; six still rest at 37%, five some 5 dp lower.
+     */
+    val restY = maxOf(screenH * 0.37f, RowAboveTop + pitchY)
     val screenH = screenH
 
     /**

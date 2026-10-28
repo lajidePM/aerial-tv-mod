@@ -72,7 +72,8 @@ class HomeView(context: Context, private val host: Host) : FrameLayout(context) 
     private var firstGap = 0f
     private var topRowY = canvasH - PITCH - 12f
     private var shelfLift = 0f
-    private val restY = canvasH * 0.37f
+    /** As the full app's: the row above clears the status pill, which four a row would reach at 37%. */
+    private val restY get() = maxOf(canvasH * 0.37f, 72f + PITCH)
 
     var apps: List<AppEntry> = emptyList()
         private set
