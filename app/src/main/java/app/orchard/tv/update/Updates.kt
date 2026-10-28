@@ -254,8 +254,15 @@ object Updates {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
-                runCatching { app.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    .onFailure { Log.w(TAG, "could not ask to confirm the update", it) }
+                runCatching { app.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure {
+                    // Some Android 13+ firmware installers have no CONFIRM_INSTALL page but still
+                    // take the APK by ACTION_VIEW (issue #827, model not known yet).
+                    Log.w(TAG, "could not ask to confirm the update; opening the installer", it)
+                    val id = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+                    if (id >= 0) runCatching { app.packageManager.packageInstaller.abandonSession(id) }
+                    val file = apkFile(app)
+                    if (!file.isFile || !openInstaller(app, app, file)) install = Install.Failed(Failure.Blocked)
+                }
             }
             PackageInstaller.STATUS_SUCCESS -> Unit // this process is replaced
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
