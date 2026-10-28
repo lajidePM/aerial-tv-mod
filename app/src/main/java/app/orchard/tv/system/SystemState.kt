@@ -471,8 +471,23 @@ object SystemProbe {
         // the TV middleware with no provider, but any app may open its source dialog, which the
         // remote's input key also shows (issues #519, #582, tried by both reporters with adb).
         val coocaa = Intent("coocaa.intent.action.SOURCE_DIALOG").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (runCatching { pm.resolveActivity(coocaa, 0) }.getOrNull() == null) return false
-        return runCatching { context.startActivity(coocaa) }.isSuccess
+        if (runCatching { pm.resolveActivity(coocaa, 0) }.getOrNull() != null &&
+            runCatching { context.startActivity(coocaa) }.isSuccess
+        ) return true
+        // Coocaa C10 projector (CCOS, no inputs in TvInputManager): its AI launcher's source picker
+        // is an activity any app may open, and the older SkyMovie launcher shows its source page on
+        // an exported broadcast; both switch through the firmware's own path (issue #779, both
+        // tried by the reporter with adb, the guard leaving them in front).
+        val aigc = Intent("coocaa.intent.aigc.home.tvsource").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { pm.resolveActivity(aigc, 0) }.getOrNull() != null &&
+            runCatching { context.startActivity(aigc) }.isSuccess
+        ) return true
+        val skyMovie = Intent("com.coocaa.action.SOURCE")
+            .setComponent(ComponentName("com.tianci.movieplatform", "com.ccos.cooui.homepage.receiver.LaunchSourceReceiver"))
+        if (runCatching { pm.queryBroadcastReceivers(skyMovie, 0) }.getOrNull().orEmpty().any { it.activityInfo.exported }) {
+            return runCatching { context.sendBroadcast(skyMovie) }.isSuccess
+        }
+        return false
     }
 
     /**
