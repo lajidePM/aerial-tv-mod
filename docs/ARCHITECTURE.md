@@ -268,7 +268,8 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 - **信号源**：`TvInputManager` 列出直通输入和调谐器。装了 `com.xiaomi.mitv.tvplayer` 的走小米的 Intent（HDMI 的 `input = HW 编号 + 18`，AV=2，ATV/DTMB 各自的 Activity），否则走 `TvContract` 的通用 URI。CEC 子输入的名字用于显示设备名，`Playback_1` 这类通用名会被过滤。`DeviceProfile` 存放按机型的修正，见下面「机型修正」。
 - **音量**：`AudioManager` 的 STREAM_MUSIC；TCL 必须加 `FLAG_SHOW_UI`（否则不会写入功放）。
 - **亮度**：见 `Brightness.kt` 的注释（小米 / 标准 / TCL 面板三种）。
-- **设置入口**：优先厂商自己的设置（小米 `com.xiaomi.mitv.settings`）。
+- **设置入口**：优先厂商自己的设置（小米 `com.xiaomi.mitv.settings`）。有的厂商的完整设置是服务弹出的面板，先按服务启动：极米 `SettingService`、康佳 `com.konka.service.SettingService` + `SETTING_MAIN_VIEW`（#771，只在服务导出时用，失败退回 Activity）。
+- **没有信号源时**：`TvInputManager` 一个都不列，先试厂商自己的列表（极米 MStar、小米播放器编号：MiTV4C 和 MiTV3 的 HDMI 1/2 = 23/24、海信、康佳、TCL），还是空的，控制中心「信号源」就打开固件自己的信号源面板（`openInputPicker`：极米设置服务、海信 InputsUIService、TCL 面板、酷开 `SOURCE_DIALOG`、酷开 C10 的 `coocaa.intent.aigc.home.tvsource` 和 SkyMovie 的 `LaunchSourceReceiver` 广播，#779）。Lite 的 `SystemIntents` 同样两条。
 
 ## 资源与第三方
 
