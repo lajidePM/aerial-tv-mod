@@ -257,7 +257,8 @@ if ! OUT=$(adb install -r "$APK" 2>&1); then
           adb shell am start -n com.dangbeimarket/.ui.apkmanager.ApkManagerActivity >/dev/null 2>&1 || true
           echo "Dangbei's package manager is open on the TV: choose Aerial, then Install (confirm on the TV)."
         else
-          echo "Open it with a file manager or an app store's local install on the TV, and confirm."
+          echo "Open it with a file manager or an app store's local install already on the TV, and confirm."
+          echo "Do not install another app (an app store or a tool) to do this: Aerial is the only app this installs."
         fi
         echo -n "Waiting for the install"
         for _ in $(seq 1 120); do
