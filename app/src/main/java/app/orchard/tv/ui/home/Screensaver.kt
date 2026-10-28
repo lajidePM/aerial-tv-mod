@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -186,17 +187,21 @@ suspend fun drawIn(push: Animatable<Float, *>) {
 /** [image] over the whole screen, [push] (0 to 1) of the way into its slow draw-in: larger by 8%, drifting right. */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDrawingIn(image: ImageBitmap, push: Float, alpha: Float = 1f) {
     val s = 1f + 0.08f * push
-    val w = size.width * s
-    val h = size.height * s
-    val left = (size.width - w) / 2f + 24.dp.toPx() * push
-    val top = (size.height - h) / 2f
-    drawImage(
-        image,
-        dstOffset = androidx.compose.ui.unit.IntOffset(left.roundToInt(), top.roundToInt()),
-        dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-        alpha = alpha,
-        filterQuality = FilterQuality.Low,
-    )
+    // Scaled and moved by the canvas, in fractions of a pixel: placed on whole pixels, the picture
+    // stood still and jumped a pixel every few frames, its edges at different times (it draws in
+    // only 2-3 px a second), and read as a shake (Xiaomi MiTV-MFTR0).
+    val drift = 24.dp.toPx() * push
+    withTransform({
+        translate(left = drift)
+        scale(s, s, center)
+    }) {
+        drawImage(
+            image,
+            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            alpha = alpha,
+            filterQuality = FilterQuality.Low,
+        )
+    }
 }
 
 /** Where a screensaver of aerials starts when it cannot carry Home's player on (AerialDream). */
