@@ -214,7 +214,9 @@ Most TVs sold in China only accept their own home screen and clear third-party a
 | Xiaomi | Mi TV 4 / 4A / 4X / 3S, Mi Box 4 | Android 6 | ✅ From 1.43; Home takes a few seconds to return to Aerial ([notes](docs/devices/xiaomi-android6.md)) |
 | Xiaomi | Mi TV 2 (MiTV2-49) | Android 4.3 | ❌ Aerial Lite installs and runs, but the system opens Xiaomi's launcher by component on Home, so it cannot be the home screen ([#770](https://github.com/pengchujin/aerial-tv/issues/770)) |
 | Xiaomi (Fengmi) | Ultraman series projector | Android 9 | ✅ ([notes](docs/devices/xiaomi-ultraman-projector.md)) |
-| TCL | MT5879 (China) | Android 11 | ✅ In daily use ([notes](docs/devices/tcl-mt5879-cn.md)) |
+| TCL | MT5879 (China), 98T8H | Android 11 | ✅ In daily use ([notes](docs/devices/tcl-mt5879-cn.md); 98T8H: [#803](https://github.com/pengchujin/aerial-tv/issues/803)) |
+| TCL | Q9L Pro | Android 14 | ⚠️ ADB over a USB cable only; allow Aerial to auto-start in the TV manager; inputs switch to no picture ([#792](https://github.com/pengchujin/aerial-tv/issues/792)) |
+| Thunderbird | 75S78A Plus (FFALCON T966D5) | Android 14 | ❌ The firmware clears accessibility about once a minute, so Home cannot be taken over; `boot_app_componentname` boots into Aerial ([notes](docs/devices/ffalcon-t966d5.md)) |
 | TCL | 75V2 (m7221) | Android 8 | ✅ Starts straight into Aerial, no root ([notes](docs/devices/tcl-m7221-cn.md)) |
 | TCL / FFALCON | 60A730U, 55V2 Pro (x32a0), 65Q10E and Crane 6 (m7642), 75S365C, 75Q10L | Android 5.1–14 | ✅ 60A730U only takes the guard build; 55V2 Pro needs `setprop persist.tcl.debug.installapk 1` before adb installs ([#620](https://github.com/pengchujin/aerial-tv/issues/620)) |
 | FFALCON | 55S595C Ultra, Crane 6 2025 Ultra | Android 11+ | ❌ Installs, can't take over Home ([notes](docs/devices/tcl-mt9655-cn.md)) |
@@ -223,6 +225,8 @@ Most TVs sold in China only accept their own home screen and clear third-party a
 | Skyworth / Coocaa | K3 Pro, 75A7D | Android 11 | ✅ 75A7D inputs work from 1.45 |
 | Skyworth / Coocaa | 65G60, 8R134 / 8R145, aigc models (C10 projector, P60, 7T863) | Android 8–11 | ⚠️ Boots into Coocaa's home first, or takes 20–30 s to come back after the system clears it ([notes](docs/devices/skyworth-coocaa.md)) |
 | Skyworth / Coocaa | 5S21 (50K2, 7626K2), 5S05 (60U2), 8H66 H7 | Android 5.x | ⚠️ Aerial after boot and standby, but Home does not return to it; no inputs listed |
+| Skyworth / Coocaa | 8H57_H5 | Android 5.1 | ⚠️ Spins for a dozen seconds at boot before Aerial ([#785](https://github.com/pengchujin/aerial-tv/issues/785)) |
+| Skyworth | 1AA46_D4 (T963) | Android 9 | ✅ ([#796](https://github.com/pengchujin/aerial-tv/issues/796)) |
 | Skyworth | 7T641, 75A6E, 55A5F Pro (8R702) | Android 13 | ❌ Black screen or freeze |
 | Skyworth | Xiaopai P3 (Q5001 / cupid-p2) box | Android 10 | ⚠️ Needs a renamed package to take over Home; boot broadcasts are all blocked ([notes](docs/devices/skyworth-p3-box.md)) |
 | Panasonic | TH-55HX560C (built by Skyworth) | Android 8 | ⚠️ No inputs listed |
@@ -231,6 +235,7 @@ Most TVs sold in China only accept their own home screen and clear third-party a
 | LeTV | Super3 X65 (X65-168CQ) | Android 5.0.1 | ⚠️ Installs and draws; the firmware kills third-party launchers on Home, so takeover is unreliable ([notes](docs/devices/letv-x3-65.md)) |
 | Hisense / Vidda | VIDAA models | Android 5–14 | ⚠️ Home works, most boot into Hisense's home first; VIDAA C1 projector can't be taken over ([notes](docs/devices/hisense-vidaa.md)) |
 | Hisense | 65E52D | Android 8 | ✅ Boots straight into Aerial ([#672](https://github.com/pengchujin/aerial-tv/issues/672)) |
+| Hisense | E5Q Pro | Android 11 | ✅ ([#790](https://github.com/pengchujin/aerial-tv/issues/790)) |
 | Hisense | VIDAA_TV (MSD6A348) | Android 4.4 | ✅ Aerial Lite from a USB drive; pick it with "Always" at the Home prompt; no brightness ([#769](https://github.com/pengchujin/aerial-tv/issues/769)) |
 | Sharp | LCD-50SU671A | Android 6 | ✅ Needs QuickShortcutMaker to open ADB |
 | OPPO | K9 | Android 9 | ⚠️ Needs a renamed package ([notes](docs/devices/oppo-coloros-tv.md)) |
@@ -241,6 +246,8 @@ Most TVs sold in China only accept their own home screen and clear third-party a
 | OBE | X7, X7D projectors | Android 9 / 5.1 | ✅ Home inside HDMI can go to the Apple TV's home screen ([notes](docs/devices/obe-x7.md)) |
 | Tencent Aurora box | 6 / 6SE / 7S | Android 10 / 14 | ✅ 6 works; ⚠️ 7S stays on the stock home at boot ([notes](docs/devices/tencent-aurora-box.md)) |
 | Dangbei | Box Max1, H5, HAQU K2 (Dangbei OS) | Android 9 | ✅ |
+| Dangbei | F3 projector | Android 6 | ❌ The firmware refuses third-party launchers and has no accessibility service ([#789](https://github.com/pengchujin/aerial-tv/issues/789)) |
+| JMGO | S621 | Android 13 | ❌ The firmware refuses writes to the accessibility setting; Home cannot be taken over ([#793](https://github.com/pengchujin/aerial-tv/issues/793)) |
 | Epson | DTP9733 projector | Android 11 | ✅ |
 | Other boxes | CM311-1 (modified ATV), PPTV K55U27 | Android 9 | ✅ |
 
