@@ -538,6 +538,8 @@ fun HomeScreen(
                 // (another plane and processing; a key frame a second off where the exact
                 // frame did not decode, Xiaomi MiTV-MFTR0 and TCL MT5879).
                 standIn = overlay == Overlay.None || overlay is Overlay.ControlCenter || overlay is Overlay.Wallpaper,
+                otherFormatSaver = vm.screensaverVisible && !filmSaver && Wallpapers.screensaver == ScreensaverMode.Aerial &&
+                    !AerialFormats.screensaverCarriesWallpaper(appContext),
                 live = liveFilm,
             )
             // Anew for each choice, so another of the owner's videos does not keep the last one's player.
@@ -591,7 +593,7 @@ fun HomeScreen(
             LaunchedEffect(Wallpapers.selectedId) { filmCover.snapTo(0f) }
             // The aerial film's own glass for the grid: the one playing or stopped, else the one
             // the picture was taken from.
-            val pictureClip = remember(Wallpapers.backdrop) { Wallpapers.liveSpot()?.first }
+            val pictureClip = remember(Wallpapers.backdrop) { Wallpapers.livePictureSpot()?.first }
             val clip = if (Wallpapers.selectedId == Wallpapers.LIVE) liveFilm.film?.id ?: pictureClip else null
             LaunchedEffect(clip) { Wallpapers.showClipGlass(clip) }
             val clipGlass = Wallpapers.clipGlass?.takeIf { it.first == clip }?.second
