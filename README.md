@@ -144,3 +144,24 @@ adb shell am start -n com.mitv.tvhome/com.mitv.tvhome.MainActivity
 - **屏保**：Apple TV 的 114 段航拍影片，电视支持时播 4K 或 4K 杜比视界，也可以换成照片、时钟或从手机添加的本地视频。
 - **壁纸**：必应每日精选、14 张内置壁纸、用手机扫码传的照片，或者航拍：停在主屏幕 10 秒后在磁贴后面播放，按任意键停在当前画面。
 - **个性化**：单排或双排、时钟大小和位置、App 名称、焦点样式、按键声音，都能改。
+
+---
+
+## 声明与致谢 (Credits & Acknowledgements)
+
+本项目基于优秀开源项目及社区实践经验二次修改与适配，特此向以下上游项目及作者致以诚挚的敬意与感谢：
+
+1. **[pengchujin/aerial-tv](https://github.com/pengchujin/aerial-tv)** (MIT License)
+   - 本项目的核心 UI 架构、tvOS 风格极简设计、Apple 航拍视频源及原生桌面接管基础均来自 @pengchujin 的 Aerial TV 原作。
+   - 感谢原作者为国产 Android TV 生态带来如此优雅纯净的极简桌面。
+
+2. **[spocky/miproja1 (Projectivy Launcher)](https://github.com/spocky/miproja1)**
+   - 感谢 Projectivy Launcher 团队在 Android TV 领域探索出的按键拦截与无障碍守护前置理念，为本项目的方案 A（无障碍魔改免变砖版）提供了关键技术灵感与思路。
+
+3. **[fandejin/tv-terminator](https://github.com/fandejin/tv-terminator)**
+   - 感谢社区在小米电视预置白名单启动器（`com.ts.launcher`）替身方案上的实践验证，为方案 B（白名单变异 0 闪烁版）的系统看门狗放行提供了重要参考。
+
+---
+
+### 开源许可 (License)
+本项目源码遵循上游的 **MIT License**，保留原版权声明与许可，欢迎社区共同交流完善。
