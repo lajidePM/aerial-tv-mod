@@ -36,12 +36,12 @@ Made for Xiaomi, TCL, Skyworth, Sony and other TVs sold in China, and runs on bo
 </p>
 
 - **Home**: your favorite apps in one row on a glass shelf at the bottom, every app below it. Hidden system apps like Xiaomi's App Store and Mi Home show up too.
-- **Organize**: hold OK (or press Menu) to move an app, put it in a folder, hide it or uninstall it. An HDMI input pinned to Home can say what is plugged in (Apple TV, PlayStation, Switch, Xbox, a computer...) and take its icon, or a name you type on your phone.
+- **Organize**: hold OK (or press Menu) to move an app, put it in a folder, hide it, uninstall it, or have the TV open it at power on and wake. An HDMI input pinned to Home can say what is plugged in (Apple TV, PlayStation, Switch, Xbox, a computer...) and take its icon, or a name you type on your phone.
 - **Arrange from your phone**: scan the code on the TV and your phone shows Home as the TV lays it out. Drag tiles into place; tap one to rename it, change its icon, put it in a folder or hide it; add HDMI and other inputs to Home.
 - **Control Center**: press Up from the top row to the top right. Inputs, network, settings, volume, brightness and Personalize.
 - **Screensaver**: Apple TV's 114 aerial films, in 4K or 4K Dolby Vision where the TV supports it, your photos, a clock, or local videos sent from your phone ([guide, Chinese](docs/SCREENSAVER_VIDEOS.md)).
-- **Wallpaper**: Bing's photo of the day, fourteen built-ins, photos you upload by scanning a code with your phone, or aerial films that play behind the apps after ten still seconds on Home and stop on the frame showing at any key.
-- **Personalize**: one or two rows, clock size and corner, app names, focus style and key sounds.
+- **Wallpaper**: Bing's photo of the day, fourteen built-ins, photos and videos you upload by scanning a code with your phone, or aerial films that play behind the apps after ten still seconds on Home and stop on the frame showing at any key.
+- **Personalize**: four, five or six apps a row, one or two rows, clock size and corner, app names, focus style and key sounds.
 
 <p align="center">
   <img src="site/img/folder.jpg" width="49%" alt="An open folder">
@@ -50,7 +50,7 @@ Made for Xiaomi, TCL, Skyworth, Sony and other TVs sold in China, and runs on bo
 
 <p align="center">
   <img src="site/img/screensaver-aerial.jpg" width="49%" alt="Aerial screensaver">
-  <img src="site/img/wallpaper.jpg" width="49%" alt="The Personalize panel">
+  <img src="site/img/columns.jpg" width="49%" alt="Personalize, with six apps per row">
 </p>
 
 ## Install
