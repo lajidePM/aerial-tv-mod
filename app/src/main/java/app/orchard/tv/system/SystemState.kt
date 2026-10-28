@@ -740,14 +740,17 @@ object SystemProbe {
      * Old Xiaomi firmwares with no tv_input service at all (MiTV4C / L32M5-AD, MStar "mainz",
      * Android 6, issue #665): TvInputManager refuses the list, and the firmware's own player is the
      * only way to switch. Its source ids there are 23 = HDMI 1 and 24 = HDMI 2, as the reporter
-     * found port by port; not tried here, and other models may have other ports, so only that one.
+     * found port by port; not tried here, and other models may have other ports, so only these.
+     * Mi TV 3 (MiTV3, MStar "inception", Android 5.1.1) has the service but lists nothing; 23 and 24
+     * are its HDMI 1 and 2 too (L60M4-AA, the reporter of issue #309 switched both with adb; #787
+     * is the same model string with no inputs in its diagnostics).
      * CLEAR_TOP: a player task left in the background is otherwise only brought to the front, and
      * the new `input` is dropped, so going from one port to the other seemed to do nothing.
      */
     private fun xiaomiSources(context: Context): List<TvSource> {
-        if (Build.MODEL != "MiTV4C" || !isInstalled(context, XIAOMI_PLAYER)) return emptyList()
+        if (Build.MODEL !in XIAOMI_NO_INPUT_MODELS || !isInstalled(context, XIAOMI_PLAYER)) return emptyList()
         val tim = context.getSystemService<TvInputManager>()
-        if (tim != null && runCatching { tim.tvInputList }.isSuccess) return emptyList()
+        if (tim != null && runCatching { tim.tvInputList }.getOrNull().orEmpty().isNotEmpty()) return emptyList()
         fun source(id: Int, label: String, kind: SourceKind) = TvSource(
             id = "xiaomi:$id",
             label = label,
@@ -761,6 +764,8 @@ object SystemProbe {
         )
         return listOf(source(23, "HDMI 1", SourceKind.Hdmi), source(24, "HDMI 2", SourceKind.Hdmi))
     }
+
+    private val XIAOMI_NO_INPUT_MODELS = setOf("MiTV4C", "MiTV3")
 
     private const val WHALEY_PLAYER = "com.whaley.tv.tvplayer.ui"
 
