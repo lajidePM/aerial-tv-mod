@@ -202,7 +202,18 @@ class HomeActivity : Activity(), HomeView.Host {
         }
     }
 
+    /** The face size the tiles were last loaded at (AppCatalog.faceW). */
+    private var loadedFaceW = 0
+
+    /** Another number of apps a row: the faces again at the new size, as the full app's artwork. */
+    private fun refaceIfResized() {
+        if (loadedFaceW == 0 || loadedFaceW == AppCatalog.faceW) return
+        folderTiles.clear()
+        loadApps()
+    }
+
     private fun loadApps() {
+        loadedFaceW = AppCatalog.faceW
         work.execute {
             val started = System.currentTimeMillis()
             // Home first, with stand-ins for tiles not made yet; then the real ones as they come.
@@ -413,7 +424,7 @@ class HomeActivity : Activity(), HomeView.Host {
                 handler.removeCallbacks(bake)
                 handler.postDelayed(bake, 500)
             },
-            onLayout = { home.applySettings(); showWeather() },
+            onLayout = { home.applySettings(); showWeather(); refaceIfResized() },
             onHidden = { whenUnlocked(::openHidden) },
             onSaverNow = { closeAll(); showSaver() },
             onPin = { on ->
@@ -618,6 +629,7 @@ class HomeActivity : Activity(), HomeView.Host {
         override fun settingsChanged() {
             home.applySettings()
             showWeather()
+            refaceIfResized()
             (panels.lastOrNull() as? Personalize)?.refreshChips()
         }
         override fun weatherChanged() {

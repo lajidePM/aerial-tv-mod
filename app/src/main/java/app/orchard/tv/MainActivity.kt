@@ -213,7 +213,6 @@ class MainActivity : ComponentActivity() {
         val fresh = savedInstanceState == null
         FontWarmup.start(this)
         val uhd = UhdCanvas.scale(this)
-        TileArtFactory.useCanvasDensity(canvasDensity(resources.displayMetrics) * uhd)
         Wallpapers.init(this)
         Weather.init(this)
         Updates.init(this)
@@ -222,6 +221,8 @@ class MainActivity : ComponentActivity() {
         SourceLooks.init(this)
         AppNames.init(this)
         AerialSettings.init(this)
+        // After the settings: the artwork's size follows the number of apps a row.
+        TileArtFactory.useCanvasDensity(canvasDensity(resources.displayMetrics) * uhd)
         Sounds.init(this)
         val reducedMotion = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 

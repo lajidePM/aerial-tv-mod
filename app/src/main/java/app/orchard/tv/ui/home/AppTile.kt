@@ -598,7 +598,7 @@ object TileFaces {
      * Sizes worked out exactly as AppTile's: a face of another size is simply made there.
      */
     suspend fun prepare(arts: List<TileArt>, screenW: Int, density: Float, focused: Boolean = false) = coroutineScope {
-        val tileW = restTileWidth((screenW / density).dp).value * density
+        val tileW = restTileWidth((screenW / density).dp, AerialSettings.homeColumns).value * density
         val tileH = tileW * 9f / 16f
         val w = tileW.roundToInt()
         val h = tileH.roundToInt()
@@ -606,7 +606,13 @@ object TileFaces {
         val fh = if (focused) focusedPx(tileH) else h
         val radius = Corner.value * density * fw / w
         val rim = 0.5f * density * fw / w
-        if (!focused) restKey = (w.toLong() shl 32) or h.toLong()
+        if (!focused) {
+            val key = (w.toLong() shl 32) or h.toLong()
+            // Another number of apps a row: the faces at the old size go, focused ones too.
+            val resized = restKey != 0L && restKey != key
+            restKey = key
+            if (resized) trimMemory()
+        }
         val todo = arts.distinctBy { System.identityHashCode(it.back) }.filter { ready(it.back, fw, fh) == null }
         if (todo.isEmpty()) return@coroutineScope
         // Only for the faces at rest: the focused ones are made ahead of need, and a tile focused

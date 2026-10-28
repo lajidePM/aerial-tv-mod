@@ -175,6 +175,11 @@ fun WallpaperSheet(
                             AerialSettings.peekNextRow, AerialSettings::choosePeekNextRow,
                         )
                         Choices(
+                            R.string.st_columns, stringResource(R.string.st_columns_hint), note,
+                            AerialSettings.HOME_COLUMNS.map { it to it.toString() },
+                            AerialSettings.homeColumns, AerialSettings::chooseHomeColumns,
+                        )
+                        Choices(
                             R.string.st_plate, stringResource(R.string.st_plate_hint), note,
                             listOf(true to R.string.st_plate_glass, false to R.string.st_plate_none),
                             AerialSettings.homePlate, AerialSettings::chooseHomePlate,
