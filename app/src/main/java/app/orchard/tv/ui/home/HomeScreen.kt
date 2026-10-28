@@ -102,6 +102,35 @@ import kotlin.math.roundToInt
 /** The plate's distance from the bottom edge with no second row peeking: as from the sides. */
 private val PlateMarginBottom = 30.dp
 
+/**
+ * The gap between the two rows on one plate in two-row mode, with no names under them there: the
+ * 50 dp the grid keeps for names left a wide empty band across the glass, and with four a row
+ * pushed the plate up into the weather line.
+ */
+private val ShelfRowGap = 30.dp
+
+/**
+ * Under the second row in two-row mode without a plate: its names and a margin. As much as the
+ * plate's margin and padding, so with and without the plate the rows take the same height: at
+ * 70 dp the rows without one stood 20 dp higher and, four a row, pushed the clock up.
+ */
+private val RowNameRoom = 50.dp
+
+/** Where the large clock's date sits: just under the status pill. */
+private val LargeClockTop = 80.dp
+
+/**
+ * From the large clock's top to where the shelf may start: its weather line ends some 136 dp down
+ * (216 dp from the top, MiTV-MFTR0, 1.65), and a gap.
+ */
+private val LargeClockHeight = 152.dp
+
+/**
+ * The highest the large clock may go to make room for two rows, level with the status pill. Only
+ * at the left: at the right it would run into the pill.
+ */
+private val LargeClockTopMin = 28.dp
+
 /** How much taller the glass plate grows to hold the top row's names, with the second row kept clear of it. */
 private val PlateNameRoom = 28.dp
 
@@ -129,7 +158,7 @@ internal fun gridGap(columns: Int): Dp = when (columns) {
 internal fun restTileWidth(screenW: Dp, columns: Int): Dp = (screenW - GridMargin * 2 - gridGap(columns) * (columns - 1)) / columns
 
 /** Grid geometry for the screen at hand. On a 1080p TV this is a 960×540 dp canvas. */
-private class GridMetrics(screenW: Dp, screenH: Dp, val columns: Int, oneRow: Boolean, plateNames: Boolean, peek: Boolean, plate: Boolean) {
+private class GridMetrics(screenW: Dp, screenH: Dp, val columns: Int, oneRow: Boolean, plateNames: Boolean, peek: Boolean, plate: Boolean, largeClock: Boolean, clockRight: Boolean) {
     val margin = GridMargin
     val gap = gridGap(columns)
     val tileW = restTileWidth(screenW, columns)
@@ -144,28 +173,47 @@ private class GridMetrics(screenW: Dp, screenH: Dp, val columns: Int, oneRow: Bo
     val firstGap = if (plateNames) PlateNameRoom else 0.dp
 
     /**
-     * The top row sits a little past the middle, under the shelf, as on tvOS. In one-row mode, or
-     * when every app fits in it, it sits low, with only the top of any second row showing under
-     * the focused app's name. Every name shown changes nothing here: the names fit in the gap
+     * How far the second row sits under the top row in two-row mode while both are on the shelf:
+     * a grid row where names go between them (no plate, or every name shown), closer on a plate
+     * with none. Not the grid's row plus [firstGap]: that stacked two names' room between them.
+     */
+    val shelfSecond = if (plate && !plateNames) tileH + ShelfRowGap else pitchY
+
+    /**
+     * Two rows, laid from the bottom up: under the second row the plate's margin (and its names'
+     * room), or without a plate room for names; then both rows.
+     */
+    private val twoRowFit = screenH - (if (plate) PlateMarginBottom + PlatePadV + firstGap else RowNameRoom) - shelfSecond - tileH
+
+    /**
+     * Top of the large clock: just under the status pill, left or right, in both layouts, as on the
+     * lock screen. Hung from the row it floated mid-screen in one-row mode and pressed on the plate
+     * in two-row mode; up here the middle of the screen stays the wallpaper's. This is the date's
+     * cap top: the clock's lines are boxed to their capitals. Two rows that do not fit under it
+     * (four a row with every name) take it up beside the pill, at the left.
+     */
+    val clockY = if (oneRow || !largeClock) LargeClockTop else
+        (twoRowFit - (if (plate) PlatePadV else 0.dp) - LargeClockHeight)
+            .coerceIn(if (clockRight) LargeClockTop else LargeClockTopMin, LargeClockTop)
+
+    /** The highest two rows may start: under the large clock's weather line. What does not fit lifts in on the second row ([shelfLift]). */
+    private val twoRowFloor = if (largeClock) clockY + LargeClockHeight + if (plate) PlatePadV else 0.dp else 0.dp
+
+    /**
+     * In two-row mode both rows sit low, laid from the bottom up ([twoRowFit]). In one-row mode, or
+     * when every app fits in one row, the row sits low, with only the top of any second row showing
+     * under the focused app's name. Every name shown changes nothing there: the names fit in the gap
      * between the rows, or on the plate, which grows by [firstGap]. Lifting the row for them as
      * well showed the second row nearly three times as far (issue #540).
      */
     val topRowY = when {
-        !oneRow -> screenH * 0.555f
+        !oneRow -> maxOf(twoRowFit, twoRowFloor)
         peek -> screenH - pitchY - 12.dp - firstGap
         // Nothing peeks under the row, so it goes as low as it fits: the plate as far from the
         // bottom edge as from the sides, or without a plate, room for the focused app's name.
         plate -> screenH - tileH - (PlateMarginBottom + PlatePadV) - firstGap
         else -> screenH - tileH - 70.dp
     }
-
-    /**
-     * Top of the large clock: just under the status pill, left or right, in both layouts, as on the
-     * lock screen. Hung from the row it floated mid-screen in one-row mode and pressed on the plate
-     * in two-row mode; up here the middle of the screen stays the wallpaper's. This is the date's
-     * cap top: the clock's lines are boxed to their capitals.
-     */
-    val clockY = 80.dp
 
     /**
      * Where a row rests once you go down into the grid: the row above stays in view, its top under
@@ -176,14 +224,31 @@ private class GridMetrics(screenW: Dp, screenH: Dp, val columns: Int, oneRow: Bo
     val screenH = screenH
 
     /**
-     * How far Home lifts, still on its shelf, for the second row in two-row mode: enough that the
-     * focused app's name, in the gap under its row, clears the bottom edge.
+     * How far the grid scrolls before the shelf has given way: the clock and the plate fade over
+     * it, the grid's glass comes in, the film stops past half of it. The top row's way up to
+     * [restY], but never less than half a row: two rows four a row sit as high as [restY] or
+     * higher, and at zero or less Home counted as scrolled past the shelf while still on it,
+     * and the aerial film never played.
      */
-    val shelfLift = (topRowY + firstGap + pitchY * 2 + 12.dp - screenH).coerceAtLeast(0.dp)
+    val collapse = (topRowY - restY).coerceAtLeast(pitchY / 2)
+
+    /**
+     * How far Home lifts, still on its shelf, for the second row in two-row mode: what did not fit
+     * under the large clock, so the second row and its names clear the bottom edge. Nothing in
+     * almost every layout; it used to lift whenever a name went under the second row.
+     */
+    val shelfLift = if (oneRow) 0.dp else topRowY - twoRowFit
+
+    /** The rows on the shelf, over the plate: the top row, and in two-row mode the second too. */
+    val shelfRows = if (oneRow) 1 else 2
 
     fun slot(index: Int, onTop: Boolean): Pair<Dp, Dp> {
         val row = index / columns
-        return Pair(margin + pitchX * (index % columns), topRowY + pitchY * row + if (row > 0 && onTop) firstGap else 0.dp)
+        val y = when {
+            row == 1 && onTop && shelfRows > 1 -> topRowY + shelfSecond
+            else -> topRowY + pitchY * row + if (row > 0 && onTop) firstGap else 0.dp
+        }
+        return Pair(margin + pitchX * (index % columns), y)
     }
 
     fun scrollFor(row: Int, rows: Int): Dp {
@@ -458,12 +523,17 @@ fun HomeScreen(
         val plateNames = AerialSettings.showAllNames && AerialSettings.homePlate
         val peek = AerialSettings.peekNextRow
         val hasPlate = AerialSettings.homePlate
-        val metrics = remember(maxWidth, maxHeight, columns, oneRow, plateNames, peek, hasPlate) {
-            GridMetrics(maxWidth, maxHeight, columns, oneRow, plateNames, peek, hasPlate)
+        val largeClock = AerialSettings.largeClock
+        val clockRightNow = AerialSettings.clockRight
+        val metrics = remember(maxWidth, maxHeight, columns, oneRow, plateNames, peek, hasPlate, largeClock, clockRightNow) {
+            GridMetrics(maxWidth, maxHeight, columns, oneRow, plateNames, peek, hasPlate, largeClock, clockRightNow)
         }
-        val collapsePx = with(density) { (metrics.topRowY - metrics.restY).toPx() }
+        val collapsePx = with(density) { metrics.collapse.toPx() }
 
-        val target = with(density) { metrics.scrollFor(if (inGrid) focusedRow else 0, rows).toPx() }
+        // Into the grid as from one row: the first row whole at the top. Two rows go in a row
+        // further down, from the second shelf row to the third, so they scroll a row less; scrolled
+        // for the focused row itself, they opened on the first row cut in half under the pill.
+        val target = with(density) { metrics.scrollFor(if (inGrid) focusedRow - (metrics.shelfRows - 1) else 0, rows).toPx() }
         val lift by animateFloatAsState(
             with(density) { if (focusedRow > 0 && !inGrid) metrics.shelfLift.toPx() else 0f },
             if (reduced) snap() else spring(dampingRatio = 1f, stiffness = 280f), label = "shelf-lift",
@@ -582,12 +652,15 @@ fun HomeScreen(
         ) {
             // The glass plate under the top row (tvOS 26), the row's full width however few apps
             // there are, which sit at its left: sized to three apps it read as a stray panel (#284).
+            // In two rows it holds both: under the top row alone, the second sat beside it on the
+            // bare wallpaper, as if left off the shelf.
             val plate = if (apps.isEmpty() || !AerialSettings.homePlate) null else with(density) {
+                val second = if (metrics.shelfRows > 1) metrics.shelfSecond else 0.dp
                 Rect(
                     (metrics.margin - PlatePadH).toPx(),
                     (metrics.topRowY - PlatePadV).toPx(),
                     (metrics.margin + metrics.pitchX * (columns - 1) + metrics.tileW + PlatePadH).toPx(),
-                    (metrics.topRowY + metrics.tileH + PlatePadV + metrics.firstGap).toPx(),
+                    (metrics.topRowY + metrics.tileH + PlatePadV + metrics.firstGap + second).toPx(),
                 )
             }
             // Another wallpaper chosen: nothing shows through until the new one has a frame.
@@ -672,8 +745,13 @@ fun HomeScreen(
                     )
                 }
 
-                // In one row with no peek, the rows below stay out of sight until Home scrolls to them.
-                val hideBelow = oneRow && !peek
+                // The rows below the shelf stay out of sight until Home scrolls to them: in one row
+                // unless set to peek; in two rows always, as the second row already shows there are more.
+                val hiddenFrom = when {
+                    !oneRow -> columns * 2
+                    !peek -> columns
+                    else -> Int.MAX_VALUE
+                }
                 apps.forEachIndexed { index, app ->
                     key(app.key) {
                         val (x, y) = metrics.slot(index, onTop = !inGrid)
@@ -727,7 +805,7 @@ fun HomeScreen(
                                 // Lifted on the shelf with the plate; the clock above stays put.
                                 .offset { slot.value - IntOffset(0, lift.roundToInt()) }
                                 .then(
-                                    if (hideBelow && index >= columns) Modifier.graphicsLayer {
+                                    if (index >= hiddenFrom) Modifier.graphicsLayer {
                                         alpha = (scroll.value / collapsePx * 2.5f).coerceIn(0f, 1f)
                                         // No offscreen buffer: it would clip the focus frame to the tile.
                                         compositingStrategy = CompositingStrategy.ModulateAlpha
@@ -745,8 +823,8 @@ fun HomeScreen(
                             rowEnd = index % columns == columns - 1 || index == apps.lastIndex,
                             // On the glass plate only with every name shown (an earlier build showed
                             // the focused one alone there, but it sat oddly on the glass).
-                            showName = plate == null || index >= columns || plateNames,
-                            nameOnPlate = plate != null && index < columns,
+                            showName = plate == null || index >= columns * metrics.shelfRows || plateNames,
+                            nameOnPlate = plate != null && index < columns * metrics.shelfRows,
                         )
                     }
                 }
