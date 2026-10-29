@@ -114,7 +114,7 @@ object Diagnostics {
             " WRITE_SETTINGS=${Build.VERSION.SDK_INT < 23 || Settings.System.canWrite(context)}" +
             " install=${Build.VERSION.SDK_INT < 26 || pm.canRequestPackageInstalls()}" +
             " location=${granted(context, Manifest.permission.ACCESS_FINE_LOCATION)}" +
-            " usage=${HomeGuardService.usageStatsAllowed(context)}")
+            " usage=${HomeGuardService.usageStatsAllowed(context)}" + restrictedSettings(context))
         appendLine("ADB         adb_enabled=${global(context, Settings.Global.ADB_ENABLED)} keep_adb=${GuardSetup.keepAdb(context)} guard_off_in_standby=${GuardSetup.offInStandby(context)}")
         appendLine("Screensaver enabled=${secure(context, "screensaver_enabled")} components=${secure(context, "screensaver_components")} Aerial's=${Wallpapers.screensaver}")
         appendLine("Sounds      sound_effects_enabled=${system(context, Settings.System.SOUND_EFFECTS_ENABLED)}")
@@ -216,6 +216,28 @@ object Diagnostics {
         if (Build.VERSION.SDK_INT >= 30) context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
         else context.packageManager.getInstallerPackageName(context.packageName)
     }.getOrNull()
+
+    /**
+     * Android 13+: whether an app installed from a file may switch its accessibility service on
+     * (ACCESS_RESTRICTED_SETTINGS), and where Android says the APK came from. Home Guard kept going
+     * off on two Android 14 TVs that had it denied (issues #811 #829); install.sh allows it.
+     */
+    private fun restrictedSettings(context: Context): String {
+        if (Build.VERSION.SDK_INT < 33) return ""
+        val mode = runCatching {
+            context.getSystemService<android.app.AppOpsManager>()?.unsafeCheckOpNoThrow(
+                "android:access_restricted_settings", android.os.Process.myUid(), context.packageName,
+            )
+        }.getOrNull()
+        val restricted = when (mode) {
+            android.app.AppOpsManager.MODE_ALLOWED -> "allow"
+            android.app.AppOpsManager.MODE_ERRORED, android.app.AppOpsManager.MODE_IGNORED -> "deny"
+            null -> "unknown"
+            else -> "mode $mode"
+        }
+        val source = runCatching { context.packageManager.getInstallSourceInfo(context.packageName).packageSource }.getOrNull()
+        return " restricted_settings=$restricted package_source=${source ?: "unknown"}"
+    }
 
     private fun granted(context: Context, permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
