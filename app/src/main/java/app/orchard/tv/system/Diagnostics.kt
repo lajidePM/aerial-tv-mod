@@ -218,25 +218,16 @@ object Diagnostics {
     }.getOrNull()
 
     /**
-     * Android 13+: whether an app installed from a file may switch its accessibility service on
-     * (ACCESS_RESTRICTED_SETTINGS), and where Android says the APK came from. Home Guard kept going
-     * off on two Android 14 TVs that had it denied (issues #811 #829); install.sh allows it.
+     * Android 13+: where Android says the APK came from. 3 is a local file (a USB stick, a file
+     * manager, Aerial's own update before 1.63): such an app gets ACCESS_RESTRICTED_SETTINGS denied
+     * and may not switch its accessibility service on, and Home Guard kept going off on two Android 14
+     * TVs installed that way (issues #811 #829); install.sh allows it. An app cannot read that op
+     * itself (it came out unknown on Xiaomi MiTV-MFTR0), so `adb shell appops get` tells.
      */
     private fun restrictedSettings(context: Context): String {
         if (Build.VERSION.SDK_INT < 33) return ""
-        val mode = runCatching {
-            context.getSystemService<android.app.AppOpsManager>()?.unsafeCheckOpNoThrow(
-                "android:access_restricted_settings", android.os.Process.myUid(), context.packageName,
-            )
-        }.getOrNull()
-        val restricted = when (mode) {
-            android.app.AppOpsManager.MODE_ALLOWED -> "allow"
-            android.app.AppOpsManager.MODE_ERRORED, android.app.AppOpsManager.MODE_IGNORED -> "deny"
-            null -> "unknown"
-            else -> "mode $mode"
-        }
         val source = runCatching { context.packageManager.getInstallSourceInfo(context.packageName).packageSource }.getOrNull()
-        return " restricted_settings=$restricted package_source=${source ?: "unknown"}"
+        return " package_source=${source ?: "unknown"}"
     }
 
     private fun granted(context: Context, permission: String) =
