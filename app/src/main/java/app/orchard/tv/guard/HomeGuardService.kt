@@ -632,13 +632,21 @@ class HomeGuardService : AccessibilityService() {
         Log.i(TAG, if (want and flag != 0) "filtering keys" else "stopped filtering keys")
     }
 
-    /** Whether a gamepad is connected; see updateKeyFilter. Not the joystick bit: TCL's IR receiver has it. */
+    /**
+     * Whether a gamepad is connected; see updateKeyFilter. Not the joystick bit: TCL's IR receiver has it.
+     * Nor a device named virtual: Sony's voice search device "virtual-search" says it is a gamepad
+     * and not virtual, so keys were never filtered in other apps and the first Home there went to
+     * the stock launcher (BRAVIA 4K GB, Android 9, issue #840, found by the reporter).
+     */
     private var gamepadAttached = false
 
     private fun lookForGamepads() {
         gamepadAttached = runCatching {
             InputDevice.getDeviceIds().any { id ->
-                InputDevice.getDevice(id)?.let { !it.isVirtual && it.supportsSource(InputDevice.SOURCE_GAMEPAD) } == true
+                InputDevice.getDevice(id)?.let {
+                    !it.isVirtual && !it.name.orEmpty().contains("virtual", ignoreCase = true) &&
+                        it.supportsSource(InputDevice.SOURCE_GAMEPAD)
+                } == true
             }
         }.getOrDefault(false)
         updateKeyFilter()
