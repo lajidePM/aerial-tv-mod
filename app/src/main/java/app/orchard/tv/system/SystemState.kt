@@ -754,7 +754,8 @@ object SystemProbe {
      * found port by port; not tried here, and other models may have other ports, so only these.
      * Mi TV 3 (MiTV3, MStar "inception", Android 5.1.1) has the service but lists nothing; 23 and 24
      * are its HDMI 1 and 2 too (L60M4-AA, the reporter of issue #309 switched both with adb; #787
-     * is the same model string with no inputs in its diagnostics).
+     * is the same model string with no inputs in its diagnostics). 25 is its HDMI 3, found by the
+     * reporter of #787 with adb.
      * CLEAR_TOP: a player task left in the background is otherwise only brought to the front, and
      * the new `input` is dropped, so going from one port to the other seemed to do nothing.
      */
@@ -773,7 +774,8 @@ object SystemProbe {
                 .putExtra("input", id)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
         )
-        return listOf(source(23, "HDMI 1", SourceKind.Hdmi), source(24, "HDMI 2", SourceKind.Hdmi))
+        val hdmi = listOf(source(23, "HDMI 1", SourceKind.Hdmi), source(24, "HDMI 2", SourceKind.Hdmi))
+        return if (Build.MODEL == "MiTV3") hdmi + source(25, "HDMI 3", SourceKind.Hdmi) else hdmi
     }
 
     private val XIAOMI_NO_INPUT_MODELS = setOf("MiTV4C", "MiTV3")
