@@ -329,7 +329,9 @@ object Wallpapers {
                 // Frosted from the picture before the home shading: the glass sits low on the
                 // screen, where the shading is darkest, and would read as a grey slab.
                 val frost = picture?.let(Images::frost)
-                picture?.let(Images::shadeForHome) to frost
+                // A film's picture is its frame as it was, as the film is not shaded (HomeBackground).
+                if (wp?.kind == WallpaperKind.Live || wp?.kind == WallpaperKind.Video) picture to frost
+                else picture?.let(Images::shadeForHome) to frost
             }
             backdrop = bmp?.asImageBitmap()
             frosted = frost?.asImageBitmap()
@@ -355,7 +357,9 @@ object Wallpapers {
             WallpaperKind.Video -> if (videoFrameIsOf(wp.id)) videoFrame.lastModified() else 0L
             else -> 0L
         }
-        return "${wp.id}|$stamp|${screenW}x$screenH|${BuildConfig.VERSION_CODE}"
+        // "clear": a film's picture baked unshaded, not one kept from when it was shaded.
+        val film = if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video) "|clear" else ""
+        return "${wp.id}|$stamp|${screenW}x$screenH|${BuildConfig.VERSION_CODE}$film"
     }
 
     /**
@@ -412,7 +416,7 @@ object Wallpapers {
     }
 
     /**
-     * The frame a moving wallpaper film stopped on becomes the wallpaper's picture: shaded, frosted
+     * The frame a moving wallpaper film stopped on becomes the wallpaper's picture: frosted
      * and kept for the next start. Returns once Home has it. [frame] is screen-sized and is used up.
      * It was [atMs] into [film], where the film picks up when it next moves ([liveSpot]).
      */
@@ -425,9 +429,8 @@ object Wallpapers {
         val (bmp, frost) = withContext(Dispatchers.Default) {
             runCatching { (if (isVideo(id)) videoFrame else liveFrame).outputStream().use { frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
                 .onFailure { Log.w(TAG, "could not keep the film's frame", it) }
-            // Frosted before shading, which draws on the frame itself.
-            val frost = Images.frost(frame)
-            Images.shadeForHome(frame) to frost
+            // Not shaded, as the film is not (HomeBackground).
+            Images.frost(frame).let { frost -> frame to frost }
         }
         // The frame is both the film's own card and the card that plays them all in turn.
         synchronized(thumbs) { thumbs.remove(id); if (isVideo(id)) { thumbs.remove(VIDEOS); thumbs.remove(VIDEO_PREFIX + film) } }

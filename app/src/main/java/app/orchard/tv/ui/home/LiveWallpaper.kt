@@ -38,7 +38,6 @@ import app.orchard.tv.wallpaper.AerialStream
 import app.orchard.tv.wallpaper.Aerials
 import app.orchard.tv.wallpaper.Wallpapers
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -123,6 +122,8 @@ fun LiveWallpaper(
     hold: Boolean,
     /** Nothing over Home that blurs it: a stopped film may stand in for its picture. */
     standIn: Boolean,
+    /** A panel is over Home (a menu, Control Center): what it opens on waits for it to be in. */
+    panel: Boolean = false,
     /** A screensaver is up in another format than the film's (Dolby Vision chosen): the TV goes black between them. */
     otherFormatSaver: Boolean,
     live: LiveFilm,
@@ -138,6 +139,7 @@ fun LiveWallpaper(
     val inSaver by rememberUpdatedState(hold && !moving)
     val keepNow by rememberUpdatedState(keep)
     val standInNow by rememberUpdatedState(standIn)
+    val panelNow by rememberUpdatedState(panel)
     val otherFormatNow by rememberUpdatedState(otherFormatSaver)
     // Back from a screensaver in another format: the TV goes black as it changes mode whatever
     // shows, so nothing carries over from it (owner, 2026-10-28). The film comes on fastest, one
@@ -161,13 +163,14 @@ fun LiveWallpaper(
         Wallpapers.dropFilmFrost()
     }
 
-    fun open(): ExoPlayer {
+    /** [atPicture]: from the moment the picture on screen was taken, not where the film was let go. */
+    fun open(atPicture: Boolean = false): ExoPlayer {
         val quality = AerialFormats.forWallpaper(context)
         val overHttp = Build.VERSION.SDK_INT < Build.VERSION_CODES.N
         val all = Aerials.all(context).shuffled()
         // The film the picture on screen came from, at that moment; else one fetched ahead.
         if (fresh) Wallpapers.forgetLeftLiveSpot()
-        val spot = Wallpapers.liveSpot().takeIf { !fresh }
+        val spot = (if (atPicture) Wallpapers.livePictureSpot() else Wallpapers.liveSpot()).takeIf { !fresh }
         fresh = false
         val resume = spot?.let { (id, _) -> all.firstOrNull { it.id == id } }
         val films = if (resume != null) listOf(resume) + (all - resume) else AerialStream.withOpenerFirst(context, all, quality)
@@ -209,14 +212,14 @@ fun LiveWallpaper(
     /**
      * The film was let go at [left], past its picture (Wallpapers.leftLiveSpot): the key frame
      * there becomes the picture, so Home does not show the same one every time, and the picture is
-     * again the frame the film starts from. Not once the film shows over it: where the film stops
-     * gives a frame of its own.
+     * again the frame the film starts from. Not once the film shows over it, unless [underFilm]:
+     * the film playing from the picture's moment hides the picture changing beneath it.
      */
-    suspend fun catchUp(left: Pair<String, Long>) {
+    suspend fun catchUp(left: Pair<String, Long>, underFilm: Boolean = false) {
         val frame = withTimeoutOrNull(CATCH_UP_MS) {
             reader.frame(left.first, left.second, Wallpapers.screenW, Wallpapers.screenH, exact = false, nearest = true)
         } ?: return
-        if (cover.value > 0f || Wallpapers.leftLiveSpot() != left) return
+        if ((cover.value > 0f && !underFilm) || Wallpapers.leftLiveSpot() != left) return
         DiagLog.i("wallpaper picture catches up with where the film was let go")
         Wallpapers.useLiveFrame(frame, left.first, left.second)
     }
@@ -251,10 +254,16 @@ fun LiveWallpaper(
     LaunchedEffect(play) {
         live.stopped = false
         if (play) {
-            // Opened anew where it was let go: the picture catches up to that moment while the
-            // film loads, so the film comes in over the same shot, as from any stopped frame.
-            val caughtUp = if (player == null && !fresh) Wallpapers.leftLiveSpot()?.let { left -> async { catchUp(left) } } else null
-            val p = player ?: open().also { player = it }
+            // Let go past its picture (into an app), it opens anew from the picture's own moment,
+            // so it comes in over the same shot; the picture catches up to where it was let go
+            // later, under the moving film (below), and the next start goes on from there. The
+            // picture used to catch up first: back from an app, Home sat still for about 3 s with
+            // two changes in it, the picture's jump and the film's fade, the decode from Apple's
+            // file holding the film's own loading back. Opened from where it was let go with no
+            // catching up, it came in sooner over another shot, which looked wrong (the owner,
+            // Xiaomi MiTV-MFTR0).
+            val left = if (player == null && !fresh) Wallpapers.leftLiveSpot() else null
+            val p = player ?: open(atPicture = left != null).also { player = it }
             DiagLog.i("wallpaper film starts (state ${p.playbackState}, ${p.currentMediaItem?.mediaId} at ${p.currentPosition} ms)")
             // It moves on from the frame the picture is: that picture's glass until the first sample.
             Wallpapers.dropFilmFrost()
@@ -262,9 +271,12 @@ fun LiveWallpaper(
             if (p.playbackState == Player.STATE_IDLE) p.prepare()
             p.playWhenReady = true
             snapshotFlow { showing }.first { it }
-            caughtUp?.await()
             DiagLog.i("wallpaper film moving")
             cover.animateTo(1f, tween(1200, easing = Motion.EaseOut))
+            if (left != null) {
+                delay(CATCH_UP_UNDER_FILM_MS)
+                catchUp(left, underFilm = true)
+            }
         } else {
             val p = player ?: return@LaunchedEffect
             // Into the screensaver or an app: no frame to take, and the decoder is needed elsewhere.
@@ -294,6 +306,12 @@ fun LiveWallpaper(
                 glassSample = null
                 var frame = if (pixelCopy == false) null else surface?.let { capture(it) }
                 if (frame == null && film != null) {
+                    // Stopped by a panel opening: decoded once the panel is in. Read from Apple and
+                    // decrypted in this process (the media server's reads come through its binder
+                    // threads), it took a third of the app's CPU in the menu's first 1.5 s (Xiaomi
+                    // MiTV-MFTR0). An open panel keeps the glass it opened with (liquidGlass), so
+                    // nothing waits on it there; the grid's glass does, and the grid has no wait.
+                    if (panelNow) delay(PANEL_IN_MS)
                     if (!live.stopped) reader.frame(film, at, 320, 180, exact = false)?.let {
                         Wallpapers.useLiveFrost(it)
                         glassReady(live)
@@ -353,7 +371,7 @@ fun LiveWallpaper(
             // Let go while it showed: the picture comes back before the film does.
             if (player == null) cover.snapTo(0f)
             // Back on Home off the shelf, with the film let go past its picture: the picture
-            // catches up now. On the shelf the film's own start does it.
+            // catches up now. On the shelf the film comes in over the picture as it is (above).
             if (!play && !fresh) Wallpapers.leftLiveSpot()?.let { catchUp(it) }
         } else if (cover.value > 0f && !otherFormatNow) {
             // Let go into a screensaver of its own: the picture, of an earlier moment and maybe
@@ -426,6 +444,9 @@ private var copySlow = false
 
 private const val COPY_SLOW_MS = 150L
 
+/** The longest a panel takes to come in (Personalize's sheet, 380 ms), and a little more. */
+private const val PANEL_IN_MS = 450L
+
 /** Whether PixelCopy read the film in this process; null until it has been tried. */
 private var pixelCopy: Boolean? = null
 
@@ -448,6 +469,9 @@ private const val SAME_SHOT_MS = 30_000L
 
 /** How long the film waits for its picture to catch up before it shows anyway (MFTR0: 1.4-3.5 s). */
 private const val CATCH_UP_MS = 5_000L
+
+/** How long the film has moved before its picture catches up beneath it: its own start is done. */
+private const val CATCH_UP_UNDER_FILM_MS = 5_000L
 
 /** How long Home stays black for the film after a screensaver in another format before showing the picture. */
 private const val FRESH_WAIT_MS = 4_000L
