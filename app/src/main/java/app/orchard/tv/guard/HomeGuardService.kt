@@ -632,13 +632,21 @@ class HomeGuardService : AccessibilityService() {
         Log.i(TAG, if (want and flag != 0) "filtering keys" else "stopped filtering keys")
     }
 
-    /** Whether a gamepad is connected; see updateKeyFilter. Not the joystick bit: TCL's IR receiver has it. */
+    /**
+     * Whether a gamepad is connected; see updateKeyFilter. Not the joystick bit: TCL's IR receiver has it.
+     * Nor a device named virtual: Sony's voice search device "virtual-search" says it is a gamepad
+     * and not virtual, so keys were never filtered in other apps and the first Home there went to
+     * the stock launcher (BRAVIA 4K GB, Android 9, issue #840, found by the reporter).
+     */
     private var gamepadAttached = false
 
     private fun lookForGamepads() {
         gamepadAttached = runCatching {
             InputDevice.getDeviceIds().any { id ->
-                InputDevice.getDevice(id)?.let { !it.isVirtual && it.supportsSource(InputDevice.SOURCE_GAMEPAD) } == true
+                InputDevice.getDevice(id)?.let {
+                    !it.isVirtual && !it.name.orEmpty().contains("virtual", ignoreCase = true) &&
+                        it.supportsSource(InputDevice.SOURCE_GAMEPAD)
+                } == true
             }
         }.getOrDefault(false)
         updateKeyFilter()
@@ -1167,8 +1175,13 @@ class HomeGuardService : AccessibilityService() {
 
         /** VIDAA's assistant and its launcher (聚好看), on the two VIDAA builds reported (issues #7, #40). */
         private val VIDAA_PACKAGES = listOf("com.hisense.vidaaassistant", "com.jamdeo.tv.vod")
-        /** The apps that play the TV's inputs (SystemProbe's TCL, Xiaomi and Skyworth routes). */
-        private val INPUT_PLAYERS = setOf("com.tcl.tv", "com.xiaomi.mitv.tvplayer", "com.skyworth.tv")
+        /**
+         * The apps that play the TV's inputs (SystemProbe's TCL, Xiaomi and Skyworth routes).
+         * HiSilicon's TV player declares a TV_HOME category and plays the input picked in Coocaa's
+         * source dialog: taken for the stock launcher, it was closed half a second after every
+         * switch to HDMI (Coocaa C10 projector 3H352_C10, Android 9, issue #779, with the log).
+         */
+        private val INPUT_PLAYERS = setOf("com.tcl.tv", "com.xiaomi.mitv.tvplayer", "com.skyworth.tv", "com.hisilicon.tvui")
         /**
          * Packages that declare Home but are no launcher to keep away. LeTV's app daemon shows its
          * DaemonActivity on the way into apps, and every app the viewer opened was taken back

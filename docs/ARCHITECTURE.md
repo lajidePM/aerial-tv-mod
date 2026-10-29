@@ -251,7 +251,7 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
   - 锁定期间只记窗口，不启动界面、不拦 HOME；凭据加密存储里的偏好（keep_adb、屏保）解锁后再读
   - ACTION_USER_UNLOCKED → 1.5 秒后按下面的规则接管。TCL 75S365C 上从解锁到 Aerial 7.6 秒 → 约 2 秒
 运行：HomeGuardService
-  - onKeyEvent(HOME) → 不是默认桌面时吞掉按键，打开 Aerial（Android 11 及以下一直开着按键过滤，见 filterKeys；接着手柄 `SOURCE_GAMEPAD` 且前台是别的 App 时不过滤，#774：过滤时每个手柄事件都要经 system_server 主线程重新注入，MFTR0 安卓 11 串流时卡死重启。不看 joystick 位：TCL MT5879 的红外接收器带这一位）
+  - onKeyEvent(HOME) → 不是默认桌面时吞掉按键，打开 Aerial（Android 11 及以下一直开着按键过滤，见 filterKeys；接着手柄 `SOURCE_GAMEPAD` 且前台是别的 App 时不过滤，#774：过滤时每个手柄事件都要经 system_server 主线程重新注入，MFTR0 安卓 11 串流时卡死重启。不看 joystick 位：TCL MT5879 的红外接收器带这一位；名字里带 virtual 的设备也不算，索尼的语音搜索设备 `virtual-search` 自称手柄，#840）
   - 守护「聋」了（#651）：重启无障碍在安卓 6 以上改成把 Aerial 从列表拿出再放回（只改 `accessibility_enabled` 不会重新绑定）；发现聋之后，按主页键起每 150 ms 查一次用量统计，直到收到窗口事件。开机复查时最后看到的窗口如果是负优先级的 HOME（开机向导、FallbackHome，`fallbackHomes`），当作前台未知，问用量统计（#701）
   - TYPE_WINDOW_STATE_CHANGED → 原桌面的 HOME Activity 到前台 → 打开 Aerial
   - 亮屏、开机、复活、解锁 → 等 1.5 秒，前台还是原桌面（或者不知道）才打开 Aerial（takeOverOnceSettled）。
@@ -263,15 +263,23 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
   → GuardSetup.ensureEnabled() → 守护重新启用 → onServiceConnected 判断为「刚被复活」→ 打开 Aerial
 ```
 
+通知服务的启动恢复不只依赖 `onListenerConnected`：`RevivalListener.onCreate` 也启动有限次数的检查，在服务创建后约 5、10、20、35、65、125 秒检查用户是否解锁、守护是否绑定，最后再等 5 秒确认。已绑定就停止；尚未解锁只等待，不读凭据存储；解锁广播即使丢失也会由下一次检查发现。重绑复用 `GuardSetup.rebindIfStalled`，保留其他无障碍服务，并遵守 `guard_off_in_standby`。窗口耗尽后不再轮询；较晚才收到解锁或通知连接回调时可以启动新窗口。服务销毁取消尚未执行的检查。
+
+`GuardSetup.ensureEnabled` 在确认户主已授予 `WRITE_SECURE_SETTINGS` 后，也会清除 Aerial 自己的 `BootReceiver` 禁用覆盖（不是修改别人的组件）。组件覆盖会跨 APK 更新保留；Android 8 的 ADB shell 不能改普通应用的单个组件，由应用自己恢复。恢复过程进 `DiagLog`；`adb shell dumpsys activity service app.orchard.tv/.guard.RevivalListener` 也打印重试状态和内存诊断，避免只能在首页已经打开后才能取日志。
+
 `allowStockLauncher`：用户从网格里主动打开原桌面时，1 小时内不拦截。
 
-电视的播放器（`com.tcl.tv`、`com.xiaomi.mitv.tvplayer`）即使声明了 HOME，也不算原桌面，除非它就是系统解析出来的 HOME：TCL 85G60E 把 `com.tcl.tv` 列为 HOME，每次切信号源都被守护当成原桌面拉回（#223，用户日志；家里的 TCL MT5879 没有这个 HOME，没有真机验证）。
+电视的播放器（`com.tcl.tv`、`com.xiaomi.mitv.tvplayer`、`com.skyworth.tv`，以及海思的 `com.hisilicon.tvui`：它声明 `TV_HOME`，酷开 C10 从固件信号源选择器切 HDMI 后被拉回，#779）即使声明了 HOME，也不算原桌面，除非它就是系统解析出来的 HOME：TCL 85G60E 把 `com.tcl.tv` 列为 HOME，每次切信号源都被守护当成原桌面拉回（#223，用户日志；家里的 TCL MT5879 没有这个 HOME，没有真机验证）。
 
 **只装了 APK 的电视**（U 盘、应用商店，#207 #213）：1.32 起 `MainActivity` 也声明 `CATEGORY_LAUNCHER`，国内电视的「我的应用」大多只列这种，以前装完找不到图标。打开后没有 `WRITE_SECURE_SETTINGS`（只有 install.sh 会授权）、桌面状态又是「尚未设为默认桌面」时，4 秒后自动打开一次控制中心的「设为主屏幕」页（`CcPage.Setup`，`settings` 的 `setup_offered` 记住），以后从控制中心底部进去。页上按电视有没有这些设置页显示：无障碍（手动打开桌面守护，小米 MFTR0 有，TCL MT5879 没有）、默认桌面（只有 standard 版；小米会忽略）、通知使用权（待机被杀后复活），以及二维码：打开 `site/update/#setup=1`，给出这台电视的安装命令和 Agent 提示词。Google TV 模拟器（Android 13）上验证过自动弹出和跳到无障碍设置。
 
 ## 系统能力（system/）
 
 - **信号源**：`TvInputManager` 列出直通输入和调谐器。装了 `com.xiaomi.mitv.tvplayer` 的走小米的 Intent（HDMI 的 `input = HW 编号 + 18`，AV=2，ATV/DTMB 各自的 Activity），否则走 `TvContract` 的通用 URI。CEC 子输入的名字用于显示设备名，`Playback_1` 这类通用名会被过滤。`DeviceProfile` 存放按机型的修正，见下面「机型修正」。
+- **网络设置入口**：海信的 `com.android.tv.settings/com.hisense.systemsettings.MainActivity`
+  存在、启用且导出时，优先用 `ACTION_WIFI_SETTINGS` 打开海信自己的 Wi-Fi 页，避开固件残留的
+  Android TV 网络页（#760，H55E9A / Android 8）。其他电视的原有候选顺序和完整版的失败回退不变，
+  Lite 同步这个入口；验证边界见 `docs/devices/hisense-vidaa.md`。
 - **音量**：`AudioManager` 的 STREAM_MUSIC；TCL 必须加 `FLAG_SHOW_UI`（否则不会写入功放）。
 - **亮度**：见 `Brightness.kt` 的注释（小米 / 标准 / TCL 面板三种）。
 - **设置入口**：优先厂商自己的设置（小米 `com.xiaomi.mitv.settings`）。有的厂商的完整设置是服务弹出的面板，先按服务启动：极米 `SettingService`、康佳 `com.konka.service.SettingService` + `SETTING_MAIN_VIEW`（#771，只在服务导出时用，失败退回 Activity）。
