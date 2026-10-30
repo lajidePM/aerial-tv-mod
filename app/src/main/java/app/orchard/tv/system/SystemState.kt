@@ -445,10 +445,11 @@ object SystemProbe {
             context.startActivity(
                 firstResolvable(
                     context,
-                    Intent(Settings.ACTION_DISPLAY_SETTINGS),
-                    // Older Coocaa (Tianci, 5S09_A3, MStar, Android 6): picture and sound, its
-                    // backlight slider first; opened by component on the TV (issue #895).
+                    // Older Coocaa (Tianci, MStar, Android 6: 5S09_A3, 6S58_K6S): picture and sound,
+                    // its brightness one step in; opened by component on the TV (issue #895). Before
+                    // the display action, which those TVs answer with the settings' main page.
                     Intent(Intent.ACTION_MAIN).setComponent(TIANCI_PICTURE),
+                    Intent(Settings.ACTION_DISPLAY_SETTINGS),
                     // PPTV K55U27: picture and sound, where its brightness is (issue #264).
                     Intent("com.pptv.intent.action.PICTUREAUDIO_ACTIVITY")
                         .setComponent(ComponentName("com.pptv.setting", "com.pptv.setting.media.PictureAudioSettingActivity")),

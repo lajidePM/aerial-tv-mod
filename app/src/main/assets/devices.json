@@ -50,8 +50,8 @@
       "ignoresPictureBacklight": true
     },
     {
-      "models": ["5S09_A3"],
-      "note": "Coocaa (Tianci, MStar maserati, Android 6): screen_brightness moves mActualBacklight but not the panel; the backlight is in com.tianci.setting's picture page (#895, the owner watched the TV).",
+      "models": ["5S09_A3", "6S58_K6S"],
+      "note": "Coocaa (Tianci, MStar maserati, Android 6): screen_brightness moves mActualBacklight but not the panel; the backlight is in com.tianci.setting's picture page (#895, the owner watched the TV; 6S58_K6S, Android 6, the same, slider 5 -> 95 changed nothing).",
       "ignoresScreenBrightness": true
     },
     {
