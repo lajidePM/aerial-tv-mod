@@ -193,6 +193,14 @@ class HomeGuardService : AccessibilityService() {
         goHome()
     }
 
+    /** Whether usage stats, where Aerial may read them, show a stock launcher in front now. */
+    private fun stockLauncherByUsageStats(): Boolean {
+        if (!usageStatsAllowed(this)) return false
+        val pkg = foreground()?.first?.first ?: return false
+        if (stockHomes.isEmpty()) refreshStockHomes()
+        return pkg in stockHomes
+    }
+
     /** The usage-stats time of the move to the front the foreground check last answered. */
     private var foregroundTakenAt = Long.MIN_VALUE / 2
 
@@ -487,7 +495,18 @@ class HomeGuardService : AccessibilityService() {
         // launcher showed at boot. CEC is safe the same way it was: the take-over only acts when a
         // stock home is still in front when it fires, so an input the firmware has already switched
         // to is left alone; the input-switch pass-through below keeps its own longer settle.
-        val fastBootTakeOver = GuardSetup.isUserUnlocked(this) &&
+        // Killed by the firmware in the first minutes after boot while the viewer was in an app,
+        // and bound again in a new process: the boot take-over pulled Aerial over the video (OPPO
+        // K9, Android 9, low RAM: com.heytap.tvapiservice stopped Aerial 4 s after an app opened,
+        // the sync revival brought it back 15 s later; issue #989, the reporter's log). Aerial's
+        // own record of this boot says an app was in front; usage stats, where they show the stock
+        // launcher, still win.
+        val appLeftInFront = GuardSetup.isUserUnlocked(this) && SystemClock.elapsedRealtime() < BOOT_WINDOW_MS && !justUpdated() &&
+            GuardSetup.homeInFrontThisBoot(this) == false &&
+            (Build.VERSION.SDK_INT < 24 || SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime() < 60_000) &&
+            !stockLauncherByUsageStats()
+        if (appLeftInFront) DiagLog.i("guard: bound again soon after boot with an app in front when Aerial died; leaving it")
+        val fastBootTakeOver = !appLeftInFront && GuardSetup.isUserUnlocked(this) &&
             SystemClock.elapsedRealtime() < BOOT_WINDOW_MS &&
             getSystemService<PowerManager>()?.isInteractive == true
         if (fastBootTakeOver) {
@@ -561,7 +580,7 @@ class HomeGuardService : AccessibilityService() {
         // Not gated on being the default Home: Skyworth/Coolita (8R145, Android 11) starts its own
         // launcher at boot whatever Home resolves to (issue #43). The take-over looks first, and
         // bringing Aerial back over itself changes nothing.
-        if (!fastBootTakeOver &&
+        if (!fastBootTakeOver && !appLeftInFront &&
             (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS || revived || diedInFront) &&
             getSystemService<PowerManager>()?.isInteractive == true
         ) {
