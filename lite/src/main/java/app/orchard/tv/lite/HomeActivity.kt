@@ -105,6 +105,9 @@ class HomeActivity : Activity(), HomeView.Host {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideBars()
+        // A window of the TV's over the screensaver: one of its own keys was pressed, whose lift
+        // then went to that window (Coocaa C10's hotkey popup, issue #915; as in the full app).
+        if (!hasFocus && resumed && saver != null) hideSaver()
     }
 
     /**

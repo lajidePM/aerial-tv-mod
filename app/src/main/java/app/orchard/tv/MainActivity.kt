@@ -485,6 +485,14 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         DiagLog.i("window focus $hasFocus")
+        // A window of the TV's over Aerial's screensaver, still resumed beneath it: a key of the
+        // firmware's own was pressed. Coocaa C10's hotkey popup sometimes took focus before the
+        // key's lift reached Aerial, and the screensaver went on under it (issue #915, the
+        // reporter's WindowManager log).
+        if (!hasFocus && vm.resumed && vm.screensaverVisible) {
+            DiagLog.i("a window came over the screensaver; ending it")
+            hideScreensaver()
+        }
     }
 
     override fun dump(prefix: String, fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
@@ -530,7 +538,7 @@ class MainActivity : ComponentActivity() {
         // which the wallpaper does not play (AerialFormats.screensaverCarriesWallpaper).
         val carry = Wallpapers.selectedId == Wallpapers.LIVE && Wallpapers.screensaver == ScreensaverMode.Aerial &&
             AerialFormats.screensaverCarriesWallpaper(this)
-        if (!carry && !dreamFails && SystemScreensaver.isAerials(this)) {
+        if (!carry && !dreamFails(this) && SystemScreensaver.isAerials(this)) {
             // The dream's film needs the decoder the wallpaper's holds: TCL MT5879 failed Dolby
             // Vision beside it and the dream fell back to 4K HEVC.
             LiveFilm.onHome?.letDecoderGo()
@@ -559,10 +567,15 @@ class MainActivity : ComponentActivity() {
      * wallpaper's film let go for nothing.
      */
     private var dreamAskedAt = Long.MIN_VALUE / 2
+    private var dreamChecking = false
     private val dreamCheck = Runnable {
+        dreamChecking = false
         // Up to Android 10 the dream is a window over Home, which stays resumed: the focus says.
-        if (!vm.resumed || !hasWindowFocus()) return@Runnable
-        dreamFails = true
+        if (!vm.resumed || !hasWindowFocus()) {
+            noteDreamShown(this@MainActivity)
+            return@Runnable
+        }
+        noteDreamFails(this)
         DiagLog.i("the system's dream did not show; Aerial's own screensaver instead")
         LiveFilm.onHome?.goOn()
         startScreensaver(asked = false)
@@ -800,7 +813,10 @@ class MainActivity : ComponentActivity() {
         idleHandler.removeCallbacks(endHomeBounce)
         vm.homeBounce = false
         DiagLog.i("onResume; screensaver after ${idleBeforeScreensaver() / 1000} s")
-        if (SystemClock.uptimeMillis() - dreamAskedAt < 1_000) idleHandler.postDelayed(dreamCheck, 1_500)
+        if (SystemClock.uptimeMillis() - dreamAskedAt < 1_000) {
+            dreamChecking = true
+            idleHandler.postDelayed(dreamCheck, 1_500)
+        }
         restartIdleTimer()
         GuardSetup.setHomeInFront(this, true)
         HomeGuardService.onAerialResumed()
@@ -840,6 +856,9 @@ class MainActivity : ComponentActivity() {
         }
         idleHandler.removeCallbacks(showScreensaver)
         idleHandler.removeCallbacks(dreamCheck)
+        // From Android 11 the dream is an activity: paused while waiting for it, it showed.
+        if (dreamChecking) noteDreamShown(this)
+        dreamChecking = false
         hideScreensaver()
     }
 
@@ -940,8 +959,35 @@ class MainActivity : ComponentActivity() {
          */
         private const val SAVER_AHEAD_MS = 8_000L
 
-        /** The system's dream did not show when asked (see dreamCheck); for this process. */
-        private var dreamFails = false
+        /**
+         * The system's dream did not show when asked (see dreamCheck): for the rest of the process,
+         * and from the second time on this firmware build also for later ones. Known only for the
+         * process, every first screensaver after Aerial restarted waited on a dream that never came
+         * and showed black meanwhile (Coocaa C10, Android 9, issue #915). Twice, so that one slow
+         * start does not give up a dream that works; a dream that shows, or a firmware update,
+         * starts the count again.
+         */
+        private var dreamFailsNow = false
+
+        private fun dreamFails(context: Context): Boolean = dreamFailsNow || dreamFailCount(context) >= 2
+
+        private fun dreamFailCount(context: Context): Int {
+            val prefs = context.getSharedPreferences("system", MODE_PRIVATE)
+            return if (prefs.getString(DREAM_FAILS_ON, null) == Build.FINGERPRINT) prefs.getInt(DREAM_FAILS, 0) else 0
+        }
+
+        private fun noteDreamFails(context: Context) {
+            dreamFailsNow = true
+            context.getSharedPreferences("system", MODE_PRIVATE).edit()
+                .putString(DREAM_FAILS_ON, Build.FINGERPRINT).putInt(DREAM_FAILS, dreamFailCount(context) + 1).apply()
+        }
+
+        private fun noteDreamShown(context: Context) {
+            if (dreamFailCount(context) > 0) context.getSharedPreferences("system", MODE_PRIVATE).edit().remove(DREAM_FAILS).apply()
+        }
+
+        private const val DREAM_FAILS_ON = "dream_fails_on"
+        private const val DREAM_FAILS = "dream_fails"
 
         /** See handOverToFirmwareFallbackHome; for this process. */
         private var handedOverAtBoot = false
