@@ -825,6 +825,11 @@ class MainActivity : ComponentActivity() {
         HomeGuardService.onAerialResumed()
         Updates.onHomeResumed()
         vm.refreshSystem()
+        if (!resumedInProcess) {
+            resumedInProcess = true
+            val age = if (Build.VERSION.SDK_INT >= 24) SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime() else -1L
+            if (BootOpen.dueAfterColdWake(this, age)) openBootSource("first in front after a cold wake")
+        }
         // Back in front by any route (Home was handled in onNewIntent, which runs first; Back from
         // the app lands here directly), so the next Home press is a Home-on-Home again.
         openedAppSinceHome = false
@@ -991,6 +996,9 @@ class MainActivity : ComponentActivity() {
 
         private const val DREAM_FAILS_ON = "dream_fails_on"
         private const val DREAM_FAILS = "dream_fails"
+
+        /** Whether Home has been resumed in this process yet (BootOpen.dueAfterColdWake). */
+        private var resumedInProcess = false
 
         /** See handOverToFirmwareFallbackHome; for this process. */
         private var handedOverAtBoot = false

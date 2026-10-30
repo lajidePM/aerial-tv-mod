@@ -40,6 +40,19 @@ object BootOpen {
         }
     }
 
+    /**
+     * Whether the TV has been to standby since the target was last opened, for a process that
+     * started just now. Xiaomi stops Aerial during standby and starts it cold on the wake, so the
+     * screen-on broadcast and Home Guard's EXTRA_WOKE were both missed and the target stayed shut
+     * (MiTV-MFTR0, Android 14, PR #927 by xutaocn; MiTV-ASTP0, Android 9, issue #964). Only the
+     * process's first time in front: Back from an app opened after the wake does not open it again.
+     */
+    fun dueAfterColdWake(context: Context, processAgeMs: Long): Boolean {
+        if (processAgeMs !in 0..COLD_WAKE_MS) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return sleptSince(prefs.getLong(OPENED_ASLEEP, -1L), asleep())
+    }
+
     /** Whether the target was opened in this boot within the last [ms]. */
     fun openedWithin(context: Context, ms: Long): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -72,4 +85,7 @@ object BootOpen {
 
     private const val SAME_BOOT_SLACK_MS = 2 * 60 * 1000L
     private const val SLEPT_MS = 30_000L
+
+    /** A wake on MiTV-MFTR0 took up to 2 minutes to bring Aerial's process up (PR #927). */
+    private const val COLD_WAKE_MS = 3 * 60 * 1000L
 }
