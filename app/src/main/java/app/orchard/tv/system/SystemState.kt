@@ -778,10 +778,12 @@ object SystemProbe {
      * nothing; 23–25 are its HDMI 1–3 (#309, #787, switched with adb by the reporters). Mi TV 2
      * (MiTV2-55, MStar, Android 5.1.1) the same: 23 opened HDMI 1, 24 and 25 were accepted (#599).
      * Mi TV 4 on firmware 20.3.6 (MiTV4-ANSM0, Amlogic, Android 6.0.1) lists only its ATV and DTV
-     * tuners (#874); the device profile's numbers come first where it has them, then the player's
-     * hdmiN_order where the firmware has one (PR #571), else 23 counts up from HDMI 1 as on the
-     * others. Not on boxes, which have
-     * no HDMI inputs, and only for the ports the TV can have: two on MiTV4C, three elsewhere.
+     * tuners (#874); the device profile's numbers come first where it has them, else 23 counts up
+     * from HDMI 1 as on the others. Not the player's hdmiN_order: it numbers droidlogic's ports
+     * (HdmiNInputService), which run the other way round from the panel's on Mi TV 4 boards, so
+     * hdmi1_order was 25 and the tile for HDMI 1 opened HDMI 3 (20.3.9.2061, #874; 22.8.15, #923).
+     * Not on boxes, which have no HDMI inputs, and only for the ports the TV can have: two on
+     * MiTV4C, three elsewhere.
      * CLEAR_TOP: a player task left in the background is otherwise only brought to the front, and
      * the new `input` is dropped, so going from one port to the other seemed to do nothing.
      */
@@ -793,12 +795,9 @@ object SystemProbe {
         val ports = if (Build.MODEL == "MiTV4C") 2 else 3
         val profile = DeviceProfile.current(context)
         return (1..ports).map { port ->
-            // A profile that names the port and its number wins over hdmiN_order: on Mi TV 4
-            // firmware 22.8 and later hdmiN_order follows droidlogic's port numbers, which run the
-            // other way round, so hdmi1_order is 25 and HDMI 1 opened HDMI 3 (22.8.15.3312, #923).
             val known = profile.labels.entries.firstOrNull { it.value == "HDMI $port" }
                 ?.let { profile.xiaomiSourceIds[it.key] }
-            val input = known ?: xiaomiConfiguredSource("HDMI $port") ?: (22 + port)
+            val input = known ?: (22 + port)
             TvSource(
                 // The id home-screen tiles keep: the player's number, as in 1.68.
                 id = "xiaomi:$input",
