@@ -946,9 +946,16 @@ class HomeGuardService : AccessibilityService() {
      * front under it (MiTV4-ANSM0, Android 6.0.1; the reporter closed it with this broadcast, issue
      * #471). Apps may send it up to Android 11 only; from 12 keys are filtered only in Aerial.
      * The guard's own homeKey receiver ignores it: Aerial was brought back just before.
+     * Only where Xiaomi's settings app is: firmwares that clear apps on a Home press listen for
+     * it, and Dangbei H3S (RK3566, Android 11) stopped Aerial itself on it, so its Home press
+     * ended on Dangbei's launcher (issue #849, the broadcast alone sent from adb did it).
      */
+    private val closesXiaomiPanel by lazy {
+        runCatching { packageManager.getPackageInfo("com.xiaomi.mitv.settings", 0) }.isSuccess
+    }
+
     private fun closeSystemDialogs() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S || !closesXiaomiPanel) return
         @Suppress("DEPRECATION")
         runCatching { sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS).putExtra("reason", "homekey")) }
             .onFailure { Log.w(TAG, "could not close the system dialogs", it) }
