@@ -40,6 +40,13 @@ object BootOpen {
         }
     }
 
+    /** Whether the target was opened in this boot within the last [ms]. */
+    fun openedWithin(context: Context, ms: Long): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val opened = prefs.getLong(OPENED_ELAPSED, -1L)
+        return opened >= 0 && thisBoot(opened, prefs.getLong(OPENED_BOOT, 0L)) && SystemClock.elapsedRealtime() - opened < ms
+    }
+
     /** How long this boot has spent suspended: uptime stops in deep sleep, elapsed time does not. */
     private fun asleep(): Long = SystemClock.elapsedRealtime() - SystemClock.uptimeMillis()
 

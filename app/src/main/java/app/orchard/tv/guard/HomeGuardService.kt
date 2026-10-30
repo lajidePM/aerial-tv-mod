@@ -157,6 +157,13 @@ class HomeGuardService : AccessibilityService() {
             if (cls !in stockHomes[pkg].orEmpty() && !bootCover) return
             foregroundTakenAt = at
             if (SystemClock.uptimeMillis() - broughtBackAt < 1_000) return
+            // PatchWall's boot screen comes up seconds after what the TV starts on was opened (DTV,
+            // 5 s later, MiTV4A, Android 6.0.1, issue #963's log): back to that, not Aerial's Home.
+            if (bootCover && BootOpen.openedWithin(this@HomeGuardService, BOOT_TARGET_COVER_MS)) {
+                Log.i(TAG, "stock launcher's boot screen over what the TV starts on; opening that again")
+                goHome(reopenBoot = true)
+                return
+            }
             Log.i(TAG, "stock launcher $pkg in front by usage stats; bringing Aerial back")
             val woke = SystemClock.elapsedRealtime() - screenOnAt < WAKE_WINDOW_MS
             if (!woke && homeKeyReachesAerial && isDefaultHome() && pressHomeForStock()) {
@@ -1205,7 +1212,7 @@ class HomeGuardService : AccessibilityService() {
         return performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
-    private fun goHome(woke: Boolean = false) {
+    private fun goHome(woke: Boolean = false, reopenBoot: Boolean = false) {
         if (!GuardSetup.isUserUnlocked(this)) return
         // Starting an activity can light the screen: on OPPO K9 the TV came back on by itself a few
         // seconds into standby (issue #22). The screen-on check takes over at wake instead.
@@ -1222,7 +1229,10 @@ class HomeGuardService : AccessibilityService() {
         }
         broughtBackAt = SystemClock.uptimeMillis()
         runCatching {
-            startActivity(MainActivity.bringBackIntent(this).putExtra(MainActivity.EXTRA_WOKE, woke))
+            startActivity(
+                MainActivity.bringBackIntent(this).putExtra(MainActivity.EXTRA_WOKE, woke)
+                    .putExtra(MainActivity.EXTRA_REOPEN_BOOT, reopenBoot),
+            )
         }.onFailure { Log.w(TAG, "could not bring Aerial Home to the front", it) }
     }
 
@@ -1230,6 +1240,7 @@ class HomeGuardService : AccessibilityService() {
         private const val TAG = "AerialGuard"
         private const val BOOT_WINDOW_MS = 3 * 60 * 1000L
         private const val HOME_KEY_CHECK_MS = 1500L
+        private const val BOOT_TARGET_COVER_MS = 30_000L
         private const val SETTLE_MS = 1500L
         private const val BOOT_STOCK_CAP_MS = 20_000L
         private const val WAKE_WINDOW_MS = 15_000L
