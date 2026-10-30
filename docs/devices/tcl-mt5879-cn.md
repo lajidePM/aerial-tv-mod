@@ -14,7 +14,7 @@
 | 策略 | 作用 |
 |---|---|
 | `PmStrategy` | 通过安装标志识别 ADB / pm 安装，**一律拒绝** |
-| `LauncherStrategy` | APK 声明了 MAIN + HOME，签名就必须和 `com.tcl.cyberui` 或平台签名一致，否则拒绝 |
+| `LauncherStrategy` | APK 声明了 MAIN + HOME 时：包名在云端白名单里就放行；否则签名要和**当前默认桌面**一致（没有默认桌面时比 `com.tcl.cyberui`），并且带 `meta-data com.tcl.app.type = com.tcl.ui`，两条都满足才放行（见下） |
 | `ThridStrategy` | 只放行由系统应用或 `com.android.packageinstaller` 发起的「显式安装」 |
 | `BlackStrategy` / `OverDueStrategy` / `SafeStrategy` | 黑名单 / 过期 / 放行 |
 
@@ -24,6 +24,8 @@
 - TCL 应用商店 `com.tcl.appmarket2` 的 `android.intent.action.APPSTORE_INSTALL_APK` 广播（`ThirdAppManagerReceiver`）：只按包名从商店升级，`Fileurl` 以 `apk` 结尾的直接忽略，装不了本地文件。
 - 媒体中心 `com.tcl.ui_mediaCenter`（系统 App，自己的文件浏览里能装 APK，见 `PackageInstallUtils`）：可以从 adb 直接打开某个目录（`-n com.tcl.ui_mediaCenter/.main.FileListActivity --es extra_title Download --es extra_device_path /storage/emulated/0 --es extra_path /storage/emulated/0/Download --ei extra_device_type 3 --ei extra_media_file_type 64`），但内置存储的目录一直卡在加载，只对 U 盘有效。
 - 安全卫士 `com.tcl.guard` 能装 U 盘里的 APK（户主确认过），没有找到能传本地路径的入口。
+
+`LauncherStrategy.isTclLauncher()` 的顺序（2026-10-30 从本机 `PackageInstaller.apk` 反编译，#983）：取 `getHomeActivities()` 的包名，为空时用 `com.tcl.cyberui`（再没有就用 `com.android.providers.settings`）；新 APK 的签名和它比，不一致就拒绝；再看 application 的 `com.tcl.app.type` 是不是 `com.tcl.ui`。所以 standard 版已经是默认桌面时，更新比对的是 Aerial 自己的签名，能过；1.72 之后的 standard 版带了这个 meta-data，应用内更新应该就能装（待 #983 报告人确认）。Aerial 不是默认桌面时（首次安装、guard 用户）比的是 TCL 桌面的签名，仍然过不了。
 
 能过校验的关键是「由 App 把 APK 交给系统安装界面」：当贝不是系统 App 也能装成功，说明 `ThridStrategy` 只拦 adb / pm 直接安装。
 

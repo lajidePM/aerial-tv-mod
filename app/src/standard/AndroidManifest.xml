@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- TCL's install verifier (LauncherStrategy in com.android.packageinstaller) lets an APK that declares
+             HOME through only if it is signed like the current default home and carries this tag. With Aerial
+             as the default home, the signature matches on an update, so this tag lets in-app updates install.
+             Read from MT5879's verifier; failing log without it from a 75T7L Pro (MT9655, Android 14), #983.
+             Other firmwares ignore it. -->
+        <meta-data android:name="com.tcl.app.type" android:value="com.tcl.ui" />
         <activity android:name="app.orchard.tv.MainActivity">
             <!-- CVTE firmware (ro.CVT_EN_COMMON_HOME_INTENT=1) sends Home and boot as MAIN + HOME + COMMON_HOME,
                  which only matches a filter listing all of them. Kept in this filter, not a second one: a plain

@@ -33,6 +33,10 @@
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="24">
 
+        <!-- TCL's install verifier wants this on a home app before it allows an update; see the full
+             app's standard manifest (#983). -->
+        <meta-data android:name="com.tcl.app.type" android:value="com.tcl.ui" />
+
         <activity
             android:name=".HomeActivity"
             android:exported="true"
