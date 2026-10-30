@@ -158,8 +158,32 @@ class HomeGuardService : AccessibilityService() {
             foregroundTakenAt = at
             if (SystemClock.uptimeMillis() - broughtBackAt < 1_000) return
             Log.i(TAG, "stock launcher $pkg in front by usage stats; bringing Aerial back")
-            goHome(woke = SystemClock.elapsedRealtime() - screenOnAt < WAKE_WINDOW_MS)
+            val woke = SystemClock.elapsedRealtime() - screenOnAt < WAKE_WINDOW_MS
+            if (!woke && homeKeyReachesAerial && isDefaultHome() && pressHomeForStock()) {
+                broughtBackAt = SystemClock.uptimeMillis()
+                handler.removeCallbacks(homeKeyCheck)
+                handler.postDelayed(homeKeyCheck, HOME_KEY_CHECK_MS)
+                return
+            }
+            goHome(woke)
         }
+    }
+
+    /**
+     * Where Aerial is the default Home, the guard answers the stock launcher with a Home press of
+     * its own, which the system answers with Aerial. Mi Home's remote starts PatchWall by component
+     * from the system, and an activity start from here was then held back as an app switch for
+     * about 5 s ("Activity start request from 10028 stopped", MiTV4 pulpfiction, Android 6.0.1,
+     * the reporter's log in issue #933). Where that press did not bring Aerial (a firmware that
+     * answers Home with its own launcher, as Panasonic DX01C does), the guard starts Aerial as
+     * before, and from then on in this process.
+     */
+    private var homeKeyReachesAerial = true
+    private val homeKeyCheck = Runnable {
+        if (aerialResumed) return@Runnable
+        Log.i(TAG, "a Home press did not bring Aerial back; starting it instead from now on")
+        homeKeyReachesAerial = false
+        goHome()
     }
 
     /** The usage-stats time of the move to the front the foreground check last answered. */
@@ -1205,6 +1229,7 @@ class HomeGuardService : AccessibilityService() {
     companion object {
         private const val TAG = "AerialGuard"
         private const val BOOT_WINDOW_MS = 3 * 60 * 1000L
+        private const val HOME_KEY_CHECK_MS = 1500L
         private const val SETTLE_MS = 1500L
         private const val BOOT_STOCK_CAP_MS = 20_000L
         private const val WAKE_WINDOW_MS = 15_000L
