@@ -501,8 +501,14 @@ class MainActivity : ComponentActivity() {
     override fun dump(prefix: String, fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
         super.dump(prefix, fd, writer, args)
         if (locked) return
-        // `... MainActivity report`: what tools/report.sh pastes into an issue.
-        if (args?.contains("report") == true) writer.print(Diagnostics.report(this)) else DiagLog.dump(writer)
+        // `... MainActivity report`: what tools/report.sh pastes into an issue. The guard's state
+        // names the app in front, so only in the plain dump, which stays on the computer.
+        if (args?.contains("report") == true) {
+            writer.print(Diagnostics.report(this))
+        } else {
+            writer.println(HomeGuardService.diagnosticState())
+            DiagLog.dump(writer)
+        }
     }
 
     // ---- Screensaver: Aerial's own, before the firmware's ad-carrying one can start ----
