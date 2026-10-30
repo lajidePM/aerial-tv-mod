@@ -15,7 +15,8 @@
     },
     {
       "models": ["MiTV_MFFU1", "MiTV-MFFU1"],
-      "note": "Redmi monitor G Pro 27U registers its DP port (HW9) and USB-C port (HW10) both as DisplayPort; tvplayer sources 29 and 30 (#62, its MonitorUtils).",
+      "note": "Redmi monitor G Pro 27U registers its DP port (HW9) and USB-C port (HW10) both as DisplayPort; tvplayer sources 29 and 30 (#62, its MonitorUtils). It also registers two tuners (HW0, HW1, reported connected) and a composite input (HW2) that a monitor does not have (#815; the same on the owner's MFFU1, OS3.0.120). The 2025 model has no USB-C either, but it shares the model name with the 2026 one, so HW10 stays.",
+      "hidden": [0, 1, 2],
       "labels": {"9": "DP", "10": "USB-C"},
       "xiaomiSources": {"9": 29, "10": 30}
     },
