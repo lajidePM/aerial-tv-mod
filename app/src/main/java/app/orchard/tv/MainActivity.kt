@@ -808,9 +808,18 @@ class MainActivity : ComponentActivity() {
         // Back in front by any route (Home was handled in onNewIntent, which runs first; Back from
         // the app lands here directly), so the next Home press is a Home-on-Home again.
         openedAppSinceHome = false
-        LaunchFallback.next()?.let {
-            DiagLog.i("the page just opened closed at once; opening ${it.component ?: it.action}")
-            open(it)
+        LaunchFallback.next()?.let { page ->
+            // Only where the page truly closed: Hisense's network page (85E5N, MT9653, Android 11)
+            // is a panel over Aerial, which resumes beneath it without window focus, and the next
+            // page then opened beside the panel (issues #948 #976, the reporters' logs).
+            idleHandler.postDelayed({
+                if (vm.resumed && hasWindowFocus()) {
+                    DiagLog.i("the page just opened closed at once; opening ${page.component ?: page.action}")
+                    open(page)
+                } else {
+                    DiagLog.i("back in front under a window of the page just opened; not opening ${page.component ?: page.action}")
+                }
+            }, FALLBACK_FOCUS_MS)
         }
     }
 
@@ -899,6 +908,13 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** How long the film waits for Aerial to come back from Home's bounce (MFTR0: 120-290 ms). */
         private const val HOME_BOUNCE_MS = 500L
+
+        /**
+         * How long after coming back from a page that closed at once Aerial waits for its window's
+         * focus before opening the next page (LaunchFallback). Focus followed onResume within
+         * 50 ms on Xiaomi MiTV-MFFU0 (issue #984's log).
+         */
+        private const val FALLBACK_FOCUS_MS = 400L
 
         /**
          * How long before the screensaver its start is fetched: the moment's 6 MB took 1-2 s from
