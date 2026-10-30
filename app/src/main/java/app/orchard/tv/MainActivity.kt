@@ -52,6 +52,7 @@ import app.orchard.tv.apps.CustomIcons
 import app.orchard.tv.apps.IconLibrary
 import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.SourceLooks
+import app.orchard.tv.apps.StandIn
 import app.orchard.tv.apps.TileArtFactory
 import app.orchard.tv.guard.GuardSetup
 import app.orchard.tv.guard.HomeGuardService
@@ -869,7 +870,7 @@ class MainActivity : ComponentActivity() {
         // The stock launcher (Xiaomi's PatchWall, with the maker's own iQIYI / Mango content) opens
         // through the system Home action where it can; see HomeGuardService.openStockLauncher.
         if (HomeGuardService.isStockHome(app.packageName) &&
-            HomeGuardService.openStockLauncher(app.packageName) { runCatching { startActivity(app.launchIntent()) }.isSuccess }
+            HomeGuardService.openStockLauncher(app.packageName) { startStockLauncher(app) }
         ) return
         val options = bounds?.asFocusedTile()?.let {
             ActivityOptions.makeScaleUpAnimation(
@@ -890,6 +891,23 @@ class MainActivity : ComponentActivity() {
             // opens the source page of its settings service instead (issue #241).
             if (app.source != null && SystemProbe.openInputPicker(this)) return
             Toast.makeText(this, getString(R.string.launch_failed, app.label), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** The stock launcher's own entry, or one of the same page Aerial may start (StandIn, issue #971). */
+    private fun startStockLauncher(app: AppEntry): Boolean {
+        val intent = app.launchIntent()
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: SecurityException) {
+            val standIn = StandIn.find(this, app.component)
+            DiagLog.i("${app.component.className} needs a permission; opening ${standIn?.className ?: "nothing"} instead")
+            standIn != null && runCatching {
+                startActivity(Intent(Intent.ACTION_MAIN).setComponent(standIn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+        } catch (e: Exception) {
+            false
         }
     }
 
