@@ -101,6 +101,7 @@ import app.orchard.tv.ui.theme.GlyphIcon
 import app.orchard.tv.ui.theme.Motion
 import app.orchard.tv.ui.theme.Palette
 import app.orchard.tv.ui.theme.Type
+import app.orchard.tv.update.SelfCompile
 import app.orchard.tv.update.Updates
 import app.orchard.tv.wallpaper.PhoneServer
 import java.time.LocalDateTime
@@ -302,6 +303,12 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
                 stringResource(R.string.cc_update_available, latest),
                 onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Update) },
             )
+        }
+
+        // Android 9 to 11, Aerial running uncompiled: reinstalling itself has the system compile it,
+        // which needs the owner's confirmation there (SelfCompile; 12+ does it by itself).
+        if (SelfCompile.offered) {
+            MenuRow(Glyph.Download, stringResource(R.string.cc_self_compile), onClick = { SelfCompile.run(context, auto = false) })
         }
 
         // Installed from the APK alone: how to finish, on the TV or with a computer.

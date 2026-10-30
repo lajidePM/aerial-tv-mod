@@ -81,6 +81,7 @@ import app.orchard.tv.system.SystemProbe
 import app.orchard.tv.system.HisenseSources
 import app.orchard.tv.system.LaunchFallback
 import app.orchard.tv.system.settingsLaunchIntent
+import app.orchard.tv.update.SelfCompile
 import app.orchard.tv.update.Updates
 import app.orchard.tv.weather.Weather
 import kotlinx.coroutines.Dispatchers
@@ -217,6 +218,7 @@ class MainActivity : ComponentActivity() {
         Wallpapers.init(this)
         Weather.init(this)
         Updates.init(this)
+        lifecycleScope.launch(Dispatchers.IO) { SelfCompile.init(this@MainActivity) }
         CustomIcons.init(this)
         IconLibrary.init(this)
         SourceLooks.init(this)
@@ -736,6 +738,7 @@ class MainActivity : ComponentActivity() {
     /** What onStart does once the user is unlocked; also run by a start that was locked before. */
     private fun startWork() {
         DiagLog.i("onStart")
+        SelfCompile.onHomeStarted()
         // The phone and computer page, at any time the TV is on (only once unlocked: its token is
         // in credential-protected storage).
         lifecycleScope.launch(Dispatchers.IO) { PhoneServer.listen(this@MainActivity) }
@@ -830,6 +833,7 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         if (locked) return
         DiagLog.i("onStop")
+        SelfCompile.onHomeStopped()
         // Out of sight after all: no bounce to wait out (homeBounce).
         idleHandler.removeCallbacks(endHomeBounce)
         vm.homeBounce = false

@@ -239,40 +239,8 @@ object Updates {
      */
     @RequiresApi(28)
     private fun installBySession(app: Context, file: File, withDm: Boolean = true): Boolean = runCatching {
-        val installer = app.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-            setAppPackageName(app.packageName)
-            if (Build.VERSION.SDK_INT >= 33) setPackageSource(PackageInstaller.PACKAGE_SOURCE_OTHER)
-            // Android 12 and later let an app update itself without the confirmation page, which some
-            // firmwares do not have (Xiaomi MiTV-MFTR0: no CONFIRM_INSTALL activity, so the session
-            // gave way to the installer's ACTION_VIEW and its dex metadata was lost). The owner has
-            // just picked "Download and Install". Where the system still wants a confirmation, it
-            // answers STATUS_PENDING_USER_ACTION as before.
-            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-        }
         val dm = if (withDm) dexMetadata(file) else null
-        val id = installer.createSession(params)
-        try {
-            installer.openSession(id).use { session ->
-                file.inputStream().use { input ->
-                    session.openWrite("aerial.apk", 0, file.length()).use { out ->
-                        input.copyTo(out)
-                        session.fsync(out)
-                    }
-                }
-                if (dm != null) session.openWrite("aerial.dm", 0, dm.size.toLong()).use { out ->
-                    out.write(dm)
-                    session.fsync(out)
-                }
-                val result = Intent(app, UpdateResult::class.java).putExtra(EXTRA_WITH_DM, dm != null)
-                val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-                GuardSetup.noteInstallerOpened(app)
-                session.commit(PendingIntent.getBroadcast(app, id, result, flags).intentSender)
-            }
-        } catch (e: Exception) {
-            runCatching { installer.abandonSession(id) }
-            throw e
-        }
+        val id = commitSession(app, file, dm, Intent(app, UpdateResult::class.java).putExtra(EXTRA_WITH_DM, dm != null))
         Log.i(TAG, "install session $id committed for ${file.length()} bytes, dex metadata ${dm?.size ?: "none"}")
         DiagLog.i("update: session $id, dex metadata ${dm?.size ?: "none"}")
         true
@@ -287,6 +255,67 @@ object Updates {
     }
 
     /**
+     * The running APK over itself with its own dex metadata (SelfCompile): no download, the same
+     * version. Without the metadata it would be pointless, so no fallback: a failure is only logged.
+     * [auto]: nobody asked, so a confirmation page is not put in front of the app being watched.
+     */
+    @RequiresApi(28)
+    internal fun reinstallSelf(app: Context, auto: Boolean) {
+        val apk = File(app.applicationInfo.sourceDir)
+        val dm = dexMetadata(apk) ?: return
+        runCatching {
+            val result = Intent(app, UpdateResult::class.java).putExtra(EXTRA_WITH_DM, true)
+                .putExtra(EXTRA_SELF, if (auto) SELF_AUTO else SELF_ASKED)
+            val id = commitSession(app, apk, dm, result)
+            Log.i(TAG, "self compile: session $id committed, dex metadata ${dm.size}")
+        }.onFailure {
+            Log.w(TAG, "self compile: no session", it)
+            DiagLog.i("self compile: no session (${it.javaClass.simpleName}: ${it.message})")
+        }
+    }
+
+    /** Writes [file] (and [dm] beside it) into a new install session and commits it; returns its id. */
+    @RequiresApi(28)
+    private fun commitSession(app: Context, file: File, dm: ByteArray?, result: Intent): Int {
+        val installer = app.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+            setAppPackageName(app.packageName)
+            if (Build.VERSION.SDK_INT >= 33) setPackageSource(PackageInstaller.PACKAGE_SOURCE_OTHER)
+            // Android 12 and later let an app update itself without the confirmation page, which some
+            // firmwares do not have (Xiaomi MiTV-MFTR0: no CONFIRM_INSTALL activity, so the session
+            // gave way to the installer's ACTION_VIEW and its dex metadata was lost). The owner has
+            // just picked "Download and Install". Where the system still wants a confirmation, it
+            // answers STATUS_PENDING_USER_ACTION as before.
+            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        }
+        val id = installer.createSession(params)
+        try {
+            installer.openSession(id).use { session ->
+                file.inputStream().use { input ->
+                    session.openWrite("aerial.apk", 0, file.length()).use { out ->
+                        input.copyTo(out)
+                        session.fsync(out)
+                    }
+                }
+                if (dm != null) session.openWrite("aerial.dm", 0, dm.size.toLong()).use { out ->
+                    out.write(dm)
+                    session.fsync(out)
+                }
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                GuardSetup.noteInstallerOpened(app)
+                session.commit(PendingIntent.getBroadcast(app, id, result, flags).intentSender)
+            }
+        } catch (e: Exception) {
+            runCatching { installer.abandonSession(id) }
+            throw e
+        }
+        return id
+    }
+
+    /** This APK's own dex metadata for this Android, or null (SelfCompile). */
+    internal fun ownDexMetadata(context: Context): ByteArray? = dexMetadata(File(context.applicationInfo.sourceDir))
+
+    /**
      * The dex metadata the build put in [apk] for this Android (28.dm for 9 to 11, 31.dm from 12),
      * or null: an APK from before 1.72, or one that cannot be read.
      */
@@ -296,11 +325,16 @@ object Updates {
     }.getOrNull()
 
     private const val EXTRA_WITH_DM = "app.orchard.tv.update.WITH_DM"
+    private const val EXTRA_SELF = "app.orchard.tv.update.SELF"
+    private const val SELF_ASKED = 1
+    private const val SELF_AUTO = 2
 
     /** The session's answer (UpdateResult): the owner's confirmation, or the installer instead. */
     internal fun onSessionResult(context: Context, intent: Intent) {
         val app = context.applicationContext
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        val self = intent.getIntExtra(EXTRA_SELF, 0)
+        if (self != 0) return onSelfResult(app, intent, status, auto = self == SELF_AUTO)
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
@@ -336,6 +370,25 @@ object Updates {
                 if (!file.isFile || !openInstaller(app, app, file)) install = Install.Failed(Failure.Blocked)
             }
         }
+    }
+
+    /** The answer to [reinstallSelf]: never the installer by ACTION_VIEW, which would carry no metadata. */
+    private fun onSelfResult(app: Context, intent: Intent, status: Int, auto: Boolean) {
+        val id = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+        // Arrives in the new process, once the replace is done.
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            DiagLog.i("self compile: installed, odex ${SelfCompile.odexBytes(app)?.div(1024)} KB")
+            return
+        }
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION && !auto) {
+            @Suppress("DEPRECATION")
+            val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+            if (confirm != null && runCatching { app.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+        }
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION && id >= 0) runCatching { app.packageManager.packageInstaller.abandonSession(id) }
+        val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        Log.w(TAG, "self compile: not installed ($status, $message)")
+        DiagLog.i("self compile: not installed ($status, $message)")
     }
 
     /** Resume failed checks; if the installer closed without replacing Aerial, reset its button. */
