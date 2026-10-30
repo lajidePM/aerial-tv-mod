@@ -496,7 +496,7 @@ class MainActivity : ComponentActivity() {
     // ---- Screensaver: Aerial's own, before the firmware's ad-carrying one can start ----
 
     private val idleHandler = Handler(Looper.getMainLooper())
-    private val showScreensaver = Runnable { startScreensaver(asked = false) }
+    private val showScreensaver = Runnable { if (vm.resumed) startScreensaver(asked = false) }
 
     /** The Dolby Vision screensaver's start, fetched to disk while Home is still up (AerialStart.prepareAhead). */
     private val prepareScreensaver = Runnable {
@@ -586,6 +586,10 @@ class MainActivity : ComponentActivity() {
         vm.lastInputAt = SystemClock.uptimeMillis()
         idleHandler.removeCallbacks(showScreensaver)
         idleHandler.removeCallbacks(prepareScreensaver)
+        // Not once paused: keys still reach Aerial between onPause and the opened app's window
+        // taking focus (TCL MT5879: a press 18 ms after onPause, focus gone 400 ms later), and a
+        // timer set then would start the screensaver over the app's video (issue #974).
+        if (!vm.resumed) return
         if (AerialSettings.screensaverMinutes != AerialSettings.NEVER) {
             val idle = idleBeforeScreensaver()
             idleHandler.postDelayed(showScreensaver, idle)
