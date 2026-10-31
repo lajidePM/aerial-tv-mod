@@ -2,7 +2,14 @@
 
 写给接手 Aerial 的人或 AI。先读这份，再读 [ARCHITECTURE.md](ARCHITECTURE.md) 和 [devices/](devices/)。
 
-## 现状（2026-10-30）
+## 现状（2026-10-31）
+
+- **2026-10-31 早巡检（main 上，未发版）**，记录见 `local/triage/2026-10-31-full.md`。256 issue / 48 PR，用户最后发言 25 + 11。TCL 这一轮用不了（户主说的），只用小米 MFTR0。
+  - 修：#964 小米 ASTP0 从桌面待机唤醒不开开机目标（f96a819：小米先结束 Aerial 再息屏，息屏没记下；守护在屏幕关着时被绑定就记一次息屏）；#915 酷开 C10 开机后前 8 次进屏保走系统 dream 闪黑（b111fc9：按「主页撤下到屏保第一帧」量黑屏，超过 2 秒算 dream 不行）；#834 小米安卓 6 设置一闪就关（695f434：0.8 秒内回到 Aerial 就发 `com.xiaomi.intent.action.show.globalsetting` 弹浮层，Lite 同步）；#998 #818 乐视 X3-55 没有 tv_input，信号源打开 `com.stv.signalsourcemanager`（2da93f4，Lite 同步）；#941 索尼壁纸回来先跳旧画面，只加了日志（dcacaaa：这台取不到当前帧，原因待复测）；#848 安装脚本和 agent.md 在小米上不再改默认桌面，restore.sh 改回 PatchWall（d692c9e）。
+  - 合 PR（本地 cherry-pick，保留作者）：#1000 开机目标被原桌面任意界面盖住重开（bdf0b49）、#993 遥控接收器不算手柄（b0757ce，守护状态行不进 report）、#996 小米长按主页开自家任务中心（e54b9de）、#997 手机页图标预览不缓存（94b5bb8；StateFlow 让 Lite 编不过，1399861 改成回调）、#991 电视果 6 笔记（2efaa19）。不合：#1002（续播从定格图时间点开始和户主 10-29 的决定冲突，请拆出比例修正）、#994 #995（没在电视上跑过，#995 和 #1000 同一块）、#992（酷开 setprop 交户主，HOME 拉回要 TCL 回归）、#962 等性能数据。
+  - 验证：152 个单元测试（standard、guard）、Lite lint、三个包签名 e089…。MFTR0 装 main 的 release 包（versionCode 仍 93）+ compile speed：守护状态行 `gamepad=false`；控制中心「设置」打开小米设置、没有误发广播；从设置和 HDMI 2 按主页键拉回；信号源列表；屏保接力 screenrecord 逐帧（影片连续无黑帧、唤醒磁贴淡回）。**没有真机验证**：#964（MFTR0 用 ADB 待机会断网，唤醒测试没做完，见下）、#915、#834 的浮层、乐视信号源、#996、TCL 上的 dream 计时。
+  - **MFTR0 现在的状态**：09:05 用 ADB 让它待机测 #964，断网后远程唤不醒（机型笔记里早有这条，我漏看了）；为了这个测试临时把 HDMI 1 设成「开机时打开」（原来没有开机目标）。等户主用遥控器唤醒后，看唤醒时有没有打开 HDMI 1（就是 #964 的验证），然后长按 HDMI 1 磁贴选「开机时不再打开」改回。记在 `local/TVS.md`。
+  - 下次发版 versionCode ≥ 94，Lite ≥ 12（Lite 改了设置浮层和乐视信号源）。
 
 - **1.73（versionCode 93）+ Aerial Lite 1.10（11），2026-10-30 深夜发布**（[v1.73](https://github.com/pengchujin/aerial-tv/releases/tag/v1.73)）：就是下面这一轮晚巡检的全部代码。发版前补测：TCL MT5879 上 #974 修复后对照通过（打开 App 后那一下按键在 onPause 之后 30 ms 仍落到 Aerial，5 分半内没有启动屏保；测试时临时开的 `stay_on_while_plugged_in` 已改回 0）；小米 MFTR0 上信号源切换（HDMI 1、2）后按主页键回来、屏保接力 screenrecord 逐帧看过（进屏保影片接着放无黑帧，唤醒磁贴淡回），小米背光弹窗盖住屏保时屏保结束（#915 的新路径）。正式包：小米 `adb install -r` standard，TCL 多屏互动推 guard（截图确认焦点在「同意」），两台 compile speed、守护在、主页键（小米从设置、TCL 从 AIDA64）和信号源（小米 HDMI 2、TCL HDMI 2）回归通过。三个包签名 e089…，官网 version.txt = v1.73，三个包 md5 和 Release 一致。16 个修过的 issue 贴了发布链接（`local/triage/release-1.73-posts.py`）。
 

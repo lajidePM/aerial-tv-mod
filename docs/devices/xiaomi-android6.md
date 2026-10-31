@@ -30,3 +30,9 @@ Amlogic 平台、Android 6.0.x 的一批小米电视和盒子，问题基本相�
 ## 其他
 
 - 没有 `cmd`：`cmd package compile`、`set-home-activity`、`role` 都不可用；通知监听要用 `settings put secure enabled_notification_listeners`。
+
+## 设置一闪就关（#834）
+
+- MiTV4-ANSM0、小米盒子 3S（MDZ-19-AA，queenchristina）：从 Aerial 打开 `com.xiaomi.mitv.settings/.entry.MainActivity`，它一出来就自己 finish（不是崩溃，`mLastPausedActivity ... f`）。它只是在 PatchWall 上弹设置浮层（`MitvSettingsPopup.showPopup`），桌面不是 PatchWall 就挂不上。原桌面打开正常；关掉守护也一样关。
+- 盒子 3S 的报告人验证了 `am broadcast -a com.xiaomi.intent.action.show.globalsetting` 能把浮层弹在 Aerial 上、遥控器能操作。main 上（未发版）：控制中心「设置」和设置磁贴打开小米设置后 0.8 秒内回到 Aerial、且 Aerial 有焦点，就改发这个广播（`SystemProbe.settingsFallbacks` + `LaunchFallback`）；Lite 同样（`SystemIntents.settingsBounced`）。MFTR0 也有这个接收器，但设置页正常打开，不会发。没有真机验证浮层这条路。
+- 报告人给的绕过：连按两次主页键进最近任务，从里面点「小米盒子设置」；或 `adb shell am start -n com.android.tv.settings/.MainSettings`。
