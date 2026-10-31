@@ -364,8 +364,14 @@ if [ "$FLAVOR" = standard ]; then
     adb shell setprop persist.vt.use_home_pkg "$PKG"
     echo "Hisense: Home now opens Aerial instead of $VT_HOME."
   fi
-  adb shell cmd role add-role-holder --user 0 android.app.role.HOME "$PKG" >/dev/null 2>&1 \
-    || adb shell cmd package set-home-activity --user 0 "$PKG/.MainActivity" >/dev/null 2>&1 || true
+  # Not on Xiaomi (PatchWall, com.mitv.tvhome installed): most firmwares ignore it, but one Android 9
+  # set took it, PatchWall then ran as an ordinary app outside the home stack, and Xiaomi's short
+  # press of the power key crashed its settings app and never put the TV to sleep (#848). Home
+  # Guard takes over there as everywhere else on Xiaomi.
+  if [ -z "$(adb shell pm path com.mitv.tvhome 2>/dev/null | tr -d '\r')" ]; then
+    adb shell cmd role add-role-holder --user 0 android.app.role.HOME "$PKG" >/dev/null 2>&1 \
+      || adb shell cmd package set-home-activity --user 0 "$PKG/.MainActivity" >/dev/null 2>&1 || true
+  fi
   HOME_NOW=$(resolve_home)
   case "$HOME_NOW" in
     "$PKG"/*)
