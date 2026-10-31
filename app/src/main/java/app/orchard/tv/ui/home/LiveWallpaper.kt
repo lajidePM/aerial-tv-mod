@@ -270,9 +270,11 @@ fun LiveWallpaper(
      * the film playing from the picture's moment hides the picture changing beneath it.
      */
     suspend fun catchUp(left: Pair<String, Long>, underFilm: Boolean = false) {
+        // Said, for a TV that reads no frame at all: Sony BRAVIA UR2 (MT5893, Android 9, issue
+        // #941) came back to a picture a minute before the film, and its log had no line of why.
         val frame = withTimeoutOrNull(CATCH_UP_MS) {
             reader.frame(left.first, left.second, Wallpapers.screenW, Wallpapers.screenH, exact = false, nearest = true)
-        } ?: return
+        } ?: return DiagLog.i("wallpaper picture did not catch up (copy ${pixelCopy}, file frames stuck ${FileFramesStuck.now(context)})")
         if ((cover.value > 0f && !underFilm) || Wallpapers.leftLiveSpot() != left) return
         DiagLog.i("wallpaper picture catches up with where the film was let go")
         Wallpapers.useLiveFrame(frame, left.first, left.second)
