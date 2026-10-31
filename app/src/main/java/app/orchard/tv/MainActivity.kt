@@ -487,6 +487,7 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         DiagLog.i("window focus $hasFocus")
+        if (!hasFocus) SystemScreensaver.noteHomeHidden()
         // A window of the TV's over Aerial's screensaver, still resumed beneath it: a key of the
         // firmware's own was pressed. Coocaa C10's hotkey popup sometimes took focus before the
         // key's lift reached Aerial, and the screensaver went on under it (issue #915, the
@@ -547,6 +548,7 @@ class MainActivity : ComponentActivity() {
             if (SystemScreensaver.startDream(this)) {
                 DiagLog.i("screensaver starts as the system's dream")
                 dreamAskedAt = SystemClock.uptimeMillis()
+                SystemScreensaver.noteDreamAsked()
                 return
             }
             LiveFilm.onHome?.goOn()
@@ -573,10 +575,9 @@ class MainActivity : ComponentActivity() {
     private val dreamCheck = Runnable {
         dreamChecking = false
         // Up to Android 10 the dream is a window over Home, which stays resumed: the focus says.
-        if (!vm.resumed || !hasWindowFocus()) {
-            noteDreamShown(this@MainActivity)
-            return@Runnable
-        }
+        // Shown: whether it came in time is for its first frame to say (dreamShowedAfter).
+        if (!vm.resumed || !hasWindowFocus()) return@Runnable
+        SystemScreensaver.forgetDreamAsked()
         noteDreamFails(this)
         DiagLog.i("the system's dream did not show; Aerial's own screensaver instead")
         LiveFilm.onHome?.goOn()
@@ -864,8 +865,8 @@ class MainActivity : ComponentActivity() {
         }
         idleHandler.removeCallbacks(showScreensaver)
         idleHandler.removeCallbacks(dreamCheck)
-        // From Android 11 the dream is an activity: paused while waiting for it, it showed.
-        if (dreamChecking) noteDreamShown(this)
+        // From Android 11 the dream is an activity: paused while waiting for it, it showed, and its
+        // first frame says whether in time (dreamShowedAfter).
         dreamChecking = false
         hideScreensaver()
     }
@@ -989,6 +990,20 @@ class MainActivity : ComponentActivity() {
             context.getSharedPreferences("system", MODE_PRIVATE).edit()
                 .putString(DREAM_FAILS_ON, Build.FINGERPRINT).putInt(DREAM_FAILS, dreamFailCount(context) + 1).apply()
         }
+
+        /**
+         * The dream Home asked for showed its first frame [blackMs] after Home's window went. Slower
+         * than Home's own screensaver would have been counts as not showing: Coocaa C10 (Android 9,
+         * issue #915) cold-started SystemUI for every dream, 1.2 to 2.7 s of black each time, for
+         * the first eight screensavers after every boot, since the dream did show in the end.
+         */
+        fun dreamShowedAfter(context: Context, blackMs: Long) {
+            if (blackMs <= DREAM_BLACK_MS) return noteDreamShown(context)
+            DiagLog.i("the system's dream showed after $blackMs ms of black; Aerial's own screensaver from now on")
+            noteDreamFails(context)
+        }
+
+        private const val DREAM_BLACK_MS = 2_000L
 
         private fun noteDreamShown(context: Context) {
             if (dreamFailCount(context) > 0) context.getSharedPreferences("system", MODE_PRIVATE).edit().remove(DREAM_FAILS).apply()
