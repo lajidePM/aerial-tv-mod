@@ -20,7 +20,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import app.orchard.tv.ui.components.smoothBorder
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.State
@@ -791,7 +791,7 @@ fun VpnBadge(color: Color, modifier: Modifier = Modifier, fontSize: TextUnit = 1
         stringResource(R.string.net_vpn),
         style = Type.Caption.copy(color = color, fontSize = fontSize, fontWeight = FontWeight.W700, letterSpacing = 0.04.em),
         modifier = modifier
-            .border(1.2.dp, color, RoundedCornerShape(4.dp))
+            .smoothBorder(1.2.dp, color, 4.dp)
             .padding(horizontal = 4.dp, vertical = 1.dp),
     )
 }

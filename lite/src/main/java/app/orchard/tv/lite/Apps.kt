@@ -193,7 +193,7 @@ object AppCatalog {
         val component = ComponentName(pkg, info.name)
         val fw = faceW
         val fh = faceH
-        val key = "v2|$stamp|$fw|$fh"
+        val key = "v3|$stamp|$fw|$fh"
         val file = File(dir, "$pkg.png")
         val cached = index.getString(pkg, null)
         if (cached != null && cached.startsWith("$key|") && file.exists()) {

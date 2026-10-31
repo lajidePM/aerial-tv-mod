@@ -34,8 +34,7 @@ class GlassBox(context: Context, private val radius: Float, private val bottomCo
      * The stand-in's own paint: drawn with [paint], its 90% stayed in the paint's alpha and every
      * baked glass after it let Home show through (Personalize over the tiles, MiTV-MFTR0).
      */
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ui.GLASS }
-    private val box = RectF()
+    private val fill = Shapes.Tint()
 
     init { setWillNotDraw(false) }
 
@@ -62,10 +61,9 @@ class GlassBox(context: Context, private val radius: Float, private val bottomCo
     override fun onDraw(canvas: Canvas) {
         val b = baked
         if (b != null) canvas.drawBitmap(b, 0f, 0f, paint)
-        else {
+        else if (width > 0 && height > 0) {
             val r = Ui.px(radius)
-            box.set(0f, 0f, width.toFloat(), height.toFloat() + if (bottomCorners) 0f else r)
-            canvas.drawRoundRect(box, r, r, fill)
+            fill.draw(canvas, Shapes.mask(width, height, r, if (bottomCorners) r else 0f), 0f, 0f, Ui.GLASS)
         }
     }
 }
@@ -550,12 +548,10 @@ class Personalize(
      */
     private fun group(note: String? = null, rows: () -> Unit) {
         val box = object : LinearLayout(context) {
-            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x0DFFFFFF }
-            private val rect = RectF()
+            private val tint = Shapes.Tint()
             init { orientation = VERTICAL; setWillNotDraw(false) }
             override fun onDraw(canvas: Canvas) {
-                rect.set(0f, 0f, width.toFloat(), height.toFloat())
-                canvas.drawRoundRect(rect, Ui.px(16f), Ui.px(16f), paint)
+                if (width > 0 && height > 0) tint.draw(canvas, Shapes.mask(width, height, Ui.px(16f)), 0f, 0f, 0x0DFFFFFF)
             }
         }
         val noteView = note(context, note ?: "").apply {
@@ -708,12 +704,10 @@ class Personalize(
     private fun phoneCard(): View {
         val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         val white = object : FrameLayout(context) {
-            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ui.WHITE }
-            private val rect = RectF()
+            private val tint = Shapes.Tint()
             init { setWillNotDraw(false); setPadding(Ui.pxi(14f), Ui.pxi(14f), Ui.pxi(14f), Ui.pxi(14f)) }
             override fun onDraw(canvas: Canvas) {
-                rect.set(0f, 0f, width.toFloat(), height.toFloat())
-                canvas.drawRoundRect(rect, Ui.px(18f), Ui.px(18f), paint)
+                if (width > 0 && height > 0) tint.draw(canvas, Shapes.mask(width, height, Ui.px(18f)), 0f, 0f, Ui.WHITE)
             }
         }
         qrView.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
