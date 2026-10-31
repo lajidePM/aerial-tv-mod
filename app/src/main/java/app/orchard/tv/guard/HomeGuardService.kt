@@ -228,8 +228,25 @@ class HomeGuardService : AccessibilityService() {
     /** The activity that last moved to the front, from usage stats, unless it is Aerial's; see takeOverIfStockHomeInFront. */
     private fun frontByUsage(): Pair<String, String>? {
         if (!usageStatsAllowed(this)) return null
-        return foreground(UNKNOWN_FRONT_LOOKBACK_MS)?.first?.takeIf { it.first != packageName }
+        val front = usageFront(UNKNOWN_FRONT_LOOKBACK_MS)?.takeIf { !it.closed } ?: return null
+        return (front.pkg to front.cls).takeIf { it.first != packageName }
     }
+
+    /** Whether usage stats say the app in front went to the back with nothing after it (UsageFront, issue #1023). */
+    private fun nothingInFrontByUsage(): Boolean =
+        usageStatsAllowed(this) && usageFront(UNKNOWN_FRONT_LOOKBACK_MS)?.closed == true
+
+    private fun usageFront(lookbackMs: Long): UsageFront.Front? = runCatching {
+        val now = System.currentTimeMillis()
+        val events = getSystemService<UsageStatsManager>()?.queryEvents(now - lookbackMs, now) ?: return null
+        val picker = UsageFront.Picker()
+        val event = UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            picker.add(event.eventType, event.packageName, event.className, event.timeStamp)
+        }
+        picker.result()
+    }.getOrNull()
 
     /**
      * The stock home that usage stats say moved to the front last, when the last window seen is
@@ -664,14 +681,18 @@ class HomeGuardService : AccessibilityService() {
         // the boot rechecks, on firmwares that raise no window change for the app the viewer
         // opened (Skyworth 9S52_Q4A, Android 6, issue #489). Aerial itself says nothing about what
         // it uncovered when it died, so it stays unknown.
-        val last = lastWindow?.takeIf { it !in fallbackHomes }?.let { (if (coveredSilently) coveredAerial(it) else null) ?: it }
-            ?: frontByUsage()?.also { Log.i(TAG, "$reason; usage stats say ${it.first} is in front") }
+        val seen = lastWindow?.takeIf { it !in fallbackHomes }?.let { (if (coveredSilently) coveredAerial(it) else null) ?: it }
+        // The app in front was backed out of and nothing came up: a black screen with no window on
+        // LeTV X4-50 (eUI, Android 6.0, issue #1023). That is the stock launcher's place.
+        val empty = seen == null && nothingInFrontByUsage()
+        if (empty) Log.i(TAG, "$reason; usage stats say the app in front went to the back and nothing came up")
+        val last = seen ?: if (empty) null else frontByUsage()?.also { Log.i(TAG, "$reason; usage stats say ${it.first} is in front") }
         // Unknown means we were only just bound, which happens after a standby kill. Any screen of
         // the stock launcher counts: when Aerial is killed, whatever was on top of the launcher's
         // task is uncovered, not always its home activity (PatchWall's StrategicLayerActivity).
         // Unless the firmware keeps stopping Aerial: then an unknown front is most likely the app
         // the viewer is in, and Home stays with the Home key (LeTV eUI, issue #63).
-        if (last == null && GuardSetup.revivedOften(this)) {
+        if (last == null && !empty && GuardSetup.revivedOften(this)) {
             Log.i(TAG, "$reason, but Aerial keeps being stopped and the front is unknown; leaving it")
             return
         }
