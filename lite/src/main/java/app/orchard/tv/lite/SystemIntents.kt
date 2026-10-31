@@ -75,6 +75,12 @@ object SystemIntents {
         if (runCatching { pm.queryBroadcastReceivers(skyMovie, 0) }.getOrNull().orEmpty().any { it.activityInfo.exported }) {
             return runCatching { context.sendBroadcast(skyMovie) }.isSuccess
         }
+        // LeTV eUI's signal source app, back to the input last used (X3-55, Android 5.0.1, the full
+        // app's issues #818 #998); not verified on LeTV's Android 4.x.
+        val letv = ComponentName("com.stv.signalsourcemanager", "com.stv.signalsourcemanager.MainActivity")
+        if (runCatching { pm.getActivityInfo(letv, 0) }.getOrNull()?.exported == true &&
+            runCatching { context.startActivity(Intent(Intent.ACTION_MAIN).setComponent(letv).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        ) return true
         return false
     }
 

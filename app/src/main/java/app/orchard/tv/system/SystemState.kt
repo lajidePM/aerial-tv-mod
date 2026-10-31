@@ -531,8 +531,17 @@ object SystemProbe {
         if (runCatching { pm.queryBroadcastReceivers(skyMovie, 0) }.getOrNull().orEmpty().any { it.activityInfo.exported }) {
             return runCatching { context.sendBroadcast(skyMovie) }.isSuccess
         }
+        // LeTV eUI (X3-55, MStar, Android 5.0.1) has no tv_input service at all; its signal source
+        // app switches to the input last used, and takes no port (issues #818 #998: both reporters
+        // opened it with adb, sourceId ignored). The remote's input key picks another from there.
+        val letv = Intent(Intent.ACTION_MAIN).setComponent(LETV_SOURCES).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { pm.getActivityInfo(LETV_SOURCES, 0) }.getOrNull()?.exported == true &&
+            runCatching { context.startActivity(letv) }.isSuccess
+        ) return true
         return false
     }
+
+    private val LETV_SOURCES = ComponentName("com.stv.signalsourcemanager", "com.stv.signalsourcemanager.MainActivity")
 
     /**
      * TCL's own input panel, where the firmware has one. The remote's input key opens it by itself,
