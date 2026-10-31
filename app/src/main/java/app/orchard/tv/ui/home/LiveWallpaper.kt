@@ -191,6 +191,12 @@ fun LiveWallpaper(
     var fresh by remember { mutableStateOf(false) }
     // The same for Home's black: read once Home is back, after the film's start has used [fresh].
     var blackForFilm by remember { mutableStateOf(false) }
+    // Let go into an app with no frame of that moment, on a TV where none can be had later either
+    // (a slow PixelCopy, or the film's file stuck): the picture is whatever the film last stopped
+    // on, a day old on Sony BRAVIA UR2 (MT5893, Android 9) with the film always moving, and Home
+    // came back to it, then black, then the film (issue #941). Back on black, as from a screensaver
+    // in another format (owner, 2026-10-29).
+    var blackForStale by remember { mutableStateOf(false) }
 
     fun release() {
         reader.close()
@@ -298,6 +304,7 @@ fun LiveWallpaper(
             // The picture as it was, of an earlier moment, rather than black; it catches up behind
             // the app (LaunchedEffect(keep)).
             DiagLog.i("wallpaper film: no frame in time to leave on")
+            if (copySlow || FileFramesStuck.now(context)) blackForStale = true
             cover.snapTo(0f)
             return
         }
@@ -482,7 +489,13 @@ fun LiveWallpaper(
             fresh = true
             blackForFilm = true
         }
-        val black = keep && blackForFilm && play && cover.value > 0f
+        val stale = keep && blackForStale && play
+        if (keep) blackForStale = false
+        if (stale) {
+            DiagLog.i("wallpaper: the picture is older than where the film was let go; black until the film")
+            cover.snapTo(1f)
+        }
+        val black = keep && (blackForFilm || stale) && play && cover.value > 0f
         if (keep) blackForFilm = false
         if (black) {
             // Black until the film's first frame; the picture only if it does not come.
@@ -505,6 +518,9 @@ fun LiveWallpaper(
             // Home comes back on the shot it left with the film going on from it. Once the app is
             // in; not under a screensaver of aerials, which moves the spot on every second.
             delay(BEHIND_CATCH_UP_MS)
+            // Black already, out of sight: set as Home comes back, its first frame showed the old
+            // picture (MiTV-MFTR0 with file frames made to fail, issue #941).
+            if (blackForStale && !keepNow) cover.snapTo(1f)
             val left = Wallpapers.leftLiveSpot()
             if (!keepNow && !otherFormatNow && !AerialStart.running && player == null && left != null) {
                 catchUp(left, underFilm = true)
