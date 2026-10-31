@@ -271,7 +271,10 @@ tcast_install() {
 BEFORE=$(installed_code)
 APK=$(build "$FLAVOR")
 echo "Installing $APK"
-if ! OUT=$(adb install -r "$APK" 2>&1); then
+# Some firmwares exit 0 on a failed install (TCL p331, Android 5.1: "Failure [INSTALL_PARSE_FAILED_
+# INCONSISTENT_CERTIFICATES]" with exit 0, issue #1017), so only "Success" counts.
+OUT=$(adb install -r "$APK" 2>&1); RC=$?
+if [ "$RC" -ne 0 ] || ! printf '%s\n' "$OUT" | grep -q Success; then
   echo "$OUT" >&2
   case "$OUT" in
     *VERIFICATION_FAILURE*)
@@ -305,6 +308,11 @@ if ! OUT=$(adb install -r "$APK" 2>&1); then
       fi
       [ "$TCAST_OK" = 1 ] || installed_now || { echo "Aerial was not installed; nothing else was changed." >&2; exit 1; }
       FLAVOR=guard
+      ;;
+    *INCONSISTENT_CERTIFICATES*|*UPDATE_INCOMPATIBLE*)
+      echo "The Aerial on this TV is signed with another key (a build of someone else's), so it cannot be updated in place." >&2
+      echo "Uninstall it first (this drops its settings, wallpapers and photos): adb uninstall $PKG" >&2
+      exit 1
       ;;
     *)
       [ "$FLAVOR" = standard ] && echo "This firmware may refuse apps that declare a home screen. Try: TV=$TV $0 guard" >&2
