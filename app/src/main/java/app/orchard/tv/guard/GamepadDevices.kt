@@ -33,4 +33,14 @@ internal object GamepadDevices {
 
         return true
     }
+
+    /**
+     * A mouse plugged in or paired: external, not virtual, with SOURCE_MOUSE. With the key filter
+     * on, a Bluetooth mouse moving hung system_server the way #774's gamepad did and the TV
+     * restarted (MiTV-MFTR0, Android 11, issue #988: the reporter's watchdog records, and no hang
+     * with the guard really off). Built-in pointers are left out: TCL MT5879's internal
+     * "gIrTouch_Mouse" reports MOUSE | TOUCHPAD but is not external.
+     */
+    fun isExternalMouse(isExternal: Boolean, isVirtual: Boolean, supportsMouse: Boolean): Boolean =
+        isExternal && !isVirtual && supportsMouse
 }

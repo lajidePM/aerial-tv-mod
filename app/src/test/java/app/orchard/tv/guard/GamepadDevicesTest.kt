@@ -42,4 +42,16 @@ class GamepadDevicesTest {
     @Test fun rejectsDevicesWithoutGamepadSource() {
         assertFalse(GamepadDevices.isPhysicalGamepad("Keyboard", false, false, 0x1234, 0x5678))
     }
+
+    @Test fun externalMouseCounts() {
+        assertTrue(GamepadDevices.isExternalMouse(isExternal = true, isVirtual = false, supportsMouse = true))
+    }
+
+    @Test fun builtInPointerAndOthersDoNot() {
+        // TCL MT5879's gIrTouch_Mouse: MOUSE | TOUCHPAD, not external.
+        assertFalse(GamepadDevices.isExternalMouse(isExternal = false, isVirtual = false, supportsMouse = true))
+        assertFalse(GamepadDevices.isExternalMouse(isExternal = true, isVirtual = true, supportsMouse = true))
+        // Xiaomi's Bluetooth remote: external, keyboard and dpad only.
+        assertFalse(GamepadDevices.isExternalMouse(isExternal = true, isVirtual = false, supportsMouse = false))
+    }
 }

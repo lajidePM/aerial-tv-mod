@@ -528,10 +528,10 @@ class HomeGuardService : AccessibilityService() {
             addDataScheme("package")
         })
         screenOff = getSystemService<PowerManager>()?.isInteractive == false
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
-            runCatching { getSystemService<InputManager>()?.registerInputDeviceListener(gamepadListener, handler) }
-            lookForGamepads()
-        }
+        // On every version: a gamepad only matters up to Android 11, but a mouse also hangs the
+        // filter Android 12+ keeps on while Aerial is in front (issue #988).
+        runCatching { getSystemService<InputManager>()?.registerInputDeviceListener(gamepadListener, handler) }
+        lookForGamepads()
         updateKeyFilter()
         watchCecInput()
         volumeSeen = volumeNow()
@@ -768,9 +768,13 @@ class HomeGuardService : AccessibilityService() {
         // TV every 5-20 minutes (issue #774, eight dropbox records). Home in that app then goes to
         // the system, and Aerial comes back after Android's 5 s hold.
         val padGame = gamepadAttached && !aerialResumed && lastWindow?.first.let { it != null && it != packageName && it !in stockHomes }
-        val wanted = !keysPassThrough && !screenOff && !padGame && (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)
+        // A mouse hangs it the same way anywhere it moves, Aerial's Home included (issue #988), so
+        // with one connected nothing is filtered: Home goes to the system, and the guard brings
+        // Aerial back from the stock launcher.
+        val wanted = !keysPassThrough && !screenOff && !padGame && !mouseAttached &&
+            (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)
         val homeWanted = wanted && !isDefaultHome()
-        val cecWanted = !screenOff && CecHome.active(this, lastWindow?.first)
+        val cecWanted = !screenOff && !mouseAttached && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
         var want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
         if (keyFilterRival) want = want and AccessibilityServiceInfo.DEFAULT.inv()
@@ -788,7 +792,21 @@ class HomeGuardService : AccessibilityService() {
      */
     private var gamepadAttached = false
 
+    /** Whether an external mouse is connected (Android 10+, where isExternal is public); see updateKeyFilter. */
+    private var mouseAttached = false
+
     private fun lookForGamepads() {
+        mouseAttached = Build.VERSION.SDK_INT >= 29 && runCatching {
+            InputDevice.getDeviceIds().any { id ->
+                InputDevice.getDevice(id)?.let {
+                    GamepadDevices.isExternalMouse(
+                        isExternal = it.isExternal,
+                        isVirtual = it.isVirtual,
+                        supportsMouse = it.supportsSource(InputDevice.SOURCE_MOUSE),
+                    )
+                } == true
+            }
+        }.getOrDefault(false)
         gamepadAttached = runCatching {
             InputDevice.getDeviceIds().any { id ->
                 InputDevice.getDevice(id)?.let {
@@ -1475,7 +1493,7 @@ class HomeGuardService : AccessibilityService() {
             val s = instance ?: return "Home Guard bound=false resumed=$aerialResumed"
             val flag = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
             return "Home Guard bound=true resumed=$aerialResumed filter=${s.serviceInfo?.flags?.and(flag) != 0} " +
-                "screenOff=${s.screenOff} gamepad=${s.gamepadAttached} stockAllowed=${SystemClock.uptimeMillis() < s.allowStockUntil} " +
+                "screenOff=${s.screenOff} gamepad=${s.gamepadAttached} mouse=${s.mouseAttached} stockAllowed=${SystemClock.uptimeMillis() < s.allowStockUntil} " +
                 "front=${s.lastWindow} windowEvents=${s.windowsSeen} resolved=${s.resolvedHome()} homes=${s.stockHomes}"
         }
 
