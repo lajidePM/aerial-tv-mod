@@ -375,9 +375,11 @@ class HomeGuardService : AccessibilityService() {
             if (front != null && front !in stockHomes) {
                 windowsAtHome = windowsSeen
                 homePressedAt = SystemClock.uptimeMillis()
+                homeFrom = front
                 handler.removeCallbacks(frontAfterHome)
                 handler.removeCallbacks(frontAfterHomeAgain)
-                handler.postDelayed(frontAfterHome, if (deafAfterHome) DEAF_LOOK_MS else FRONT_AFTER_HOME_MS)
+                val quiet = deafAfterHome || front in quietHomeApps(this@HomeGuardService)
+                handler.postDelayed(frontAfterHome, if (quiet) DEAF_LOOK_MS else FRONT_AFTER_HOME_MS)
                 return
             }
             // The stock launcher's window change usually comes first and already brought Aerial
@@ -417,7 +419,8 @@ class HomeGuardService : AccessibilityService() {
         val front = frontByUsage()
         if (front == null || front.first !in stockHomes) {
             // Usage stats may not have the stock launcher yet: look again until the usual wait is up.
-            if (deafAfterHome && SystemClock.uptimeMillis() - homePressedAt < FRONT_AFTER_HOME_MS) {
+            val quiet = deafAfterHome || homeFrom in quietHomeApps(this)
+            if (quiet && SystemClock.uptimeMillis() - homePressedAt < FRONT_AFTER_HOME_MS) {
                 handler.postDelayed(frontAfterHomeAgain, DEAF_LOOK_MS)
             }
             return@Runnable
@@ -426,6 +429,7 @@ class HomeGuardService : AccessibilityService() {
         lastWindow = front
         allowStockUntil = 0L
         goHome()
+        homeFrom?.let { noteQuietHomeApp(this, it) }
         deafAfterHome = true
         if (!deafAfterHomeRestarted) {
             deafAfterHomeRestarted = true
@@ -434,6 +438,9 @@ class HomeGuardService : AccessibilityService() {
         }
     }
     private val frontAfterHomeAgain: Runnable = Runnable { frontAfterHome.run() }
+
+    /** The app Home was last pressed in; see frontAfterHome. */
+    private var homeFrom: String? = null
 
     /** The firmware putting its own screensaver back while Aerial's is chosen (GuardSetup). */
     private val screensaverObserver by lazy {
@@ -1429,6 +1436,32 @@ class HomeGuardService : AccessibilityService() {
         /** Home has found the guard deaf, and no window change has come since; see frontAfterHome. */
         @Volatile
         private var deafAfterHome = false
+
+        /**
+         * Apps where Home brought no window change of the stock launcher, kept across processes.
+         * In the Bilibili client blbl.cat3399 on Xiaomi MiTV-MFTR0 (Android 14, OS3.0.106), the
+         * guard saw the app's window but none of PatchWall's after Home, every time and again after
+         * accessibility was switched off and on; any window change after that ended deafAfterHome,
+         * so each Home there waited the full FRONT_AFTER_HOME_MS with PatchWall on screen (issue
+         * #984). In these apps usage stats are read every DEAF_LOOK_MS from the press on.
+         */
+        private var quietHomeApps: Set<String>? = null
+
+        private const val QUIET_HOME_PREFS = "guard_quiet_home"
+        private const val QUIET_HOME_MAX = 20
+
+        private fun quietHomeApps(context: Context): Set<String> = quietHomeApps
+            ?: context.getSharedPreferences(QUIET_HOME_PREFS, Context.MODE_PRIVATE)
+                .getStringSet("apps", null).orEmpty().toSet().also { quietHomeApps = it }
+
+        private fun noteQuietHomeApp(context: Context, pkg: String) {
+            val now = quietHomeApps(context)
+            if (pkg in now) return
+            val next = (now + pkg).toList().takeLast(QUIET_HOME_MAX).toSet()
+            quietHomeApps = next
+            Log.i(TAG, "no window change after Home in $pkg; reading usage stats at once there from now on")
+            context.getSharedPreferences(QUIET_HOME_PREFS, Context.MODE_PRIVATE).edit().putStringSet("apps", next).apply()
+        }
 
         /** VIDAA's assistant and its launcher (聚好看), on the two VIDAA builds reported (issues #7, #40). */
         private val VIDAA_PACKAGES = listOf("com.hisense.vidaaassistant", "com.jamdeo.tv.vod")
