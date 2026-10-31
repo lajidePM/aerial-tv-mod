@@ -273,7 +273,7 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
   - 锁定期间只记窗口，不启动界面、不拦 HOME；凭据加密存储里的偏好（keep_adb、屏保）解锁后再读
   - ACTION_USER_UNLOCKED → 1.5 秒后按下面的规则接管。TCL 75S365C 上从解锁到 Aerial 7.6 秒 → 约 2 秒
 运行：HomeGuardService
-  - onKeyEvent(HOME) → 不是默认桌面时吞掉按键，打开 Aerial（Android 11 及以下一直开着按键过滤，见 filterKeys；接着手柄 `SOURCE_GAMEPAD` 且前台是别的 App 时不过滤，#774：过滤时每个手柄事件都要经 system_server 主线程重新注入，MFTR0 安卓 11 串流时卡死重启。不看 joystick 位：TCL MT5879 的红外接收器带这一位；名字里带 virtual 的设备也不算，索尼的语音搜索设备 `virtual-search` 自称手柄，#840）；插着外接鼠标（安卓 10+ `InputDevice.isExternal`、非虚拟、带 `SOURCE_MOUSE`）时在所有界面都不过滤，Aerial 首页也一样，#988：MFTR0 安卓 11 上蓝牙鼠标走同一条注入路径卡死重启；TCL MT5879 自带的 `gIrTouch_Mouse` 不是外接，不算）
+  - onKeyEvent(HOME) → 不是默认桌面时吞掉按键，打开 Aerial（Android 11 及以下一直开着按键过滤，见 filterKeys；接着手柄 `SOURCE_GAMEPAD` 且前台是别的 App 时不过滤，#774：过滤时每个手柄事件都要经 system_server 主线程重新注入，MFTR0 安卓 11 串流时卡死重启。不看 joystick 位：TCL MT5879 的红外接收器带这一位；名字里带 virtual 的设备也不算，索尼的语音搜索设备 `virtual-search` 自称手柄，#840）；插着外接鼠标（安卓 10+ `InputDevice.isExternal`、非虚拟、带 `SOURCE_MOUSE`）时，在装有 PatchWall 或小米系统界面的电视上所有界面都不过滤（#1039：TCL 75Q10L 插鼠标开着过滤不卡，关掉反而主页键先闪 TCL 桌面），Aerial 首页也一样，#988：MFTR0 安卓 11 上蓝牙鼠标走同一条注入路径卡死重启；TCL MT5879 自带的 `gIrTouch_Mouse` 不是外接，不算）
   - 守护「聋」了（#651）：重启无障碍在安卓 6 以上改成把 Aerial 从列表拿出再放回（只改 `accessibility_enabled` 不会重新绑定）；发现聋之后，按主页键起每 150 ms 查一次用量统计，直到收到窗口事件。开机复查时最后看到的窗口如果是负优先级的 HOME（开机向导、FallbackHome，`fallbackHomes`），当作前台未知，问用量统计（#701）。问用量统计时看最后一个移到前台的 Activity 之后有没有它自己的「移到后台」（`UsageFront`）：有且之后没有别的上来，就是前台空着，按原桌面在前台处理（乐视 X4-50 退出最后一个 App 后黑屏、没有窗口，#1023）
   - TYPE_WINDOW_STATE_CHANGED → 原桌面的 HOME Activity 到前台 → 打开 Aerial
   - 亮屏、开机、复活、解锁 → 等 1.5 秒，前台还是原桌面（或者不知道）才打开 Aerial（takeOverOnceSettled）。

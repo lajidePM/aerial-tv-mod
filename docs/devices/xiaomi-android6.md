@@ -36,3 +36,7 @@ Amlogic 平台、Android 6.0.x 的一批小米电视和盒子，问题基本相�
 - MiTV4-ANSM0、小米盒子 3S（MDZ-19-AA，queenchristina）：从 Aerial 打开 `com.xiaomi.mitv.settings/.entry.MainActivity`，它一出来就自己 finish（不是崩溃，`mLastPausedActivity ... f`）。它只是在 PatchWall 上弹设置浮层（`MitvSettingsPopup.showPopup`），桌面不是 PatchWall 就挂不上。原桌面打开正常；关掉守护也一样关。
 - 盒子 3S 的报告人验证了 `am broadcast -a com.xiaomi.intent.action.show.globalsetting` 能把浮层弹在 Aerial 上、遥控器能操作。main 上（未发版）：控制中心「设置」和设置磁贴打开小米设置后 0.8 秒内回到 Aerial、且 Aerial 有焦点，就改发这个广播（`SystemProbe.settingsFallbacks` + `LaunchFallback`）；Lite 同样（`SystemIntents.settingsBounced`）。MFTR0 也有这个接收器，但设置页正常打开，不会发。没有真机验证浮层这条路。
 - 报告人给的绕过：连按两次主页键进最近任务，从里面点「小米盒子设置」；或 `adb shell am start -n com.android.tv.settings/.MainSettings`。
+
+## 米家 App 的主页键要等 5 秒（#933，MiTV4 pulpfiction 6.0.1）
+
+米家 App 的遥控器按主页键不经过守护的按键过滤，系统自己打开 PatchWall，之后 5 秒内 App 的 `startActivity` 都被挂起（`stopAppSwitches`）。安卓 5–8.1 的 PendingIntent 由系统身份发出，不受这个限制（报告人在这台上实测 0.25 s）；1.75 之后守护拉回 Aerial 一律走 PendingIntent（安卓 8.0 模拟器对照 5.0 s → 0.05 s）。安卓 9 起系统按真实发送者算，不管用。

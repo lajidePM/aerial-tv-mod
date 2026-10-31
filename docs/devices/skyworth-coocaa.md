@@ -60,3 +60,7 @@ root 后把 `/system/pcfg/<型号目录>/config/general_config.xml` 里的 `DEFA
 
 - 5S09_A3（Tianci，MStar maserati，Android 6，#895，报告人在电视前核对）：`screen_brightness` 能写、`mActualBacklight` 跟着变，但面板亮度不变；背光在 `com.tianci.setting/.activity.PictureSoundSetting`（图像与声音）里，酷开自己调背光时 Settings 不变。没有 `com.skyworth.setting`。1.71 起 devices.json 标 `ignoresScreenBrightness`，亮度按钮打开这个页面。信号源：TvInputManager 为空，控制中心「信号源」打开 `coocaa.intent.action.SOURCE_DIALOG` 能切；切换由 `com.tianci.tv/.SkyLauncher` 带 extras 完成，报告人试的 `source`/`sourceIndex`/`inputSource`/`index` 都不行；HDMI 1 = 23，HDMI 2 = 24。
 - C10 投影（3H352_C10，Android 9，#915）：遥控器「对焦」（扫描码 742，KeyCode 1116 `QUICK_START6`）和「设置」（176）的按下被 `com.cvte.tv.hotkey` 消费，只把抬起给 App。1.71 起屏保收到没有按下的抬起也退出。
+
+## 飞利浦 50PUF6192/T3（创维代工，海思 Hi3751V553，安卓 5.1，#1038）
+
+遥控器关机走海思的 BlackScreen 待机，再开机时固件清空 `enabled_accessibility_services`，并连着强停 Aerial 两次（`is not system and isn't Visibility kill`，再由 `com.tianci.system` 深度清理），日志 `hisi is force killing, no way to start: app.orchard.tv`，这次开机内系统不再拉起它，回到酷开。`adb reboot` 开机正常。App 改不了。
