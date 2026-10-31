@@ -4,7 +4,17 @@
 
 ## 现状（2026-10-31）
 
-- **未发布（2026-10-31，#1004）：海信 VIDAA_TV（安卓 9，Amlogic T963）1.72 起应用内升级不弹安装界面**。1.72 把安装会话从安卓 13 起改成 9 起（带 `.dm`），这台提交会话后既没有回复、也没有确认页，代码只在 `startActivity` 抛异常时才退回 `ACTION_VIEW`。现在 `Updates.awaitSession` 计时：安卓 12 以下提交后 8 秒没回复、或启动确认页后 4 秒主页没进 `onPause`，就放弃会话、打开系统安装器（不带 `.dm`）；等待期间不再开第二个会话（报告人连按两次开了两个）；各步写进诊断日志。安卓 12+ 只等确认页（自己更新可能不弹页、正在安装的会话不能放弃）。验证：安卓 9 模拟器（aerial28）+ `update_test_self`：正常路径确认页照常弹、12 秒不误触发；用 root 禁掉 `UpdateResult` 模拟收不到回复，连按两次只开一个会话，8 秒后打开系统安装器，点安装后装上。**没有验证的**：「确认页启动了但没出现」那 4 秒分支（模拟器做不出来，和 8 秒分支共用放弃 + 退回代码）；海信真机（手上没有）；小米、TCL 上没装这版。1.72 / 1.73 / 1.74 的海信用户这次得用 ADB 或安装脚本手动升一次。Lite 不走会话，不用移植。
+- **未发布（main，1.75 之后）**：#1023 乐视 X4-50 退出最后一个 App 后黑屏、守护不接管（e6f22ad）：守护没看到窗口时问用量统计，原来只取最后一次「移到前台」；现在看它之后有没有自己的「移到后台」（`guard/UsageFront.kt`），有就当前台空着、按原桌面在前台处理（也不再被「Aerial 常被强停」挡住）。只有单元测试，手上的电视都有原桌面兜底，做不出这个场景。
+
+- **1.75（versionCode 96），2026-10-31 下午发布**（[v1.75](https://github.com/pengchujin/aerial-tv/releases/tag/v1.75)），Lite 没改（仍 1.11 / 12）。记录见 `local/triage/2026-10-31b-full.md`。
+  - **1.74 在安卓 5.x 上守护一绑定就崩**（#1018 #1010 #1012 #1017，小米电视 3、盒子 4、TCL p331、乐视 X43S）：#964 那次在 `BootOpen.noteStartedInStandby` 里用了 API 23 的 `Context.getSystemService(Class)`，守护 `onServiceConnected` 第一行就调用（11bfb00，改成 core-ktx）。`app/build.gradle.kts` 的 lint 把 **NewApi 设为 fatal**，`assembleRelease` 带的 lintVital 会拦（把旧写法放回去试过，报错）；UhdCanvas 的两处误报（只在安卓 10+ 的 4K 画布里）加了注解。顺带修了 `StandIn` 的 `checkSelfPermission`（API 23，f0b67aa）。**以前只跑 Lite 的 lint，app 的 NewApi 一直没人看**。验证：安卓 5.0 模拟器（aerial21）上 1.74 正式包复现崩溃，修复版守护绑定。
+  - #1004 #1011 海信安装会话不弹界面（8b4a34b）：是「Issue 1004 review」会话写的，它提交在了 `smooth-corners-everywhere` 分支上，这次 cherry-pick 到 main 一起发。海信 1.72–1.74 用户这一次要手动升。
+  - #988 外接鼠标卡死重启（c34ac8f）：MFTR0 安卓 11 上真蓝牙鼠标走无障碍输入过滤的注入路径，和 #774 手柄同一个死锁（报告人 revoke 权限真正关掉守护后就不卡）。插着外接鼠标（`isExternal`、非虚拟、`SOURCE_MOUSE`，安卓 10+）时任何界面都不过滤；输入设备监听改为所有版本都注册。状态行加了 `mouse=`。验证：小米 MFTR0、TCL MT5879 上用 `hid` 造蓝牙鼠标，插上 `mouse=true`、TCL 在 AIDA64 里 `filter=false`，拔掉恢复；TCL 自带的 `gIrTouch_Mouse`（MOUSE|TOUCHPAD，非外接）不算。**没复现真鼠标的死锁**。
+  - #1017 `install.sh` 只认输出里的 `Success`（TCL p331 安卓 5.1 失败也返回 0），签名不一致时提示先卸载；agent.md 两份同步（e2f89ac）。
+  - #1009 开机打开的几行改写 DiagLog，首页超过 3 分钟才创建、不打开时也记一行（a6b5f22），等 MiTV4-ANSM0 报告人贴诊断。
+  - PR #1019（ZhiHua）回首页不再无条件 `vm.reload()`，只靠 `reloadIfPackagesChanged()`（87d680c）；小米上回首页只剩 `onStart`。
+  - 验证：154 个单元测试、Lite lint、三个包签名 e089…。测试包 1.75-test（95）先装两台：小米 `adb install -r`、TCL 多屏互动推 guard（uiautomator 确认焦点在「同意」再按确定）。正式包同样装两台 + compile speed：守护在（TCL 两个 walleve 服务保留）、主页键（小米从设置和 HDMI 2、TCL 从 AIDA64 和 HDMI 2）拉回、信号源列表 7 项；屏保接力两台都 screenrecord 逐帧看过（进出无黑帧、影片连续、磁贴淡回；TCL 的录屏起步慢，退出只录到淡回开头）。官网 version.txt = v1.75，三个包 md5 和 Release 一致。
+  - 工作目录 `/Users/jzb/Documents/ATV` 被「设计调研」会话切到 `smooth-corners-everywhere`（PR #1005），里面还有别的会话未提交的 HANDOFF / hisense-vidaa.md 改动，所以这一轮在 worktree `/Users/jzb/Documents/ATV-main`（main）上改（`local` 是指向原目录的软链，`local.properties` 复制过去）。
 
 - **1.74（versionCode 94）+ Aerial Lite 1.11（12），2026-10-31 上午发布**（[v1.74](https://github.com/pengchujin/aerial-tv/releases/tag/v1.74)）：就是下面这一轮早巡检的全部代码。发版前补测：小米 MFTR0 唤醒后打开开机目标（#964，户主遥控器唤醒，日志 `brought back on wake: opening HDMI 1`，测完开机目标已改回「不打开」）。正式包：小米 `adb install -r` standard；TCL 多屏互动推 guard（uiautomator 确认焦点在「同意」再按确定）；两台 compile speed、守护在（TCL 的两个 walleve 服务保留）、主页键（小米从设置和 HDMI 2、TCL 从 AIDA64 和 HDMI 2）和信号源列表回归通过，屏保接力两台都录屏逐帧看过。三个包签名 e089…，官网 version.txt = v1.74，三个包 md5 和 Release 一致。#964 #915 #834 #998 #818 #848 贴了发布链接（`local/triage/release-1.74-posts.py`），#848 关闭。
 
