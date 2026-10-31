@@ -482,6 +482,7 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        BootOpen.noteStartedInStandby(this)
         // The profile is in credential storage: only once unlocked.
         if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS && GuardSetup.isUserUnlocked(this) &&
             DeviceProfile.current(this).bootStockMs > 0

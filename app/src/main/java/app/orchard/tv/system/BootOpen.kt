@@ -1,6 +1,8 @@
 package app.orchard.tv.system
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.content.edit
 import kotlin.math.abs
@@ -71,7 +73,26 @@ object BootOpen {
     fun dueAfterColdWake(context: Context, processAgeMs: Long): Boolean {
         if (processAgeMs !in 0..COLD_WAKE_MS) return false
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return sleptSince(prefs.getLong(OPENED_ASLEEP, -1L), asleep())
+        return sleptSince(prefs.getLong(OPENED_ASLEEP, -1L), asleep()) || offSinceOpened(prefs)
+    }
+
+    /**
+     * Aerial's process started while the TV was in standby: count that as the screen going off.
+     * Xiaomi MiTV-ASTP0 (Android 9) stops Aerial on the way into standby before the screen-off
+     * broadcast reaches it, and a short standby does not suspend the kernel long enough for
+     * [sleptSince]; the guard revived in standby is the only one to know (issue #964, 6 of 6 wakes
+     * from Home stayed on Aerial's Home).
+     */
+    fun noteStartedInStandby(context: Context) {
+        if (context.getSystemService(PowerManager::class.java)?.isInteractive == false) noteScreenOff(context)
+    }
+
+    /** Whether the screen went off in this boot after the target was last opened. */
+    private fun offSinceOpened(prefs: SharedPreferences): Boolean {
+        val opened = prefs.getLong(OPENED_ELAPSED, -1L)
+        if (opened < 0 || !thisBoot(opened, prefs.getLong(OPENED_BOOT, 0L))) return false
+        val off = prefs.getLong(SCREEN_OFF_ELAPSED, -1L)
+        return off >= 0 && thisBoot(off, prefs.getLong(SCREEN_OFF_BOOT, 0L)) && off > opened
     }
 
     /** Whether the target was opened in this boot within the last [ms]. */
@@ -99,9 +120,7 @@ object BootOpen {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val opened = prefs.getLong(OPENED_ELAPSED, -1L)
         if (opened < 0 || !thisBoot(opened, prefs.getLong(OPENED_BOOT, 0L))) return true
-        if (sleptSince(prefs.getLong(OPENED_ASLEEP, -1L), asleep())) return true
-        val off = prefs.getLong(SCREEN_OFF_ELAPSED, -1L)
-        return off >= 0 && thisBoot(off, prefs.getLong(SCREEN_OFF_BOOT, 0L)) && off > opened
+        return sleptSince(prefs.getLong(OPENED_ASLEEP, -1L), asleep()) || offSinceOpened(prefs)
     }
 
     private const val SAME_BOOT_SLACK_MS = 2 * 60 * 1000L
