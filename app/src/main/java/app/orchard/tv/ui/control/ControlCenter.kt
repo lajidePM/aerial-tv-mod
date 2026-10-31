@@ -273,7 +273,12 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
                 Glyph.Gear, stringResource(R.string.cc_settings),
                 focusRequester = settingsFocus,
                 modifier = Modifier.onFocusChanged { if (it.isFocused) cameFrom = settingsFocus },
-            ) { vm.whenUnlocked { onOpen(SystemProbe.settingsIntent(context)) } }
+            ) {
+                vm.whenUnlocked {
+                    LaunchFallback.arm(SystemProbe.settingsFallbacks(context))
+                    onOpen(SystemProbe.settingsIntent(context))
+                }
+            }
         }
 
         Spacer(Modifier.height(12.dp))

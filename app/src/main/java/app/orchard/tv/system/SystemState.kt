@@ -205,6 +205,23 @@ object SystemProbe {
      */
     private val KONKA_SETTINGS = ComponentName("com.konka.tvsettings", "com.konka.service.SettingService")
 
+    /**
+     * Xiaomi's settings menu as the popup its settings app shows on a broadcast, for where its
+     * activity closes at once. On Android 6 (Mi TV 4 MiTV4-ANSM0, issue #834; Mi Box 3S, the
+     * comment there by recall350) entry.MainActivity only hosts that popup over PatchWall and
+     * finishes with any other Home in front, no crash; the broadcast showed it over Aerial with the
+     * remote working. MiTV-MFTR0 (Android 14) has the receiver too, but its activity opens.
+     */
+    private val XIAOMI_SETTINGS_POPUP = Intent("com.xiaomi.intent.action.show.globalsetting").setPackage("com.xiaomi.mitv.settings")
+
+    /** What to open when the settings page just opened closes at once (LaunchFallback). */
+    fun settingsFallbacks(context: Context): List<Intent> =
+        listOfNotNull(
+            XIAOMI_SETTINGS_POPUP.takeIf { i ->
+                runCatching { context.packageManager.queryBroadcastReceivers(i, 0).any { it.activityInfo.exported } }.getOrDefault(false)
+            }?.let(::Intent),
+        )
+
     private fun konkaSettingsIntent(context: Context): Intent? {
         val intent = Intent("com.konka.settings.action.SETTING_MAIN_VIEW").setComponent(KONKA_SETTINGS)
         return intent.takeIf { context.packageManager.resolveService(it, 0)?.serviceInfo?.exported == true }
@@ -370,6 +387,10 @@ object SystemProbe {
 
     fun startSettingsIntent(context: Context, intent: Intent) {
         if (HisenseSources.open(context, intent)) return
+        if (intent.action == XIAOMI_SETTINGS_POPUP.action && intent.`package` == XIAOMI_SETTINGS_POPUP.`package`) {
+            context.sendBroadcast(intent)
+            return
+        }
         if (intent.component == KONKA_SETTINGS) {
             if (runCatching { context.startService(intent) }.getOrNull() != null) return
             context.startActivity(settingsLaunchIntent(context, settingsActivityIntent(context)))

@@ -911,6 +911,8 @@ class MainActivity : ComponentActivity() {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) remove("android:activity.packageName")
             }
         }
+        // Xiaomi's settings tile can close at once like Control Center's button (issue #834).
+        LaunchFallback.arm(if (app.packageName == "com.xiaomi.mitv.settings") SystemProbe.settingsFallbacks(this) else emptyList())
         try {
             if (HisenseSources.open(this, app.launchIntent())) return
             startActivity(settingsLaunchIntent(this, app.launchIntent()), options)

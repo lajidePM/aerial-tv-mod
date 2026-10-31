@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 
 /**
@@ -87,6 +88,33 @@ object SystemIntents {
         if (runCatching { context.packageManager.resolveService(konka, 0) }.getOrNull()?.serviceInfo?.exported != true) return false
         return runCatching { context.startService(konka) }.getOrNull() != null
     }
+
+    /**
+     * Xiaomi's settings menu as the popup its settings app shows on a broadcast, for where its
+     * activity closes at once: on Android 6 (Mi TV 4, Mi Box 3S, the full app's issue #834) it only
+     * hosts that popup over PatchWall and finishes over any other Home. Older Xiaomi firmwares are
+     * not verified. Armed when settings open, sent if Home is back within a moment (onResume).
+     */
+    private var settingsOpenedAt = 0L
+
+    fun noteSettingsOpened(intent: Intent) {
+        settingsOpenedAt = if (intent.component?.packageName == XIAOMI_SETTINGS) SystemClock.uptimeMillis() else 0L
+    }
+
+    /** Whether the Xiaomi settings just opened closed at once; asked once, on resume. */
+    fun settingsBounced(context: Context): Boolean {
+        val at = settingsOpenedAt
+        settingsOpenedAt = 0L
+        if (at == 0L || SystemClock.uptimeMillis() - at > 800L) return false
+        val popup = Intent("com.xiaomi.intent.action.show.globalsetting").setPackage(XIAOMI_SETTINGS)
+        return runCatching { context.packageManager.queryBroadcastReceivers(popup, 0) }.getOrNull().orEmpty().any { it.activityInfo.exported }
+    }
+
+    fun showXiaomiSettingsPopup(context: Context) {
+        runCatching { context.sendBroadcast(Intent("com.xiaomi.intent.action.show.globalsetting").setPackage(XIAOMI_SETTINGS)) }
+    }
+
+    private const val XIAOMI_SETTINGS = "com.xiaomi.mitv.settings"
 
     /** Not Intent.resolveActivity: it returns an explicit component unchecked. */
     private fun first(context: Context, vararg intents: Intent): Intent {

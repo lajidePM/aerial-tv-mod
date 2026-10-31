@@ -131,6 +131,9 @@ class HomeActivity : Activity(), HomeView.Host {
         refreshDaily()
         Weather.refreshIfStale({ work.execute(it) }) { handler.post { showWeather() } }
         resetIdle()
+        if (SystemIntents.settingsBounced(this)) handler.postDelayed({
+            if (resumed && hasWindowFocus()) SystemIntents.showXiaomiSettingsPopup(this)
+        }, 400)
     }
 
     override fun onPause() {
