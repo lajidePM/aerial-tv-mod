@@ -28,6 +28,13 @@ android {
         if (diag) versionNameSuffix = "-diag"
     }
 
+    // A call newer than minSdk fails the release build (lintVital runs with assembleRelease):
+    // 1.74 shipped Context.getSystemService(Class), Android 6+, in the guard's onServiceConnected,
+    // and the guard crashed on every bind on Android 5 (issues #1010 #1012 #1017 #1018).
+    lint {
+        fatal += "NewApi"
+    }
+
     // standard: a normal HOME app. guard: no HOME intent filter at all, for China-market firmwares
     // (some TCL / Hisense builds) that refuse to install any package declaring CATEGORY_HOME. The guard
     // build takes over Home through its accessibility service instead.
