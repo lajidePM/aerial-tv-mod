@@ -358,7 +358,14 @@ class MainActivity : ComponentActivity() {
 
     /** Once per boot (Settings.Global.BOOT_COUNT, Android 7+), within a few minutes of it. */
     private fun firstStartSinceBoot(): Boolean {
-        if (SystemClock.elapsedRealtime() > 3 * 60 * 1000L) return false
+        if (SystemClock.elapsedRealtime() > 3 * 60 * 1000L) {
+            // In the diagnostics: an app to start on that never opened at power-on (MiTV4-ANSM0,
+            // Android 6.0.1, issue #1009) may be Home created later than this.
+            if (AerialSettings.bootSource != null || AerialSettings.bootApp != null) {
+                DiagLog.i("boot target: Home first created ${SystemClock.elapsedRealtime() / 1000} s after boot, too late to open it")
+            }
+            return false
+        }
         if (Build.VERSION.SDK_INT < 24) return true
         val boot = Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1)
         val prefs = getSharedPreferences("system", MODE_PRIVATE)
@@ -378,7 +385,7 @@ class MainActivity : ComponentActivity() {
         if (id == null && pkg == null) return
         if (!again && SystemClock.elapsedRealtime() - bootSourceOpenedAt < 15_000) return
         if (!again && !BootOpen.due(this)) {
-            android.util.Log.i("Aerial", "$reason: already opened ${id ?: pkg} since the TV came on")
+            DiagLog.i("$reason: already opened ${id ?: pkg} since the TV came on")
             return
         }
         bootSourceOpenedAt = SystemClock.elapsedRealtime()
@@ -400,7 +407,7 @@ class MainActivity : ComponentActivity() {
                     else vm.entry(pkg!!)?.let { it.label to it.launchIntent() }
                 }.filterNotNull().first()
             } ?: run {
-                android.util.Log.w("Aerial", "$reason: ${id ?: pkg} not listed; not opening it")
+                DiagLog.i("$reason: ${id ?: pkg} not listed; not opening it")
                 return@launch
             }
             // A live TV app opened before the network is up shows an error and stays on it: a box
@@ -410,7 +417,7 @@ class MainActivity : ComponentActivity() {
                     while (SystemProbe.network(this@MainActivity).kind == NetKind.Offline) delay(500)
                 }
             }
-            android.util.Log.i("Aerial", "$reason: opening ${intent.first}, what the TV starts on")
+            DiagLog.i("$reason: opening ${intent.first}, what the TV starts on")
             BootOpen.noteOpened(this@MainActivity)
             openedAppSinceHome = true
             open(intent.second)
