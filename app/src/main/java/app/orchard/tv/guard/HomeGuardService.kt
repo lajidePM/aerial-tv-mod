@@ -790,12 +790,15 @@ class HomeGuardService : AccessibilityService() {
         // the system, and Aerial comes back after Android's 5 s hold.
         val padGame = gamepadAttached && !aerialResumed && lastWindow?.first.let { it != null && it != packageName && it !in stockHomes }
         // A mouse hangs it the same way anywhere it moves, Aerial's Home included (issue #988), so
-        // with one connected nothing is filtered: Home goes to the system, and the guard brings
-        // Aerial back from the stock launcher.
-        val wanted = !keysPassThrough && !screenOff && !padGame && !mouseAttached &&
+        // on Xiaomi nothing is filtered with one connected: Home goes to the system, and the guard
+        // brings Aerial back from the stock launcher. Only there: on TCL 75Q10L (MT9655) a mouse
+        // never hung with the filter on, and without it Home showed the TCL launcher first
+        // (issue #1039).
+        val mouseHang = mouseAttached && xiaomiInput
+        val wanted = !keysPassThrough && !screenOff && !padGame && !mouseHang &&
             (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)
         val homeWanted = wanted && !isDefaultHome()
-        val cecWanted = !screenOff && !mouseAttached && CecHome.active(this, lastWindow?.first)
+        val cecWanted = !screenOff && !mouseHang && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
         var want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
         if (keyFilterRival) want = want and AccessibilityServiceInfo.DEFAULT.inv()
@@ -815,6 +818,15 @@ class HomeGuardService : AccessibilityService() {
 
     /** Whether an external mouse is connected (Android 10+, where isExternal is public); see updateKeyFilter. */
     private var mouseAttached = false
+
+    /**
+     * Xiaomi's input stack, where events injected again by the filter hung system_server (MiTV-MFTR0,
+     * Android 11: a gamepad in #774, a Bluetooth mouse in #988). Known by PatchWall or Xiaomi's
+     * system UI being installed; the hang itself can't be seen before it happens.
+     */
+    private val xiaomiInput by lazy {
+        listOf(PATCHWALL, "com.xiaomi.mitv.systemui").any { runCatching { packageManager.getPackageInfo(it, 0) }.isSuccess }
+    }
 
     private fun lookForGamepads() {
         mouseAttached = Build.VERSION.SDK_INT >= 29 && runCatching {
