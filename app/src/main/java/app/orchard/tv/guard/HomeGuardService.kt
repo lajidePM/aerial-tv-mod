@@ -3,6 +3,7 @@ package app.orchard.tv.guard
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
+import android.app.PendingIntent
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
@@ -1365,15 +1366,31 @@ class HomeGuardService : AccessibilityService() {
         }
         broughtBackAt = SystemClock.uptimeMillis()
         runCatching {
-            startActivity(
-                MainActivity.bringBackIntent(this).putExtra(MainActivity.EXTRA_WOKE, woke)
-                    .putExtra(MainActivity.EXTRA_REOPEN_BOOT, reopenBoot),
-            )
+            val intent = MainActivity.bringBackIntent(this).putExtra(MainActivity.EXTRA_WOKE, woke)
+                .putExtra(MainActivity.EXTRA_REOPEN_BOOT, reopenBoot)
+            if (!startPastHomeHold(intent)) startActivity(intent)
         }.onFailure { Log.w(TAG, "could not bring Aerial Home to the front", it) }
+    }
+
+    /**
+     * Android 5 to 8.1 hold an app's activity starts for 5 s after a Home the system handled
+     * (stopAppSwitches). A PendingIntent is sent by the system there, which may switch apps, so
+     * it is not held: Home from the Mi Home app's remote reaches PatchWall without the key filter,
+     * and Aerial came back after 5 s; sent this way, 0.25 s (Mi TV 4, Android 6.0.1, tried by the
+     * reporter, issue #933). Android 9 counts the app that sends it instead.
+     */
+    private fun startPastHomeHold(intent: Intent): Boolean {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O_MR1) return false
+        val flags = PendingIntent.FLAG_CANCEL_CURRENT or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        return runCatching { PendingIntent.getActivity(this, BRING_BACK_REQUEST, intent, flags).send() }
+            .onFailure { Log.w(TAG, "bringing Aerial back through a PendingIntent failed; starting it directly", it) }
+            .isSuccess
     }
 
     companion object {
         private const val TAG = "AerialGuard"
+        private const val BRING_BACK_REQUEST = 933
         private const val BOOT_WINDOW_MS = 3 * 60 * 1000L
         private const val HOME_KEY_CHECK_MS = 1500L
         /**
