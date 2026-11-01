@@ -890,8 +890,8 @@ class HomeGuardService : AccessibilityService() {
         // never hung with the filter on, and without it Home showed the TCL launcher first
         // (issue #1039).
         val mouseHang = mouseAttached && xiaomiInput
-        val wanted = !keysPassThrough && !screenOff && !padGame && !mouseHang &&
-            (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)
+        // Unlocked for Android 14 zero-flicker key filtering (Projectivy-style intercept)
+        val wanted = !keysPassThrough && !screenOff && !padGame && !mouseHang
         val homeWanted = wanted && (!isDefaultHome() || defaultHomeNeedsHomeFilter)
         val cecWanted = !screenOff && !mouseHang && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
