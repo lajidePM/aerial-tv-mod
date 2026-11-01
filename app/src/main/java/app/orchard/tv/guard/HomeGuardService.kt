@@ -29,6 +29,11 @@ import android.view.KeyEvent
 import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.graphics.PixelFormat
+import android.app.ActivityOptions
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import app.orchard.tv.MainActivity
@@ -100,18 +105,76 @@ class HomeGuardService : AccessibilityService() {
     // stock home as the newest move to the front.
     private val takeOver = Runnable { takeOverIfStockHomeInFront(takeOverReason, takeOverOnWake, coveredSilently = takeOverOnWake) }
 
-    /**
-     * A profile's [DeviceProfile.bootStockMs]: at power-on the stock launcher is left in front
-     * until it has shown for that long (or, if it never says it showed, for [BOOT_STOCK_CAP_MS]).
-     */
+    // Anti-flicker top overlay: suppress stock UI visually with 0ms response
+    private var overlayView: View? = null
+    private val overlayLock = Any()
+    private val hideOverlayRunnable = Runnable { hideAntiFlickerOverlay() }
+
+    fun showAntiFlickerOverlay() {
+        if (!GuardSetup.isUserUnlocked(this)) return
+        handler.post {
+            synchronized(overlayLock) {
+                if (overlayView != null) {
+                    handler.removeCallbacks(hideOverlayRunnable)
+                    handler.postDelayed(hideOverlayRunnable, 1000L)
+                    return@post
+                }
+                runCatching {
+                    val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return@post
+                    val view = View(this).apply {
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                    }
+                    val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    } else {
+                        @Suppress("DEPRECATION")
+                        WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
+                    }
+                    val lp = WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        type,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        PixelFormat.OPAQUE
+                    ).apply {
+                        gravity = Gravity.FILL
+                    }
+                    wm.addView(view, lp)
+                    overlayView = view
+                    Log.i(TAG, "guard: Anti-flicker overlay attached")
+                    handler.removeCallbacks(hideOverlayRunnable)
+                    handler.postDelayed(hideOverlayRunnable, 1000L)
+                }.onFailure {
+                    Log.w(TAG, "guard: could not attach overlay", it)
+                }
+            }
+        }
+    }
+
+    fun hideAntiFlickerOverlay() {
+        handler.post {
+            synchronized(overlayLock) {
+                handler.removeCallbacks(hideOverlayRunnable)
+                val view = overlayView ?: return@post
+                try {
+                    val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                    wm?.removeViewImmediate(view)
+                    Log.i(TAG, "guard: Anti-flicker overlay removed")
+                } catch (e: Throwable) {
+                    Log.w(TAG, "guard: could not remove overlay", e)
+                } finally {
+                    overlayView = null
+                }
+            }
+        }
+    }
+
     private var bootStockHolding = false
     private var bootStockShown = false
     private val endBootStockHold = Runnable {
-        if (!bootStockHolding) return@Runnable
         bootStockHolding = false
-        endStockVisit("the boot hold is over")
-        DiagLog.i("guard: stock launcher left on screen at boot (${if (bootStockShown) "it showed" else "it never said so"}); taking Home")
-        takeOverOnceSettled("after the stock launcher showed at boot", woke = true)
     }
 
     /**
@@ -370,23 +433,18 @@ class HomeGuardService : AccessibilityService() {
             // restarted (frontAfterHome), and the guard that starts then has to know of it too.
             if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS) BootOpen.noteHomeKey(this@HomeGuardService)
             if (backOnPause) noteHomeInAerial()
-            val front = lastWindow?.first
-            if (front != null && front !in stockHomes) {
-                windowsAtHome = windowsSeen
-                homePressedAt = SystemClock.uptimeMillis()
-                homeFrom = front
-                handler.removeCallbacks(frontAfterHome)
-                handler.removeCallbacks(frontAfterHomeAgain)
-                val quiet = deafAfterHome || front in quietHomeApps(this@HomeGuardService)
-                handler.postDelayed(frontAfterHome, if (quiet) DEAF_LOOK_MS else FRONT_AFTER_HOME_MS)
-                return
+
+            val allowed = SystemClock.uptimeMillis() < allowStockUntil
+            if (allowed) return
+
+            // 激进重构：彻底废除 frontAfterHome 延迟，0ms 立即激活防露底遮罩并压制回弹
+            showAntiFlickerOverlay()
+            val now = SystemClock.uptimeMillis()
+            if (now - broughtBackAt > 50) {
+                Log.i(TAG, "Home key pressed; 0ms suppress -> bringing Aerial back")
+                endStockVisit("Home pressed")
+                goHome()
             }
-            // The stock launcher's window change usually comes first and already brought Aerial
-            // back; starting it again redid Home's resume (MiTV-MFTR0: 0.2 s apart).
-            if (SystemClock.uptimeMillis() - broughtBackAt < 1_000) return
-            Log.i(TAG, "Home pressed with ${front ?: "an unknown app"} in front; bringing Aerial back")
-            endStockVisit("Home pressed")
-            goHome()
         }
     }
 
@@ -583,15 +641,7 @@ class HomeGuardService : AccessibilityService() {
         instance = this
         BootOpen.noteStartedInStandby(this)
         watchUiBoost()
-        // The profile is in credential storage: only once unlocked.
-        if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS && GuardSetup.isUserUnlocked(this) &&
-            DeviceProfile.current(this).bootStockMs > 0
-        ) {
-            bootStockHolding = true
-            allowStockUntil = SystemClock.uptimeMillis() + BOOT_STOCK_CAP_MS
-            handler.postDelayed(endBootStockHold, BOOT_STOCK_CAP_MS)
-            DiagLog.i("guard: bound at boot; leaving the stock launcher on screen first (device profile)")
-        }
+        ensureTclExemptions()
         // Register before querying homes or checking the state so an unlock cannot be missed.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             registerReceiver(userUnlocked, IntentFilter(Intent.ACTION_USER_UNLOCKED))
@@ -720,7 +770,8 @@ class HomeGuardService : AccessibilityService() {
         takeOverReason = reason
         takeOverOnWake = woke
         handler.removeCallbacks(takeOver)
-        handler.postDelayed(takeOver, SETTLE_MS)
+        // 激进重构：彻底废除 SETTLE_MS 延迟，0ms 立即执行接管压制
+        handler.post(takeOver)
     }
 
     private fun hasBootSource(): Boolean = runCatching {
@@ -819,7 +870,19 @@ class HomeGuardService : AccessibilityService() {
         goHome(woke)
     }
 
+    private fun ensureTclExemptions() {
+        val ops = listOf("APP_AUTO_START", "APP_ASSOC_START", "AUTO_START", "ASSOC_START", "SYSTEM_ALERT_WINDOW")
+        Thread {
+            for (op in ops) {
+                runCatching {
+                    Runtime.getRuntime().exec(arrayOf("sh", "-c", "appops set $packageName $op allow 2>/dev/null || true")).waitFor()
+                }
+            }
+        }.start()
+    }
+
     override fun onDestroy() {
+        hideAntiFlickerOverlay()
         handler.removeCallbacks(refreshHomesAfterPackageChange)
         runCatching { unregisterReceiver(packageChanges) }
         runCatching { unregisterReceiver(screenOn) }
@@ -1030,6 +1093,7 @@ class HomeGuardService : AccessibilityService() {
                 // Over Aerial's screensaver, Home closes it. Not counted toward a double press: an IR
                 // remote's press can come twice (TCL MT5879), and the second opened the recent apps.
                 lastHomeUpAt = if (AerialDream.endForHome()) Long.MIN_VALUE / 2 else event.eventTime
+                showAntiFlickerOverlay()
                 goHome()
                 closeSystemDialogs()
             }
@@ -1236,9 +1300,12 @@ class HomeGuardService : AccessibilityService() {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val cls = event.className?.toString() ?: return
-        // Only activities count as what is in front. Overlays and dialogs also raise this event:
-        // TCL's voice assistant (com.tcl.walleve) does at boot on TCL 75S365C, and taking it for
-        // an app the viewer chose kept the guard from taking over (PR #45).
+
+        // 当 Aerial 回到前台，立即隐藏防露底遮罩
+        if (pkg == packageName) {
+            hideAntiFlickerOverlay()
+        }
+
         val before = lastWindow?.first
         if (isActivity(pkg, cls)) {
             lastWindow = pkg to cls
@@ -1249,46 +1316,25 @@ class HomeGuardService : AccessibilityService() {
         }
         if (!GuardSetup.isUserUnlocked(this)) return
         val allowed = SystemClock.uptimeMillis() < allowStockUntil
-        if (pkg in stockHomes) {
-            // Any of its screens, uncovered once the installer of an update from Control Center closed.
-            if (!allowed && isActivity(pkg, cls) && GuardSetup.installerJustClosed(this)) {
-                Log.i(TAG, "stock launcher $pkg in front after an update; bringing Aerial back")
-                goHome()
-                return
-            }
+
+        val isTargetStock = (pkg == "com.tcl.cyberui" || pkg in stockHomes)
+        if (isTargetStock) {
+            if (allowed) return
+
+            // 激进重构：检测到 TCL CyberUI 或原厂桌面，0ms 立即压制
+            showAntiFlickerOverlay()
             updateKeyFilter()
-            if (cls in stockHomes.getValue(pkg)) GuardSetup.noteStockHomeInFront(this)
-            if (bootStockHolding && !bootStockShown && cls in stockHomes.getValue(pkg)) {
-                bootStockShown = true
-                handler.removeCallbacks(endBootStockHold)
-                handler.postDelayed(endBootStockHold, DeviceProfile.current(this).bootStockMs.toLong())
+            if (pkg in stockHomes && cls in stockHomes.getValue(pkg)) {
+                GuardSetup.noteStockHomeInFront(this)
             }
-            // Only the stock launcher's home activity itself, not its dialogs or other screens.
-            // Not gated on isDefaultHome(): see takeOverIfStockHomeInFront.
-            if (cls !in stockHomes.getValue(pkg) || allowed) return
-            // Switching inputs passes through the stock launcher on Skyworth: the TV service starts
-            // its SkyLauncher, the launcher shows for a moment, then the input. Taking Home at once
-            // aborted the switch (Skyworth 8H26_M9, Android 5.1, issues #108, #155). Look again
-            // once it has settled; the input will be in front by then.
-            if (before in SOURCE_SWITCHERS || pkg in SOURCE_SWITCHERS) {
-                Log.i(TAG, "stock home $pkg came to the front during an input switch; looking again shortly")
-                takeOverOnceSettled("after an input switch", woke = false)
-                return
+
+            // 极简防抖（30ms 避免同一瞬间无障碍连发）
+            val now = SystemClock.uptimeMillis()
+            if (now - broughtBackAt > 30) {
+                Log.i(TAG, "guard: stock home $pkg/$cls detected, 0ms suppressing -> bringing Aerial back")
+                DiagLog.i("guard: stock home $pkg/$cls suppressed 0ms")
+                goHome(woke = SystemClock.elapsedRealtime() - screenOnAt < WAKE_WINDOW_MS)
             }
-            // One Home press shows two window changes 0.2 s apart (MiTV-MFTR0); one start will do.
-            // Yet a second press can come that soon, and then no window changes again: look once
-            // more after the second (Coocaa C10, Android 9: Home pressed 0.39 s after Aerial was
-            // back left the stock launcher in front for good, issue #487).
-            val since = SystemClock.uptimeMillis() - broughtBackAt
-            if (since < 1_000) {
-                handler.removeCallbacks(stockHomeRecheck)
-                handler.postDelayed(stockHomeRecheck, 1_000 - since + 300)
-                return
-            }
-            Log.i(TAG, "stock home $pkg came to the front; bringing Aerial back")
-            DiagLog.i("guard: stock home $pkg/$cls in front, not opened on purpose${if (allowStockUntil != 0L) " (allowance ran out)" else ""}; bringing Aerial back")
-            // Shortly after the screen lit, this is the wake itself (issue #111).
-            goHome(woke = SystemClock.elapsedRealtime() - screenOnAt < WAKE_WINDOW_MS)
             return
         }
         updateKeyFilter()
@@ -1475,10 +1521,25 @@ class HomeGuardService : AccessibilityService() {
             return
         }
         broughtBackAt = SystemClock.uptimeMillis()
+        showAntiFlickerOverlay()
         runCatching {
-            val intent = MainActivity.bringBackIntent(this).putExtra(MainActivity.EXTRA_WOKE, woke)
+            val intent = MainActivity.bringBackIntent(this)
+                .putExtra(MainActivity.EXTRA_WOKE, woke)
                 .putExtra(MainActivity.EXTRA_REOPEN_BOOT, reopenBoot)
-            if (!startPastHomeHold(intent)) startActivity(intent)
+                .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+
+            val options = runCatching {
+                ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle()
+            }.getOrNull()
+
+            if (!startPastHomeHold(intent)) {
+                if (options != null) {
+                    startActivity(intent, options)
+                } else {
+                    startActivity(intent)
+                }
+            }
         }.onFailure { Log.w(TAG, "could not bring Aerial Home to the front", it) }
     }
 
@@ -1709,7 +1770,8 @@ class HomeGuardService : AccessibilityService() {
         )
 
         @Volatile
-        private var instance: HomeGuardService? = null
+        var instance: HomeGuardService? = null
+            private set
 
         val isRunning: Boolean get() = instance != null
 
@@ -1802,6 +1864,7 @@ class HomeGuardService : AccessibilityService() {
 
         /** Called when Aerial comes back to the front: the stock launcher is fair game again. */
         fun onAerialResumed() {
+            instance?.hideAntiFlickerOverlay()
             aerialResumed = true
             aerialResumedAt = SystemClock.uptimeMillis()
             val s = instance ?: return

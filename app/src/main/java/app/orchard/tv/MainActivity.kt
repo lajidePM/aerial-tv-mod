@@ -185,6 +185,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         DiagLog.catchCrashes()
+        disableActivityAnimation()
         if (!GuardSetup.isUserUnlocked(this)) {
             super.onCreate(null)
             if (handOverToFirmwareFallbackHome()) return
@@ -194,6 +195,16 @@ class MainActivity : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
         startReal(savedInstanceState)
+    }
+
+    private fun disableActivityAnimation() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, 0, 0)
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
     }
 
     /**
@@ -764,6 +775,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        disableActivityAnimation()
         if (locked) return
         DiagLog.i("onNewIntent ${intent.action}")
         if (intent.getBooleanExtra(EXTRA_WOKE, false)) openBootSource("brought back on wake")
@@ -842,6 +854,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        disableActivityAnimation()
         if (locked) return
         resumeWork()
     }
@@ -1077,7 +1090,12 @@ class MainActivity : ComponentActivity() {
         fun bringBackIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java)
                 .setAction(Intent.ACTION_MAIN)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                )
 
         const val SCREENSAVER_HOLD_MS = 4 * 60 * 60 * 1000L
 
