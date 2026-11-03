@@ -58,10 +58,13 @@ adb -s <TV_IP>:5555 shell am force-stop com.android.packageinstaller
 ### 2. 推送并安装定制版 APK
 由于 TCL 深度修改了底层 `/system/bin/pm`，直接 `adb install` 会报 `install_switch_flag: 0`。推荐以下最稳安装通道：
 ```bash
-# 推送至电视内部存储
+# 1. 下载预编译好的定制版 APK（发布于本仓库 Releases）
+curl -fL -o aerial-tcl-1.82-guard.apk https://github.com/lajidePM/aerial-tv-mod/releases/download/v1.82-tcl-mod/aerial-tcl-1.82-guard.apk
+
+# 2. 推送至电视内部存储
 adb -s <TV_IP>:5555 push aerial-tcl-1.82-guard.apk /sdcard/Download/Aerial.apk
 
-# 调起电视上当贝市场本地安装器（屏幕上按确认安装）：
+# 3. 调起电视上当贝市场本地安装器（屏幕上按确认安装）：
 adb -s <TV_IP>:5555 shell am start -n com.dangbeimarket/.ui.apkmanager.ApkManagerActivity
 
 # （若无当贝市场，可通过电视自带多屏互动推送，或使用系统自带文件管理器打开安装）

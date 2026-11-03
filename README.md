@@ -130,8 +130,9 @@ adb shell am start -n com.mitv.tvhome/com.mitv.tvhome.MainActivity
 
 编译完成的 APK 与源码改动详见本仓库 Releases：
 - [Releases 页面](https://github.com/lajidePM/aerial-tv-mod/releases)
-  - `aerial-tv-v1.61-whitelist-com.ts.launcher.apk` (方案 B：白名单 0 闪烁版)
-  - `aerial-tv-v1.61-accessibility-guard.apk` (方案 A：无障碍守护免变砖版)
+  - `aerial-tcl-1.82-guard.apk` ([v1.82-tcl-mod](https://github.com/lajidePM/aerial-tv-mod/releases/tag/v1.82-tcl-mod)：TCL / 雷鸟电视免露底专项定制版)
+  - `aerial-tv-v1.61-whitelist-com.ts.launcher.apk` (小米方案 B：白名单 0 闪烁版)
+  - `aerial-tv-v1.61-accessibility-guard.apk` (小米方案 A：无障碍守护免变砖版)
 
 ---
 
