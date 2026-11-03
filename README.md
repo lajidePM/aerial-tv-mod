@@ -1,7 +1,14 @@
-# Aerial TV (Xiaomi / HyperOS TV Mod)
+# Aerial TV Mod (小米 & TCL/雷鸟电视无缝接管桌面)
 
-> **针对小米电视 / 红米智能显示器（HyperOS TV / Android 14）定制的 Apple TV 4K 航拍桌面开源方案与预编译产物。**  
+> **针对国内主流智能电视（小米 HyperOS TV 与 TCL / 雷鸟电视）深度定制的 Apple TV 4K 航拍极简桌面方案与避坑指南。**  
 > 源码与下载：[https://github.com/lajidePM/aerial-tv-mod](https://github.com/lajidePM/aerial-tv-mod)
+
+---
+
+## 适配机型与专项指南
+
+- 📱 **[小米电视 / 红米智能显示器 (HyperOS TV / Android 14) 专项指南](XIAOMI_MOD.md)**：包含「无障碍守护模式（安全版）」与「白名单变异模式（终极 0 闪烁）」
+- 📺 **[TCL / 雷鸟电视 (Android 8–14 / CyberUI) 专项指南](TCL_MOD.md)**：包含「开机直达」与「第三方应用内按 Home 键延迟 5 秒 / 露底根治方案」
 
 ---
 
@@ -90,6 +97,31 @@ adb shell pm disable-user --user 0 com.mitv.tvhome
 adb shell pm enable com.mitv.tvhome
 adb shell cmd package set-home-activity --user 0 com.mitv.tvhome
 adb shell am start -n com.mitv.tvhome/com.mitv.tvhome.MainActivity
+```
+
+---
+
+## 📺 TCL & 雷鸟电视方案概要（CyberUI 0延迟直达）
+
+完整实操与避坑长文请见：**👉 [TCL_MOD.md](TCL_MOD.md)**
+
+### 核心亮点
+1. **开机直达**：利用 `system boot_app_componentname` 与 `boot_app_mode` 参数，由 TCL 原厂服务 `com.tcl.ttvs` 在开机首帧直接拉起 Aerial，消除开机露底。
+2. **根治应用内按 Home 键延迟 5 秒**：修复官方源码将 TCL 内置仿真驱动 `sim-mouse` 误判为手柄（导致第三方 App 内主动撤销按键过滤）的 Bug，使守护常驻保持 `filter=true`，实体遥控器按 Home 键 0 延迟秒回 Aerial。
+
+### 面向 AI Agent 的直达执行 Prompt
+直接把下面这段发给你的 AI Agent（Claude Code / Codex / WorkBuddy 等）：
+```text
+请帮我将定制优化版 Aerial TV 安装到我的 TCL/雷鸟电视上，并完成无缝桌面接管。
+电视 IP 地址：<请替换为你的电视IP>
+
+请按照 https://github.com/lajidePM/aerial-tv-mod/blob/main/TCL_MOD.md 的指引执行：
+1. 解锁 TCL 固件安装拦截（content update com.tcl.providers.config/InstallConfig）。
+2. 推送并安装 Aerial guard 版本。
+3. 授予 WRITE_SECURE_SETTINGS、SYSTEM_ALERT_WINDOW 与 TCL 专属 APP_AUTO_START/APP_ASSOC_START。
+4. 写入开机直达：settings put system boot_app_mode boot_launcher 与 boot_app_componentname app.orchard.tv/.MainActivity。
+5. 激活无障碍守护并执行 AOT speed 编译：cmd package compile -m speed -f app.orchard.tv。
+6. 验收：确认 dumpsys activity app.orchard.tv/.MainActivity 中 filter=true 且 gamepad=false。
 ```
 
 ---
